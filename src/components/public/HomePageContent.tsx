@@ -20,9 +20,12 @@ interface HomePageContentProps {
   isLoggedIn: boolean;
   showEditorLink: boolean;
   postOrder?: string[];
+  proposal?: string;
 }
 
 const LINK_ICONS = ['event', 'article', 'info'] as const;
+const sectionClass = 'mb-[42px] md:mb-16';
+const fullWidthSectionClass = `${sectionClass} min-[961px]:col-span-full`;
 
 export function HomePageContent({
   document,
@@ -32,12 +35,13 @@ export function HomePageContent({
   isLoggedIn,
   showEditorLink,
   postOrder = [],
+  proposal,
 }: HomePageContentProps) {
   const router = useRouter();
   const visible = document.sections.filter((section) => section.enabled);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-5 sm:py-8 md:py-10">
+    <div className="w-full" data-proposal={proposal}>
       {showEditorLink ? (
         <div className="mb-4 flex justify-end">
           <Link href="/gestao/home" className="btn-outline-primary inline-flex min-h-11 items-center gap-2 px-4 text-sm">
@@ -49,18 +53,20 @@ export function HomePageContent({
         </div>
       ) : null}
 
-      {visible.map((section) => (
-        <HomeSectionBlock
-          key={section.type}
-          section={section}
-          events={events}
-          posts={posts}
-          portalError={portalError}
-          isLoggedIn={isLoggedIn}
-          onCta={() => router.push(isLoggedIn ? '/gestao' : '/login')}
-          postOrder={postOrder}
-        />
-      ))}
+      <div data-home-content="true" className="mx-auto grid w-full max-w-[1320px] grid-cols-1 gap-y-0 px-4 pb-[38px] pt-[30px] md:px-[22px] md:pb-[58px] md:pt-9 min-[961px]:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] min-[961px]:gap-x-6 min-[961px]:px-7">
+        {visible.map((section) => (
+          <HomeSectionBlock
+            key={section.type}
+            section={section}
+            events={events}
+            posts={posts}
+            portalError={portalError}
+            isLoggedIn={isLoggedIn}
+            onCta={() => router.push(isLoggedIn ? '/gestao' : '/login')}
+            postOrder={postOrder}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -83,38 +89,37 @@ function HomeSectionBlock({
   postOrder: string[];
 }) {
   if (section.type === 'hero') {
+    const agendaIndex = section.links.findIndex((link) => link.href === '/agenda');
+    const primaryIndex = agendaIndex >= 0 ? agendaIndex : 0;
+
     return (
-      <section id="portal-home-hero" className="portal-home-hero relative mb-10 overflow-hidden rounded-2xl md:mb-14">
-        <div className="absolute inset-0">
-          <Image src={section.imageUrl} alt="" fill className="object-cover" priority sizes="100vw" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-ink)] via-[var(--color-ink)]/70 to-[var(--color-ink)]/40" />
+      <section
+        id="portal-home-hero"
+        data-home-section="hero"
+        className={`relative col-span-full mb-[42px] flex min-h-0 flex-col items-stretch overflow-hidden bg-[var(--header-bg)] transition-opacity duration-300 [body.portal-intro-active_&]:pointer-events-none [body.portal-intro-active_&]:opacity-0 min-[701px]:min-h-[400px] min-[701px]:flex-row min-[701px]:items-center min-[961px]:min-h-[430px] ${isLoggedIn ? 'ml-0 w-full' : 'ml-[calc(50%_-_50vw)] w-screen max-w-none'}`}
+      >
+        <div data-home-image="true" className="relative order-first min-h-[250px] w-full shrink-0 overflow-hidden bg-[var(--header-bg)] min-[701px]:absolute min-[701px]:inset-0 min-[701px]:min-h-0 min-[701px]:opacity-50">
+          <Image src={section.imageUrl} alt="" fill className="object-cover" priority sizes="(max-width: 700px) 100vw, 42vw" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[color-mix(in_srgb,var(--header-bg)_64%,transparent)] to-transparent min-[701px]:bg-gradient-to-r min-[701px]:from-[color-mix(in_srgb,var(--header-bg)_95%,transparent)] min-[701px]:via-[color-mix(in_srgb,var(--header-bg)_72%,transparent)] min-[701px]:to-transparent" />
         </div>
-        <div className="relative z-10 px-4 py-10 text-center sm:px-6 sm:py-14 md:px-12 md:py-20">
-          <Image
-            src="/assets/logo.png"
-            alt="Logo Banda Carmelitana"
-            width={306}
-            height={270}
-            className="mx-auto h-auto w-24 object-contain"
-          />
-          <p className="mt-6 text-xs font-medium uppercase tracking-[0.25em] text-white/80">{section.eyebrow}</p>
-          <h1 className="mt-3 text-[1.65rem] font-bold leading-tight tracking-tight text-white sm:text-3xl md:text-5xl">
+        <div data-home-copy="true" className="relative z-[1] flex w-full max-w-none flex-col items-start justify-center px-5 py-[22px] min-[701px]:px-7 min-[701px]:py-16 min-[961px]:px-[max(2rem,calc((100vw_-_72rem)/2))]">
+          <p data-home-eyebrow="true" className="m-0 text-xs font-bold uppercase tracking-[0.14em] text-[var(--header-fg)]">{section.eyebrow}</p>
+          <h1 className="mt-2 max-w-[30ch] text-[clamp(2rem,8vw,2.65rem)] font-bold leading-[1.03] tracking-[-0.03em] text-[var(--header-fg)] min-[701px]:mt-3 min-[701px]:text-[clamp(2.25rem,4.5vw,3.5rem)] min-[701px]:font-extrabold">
             {section.title}
           </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-white/90 md:text-lg">{section.subtitle}</p>
-          <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <p data-home-subtitle="true" className="mt-3 max-w-[52ch] text-[0.9375rem] leading-[1.65] text-[var(--header-fg)] min-[701px]:mt-4 min-[701px]:text-base">{section.subtitle}</p>
+          <div data-home-actions="true" className="mt-[17px] grid w-full gap-1 min-[701px]:mt-6 min-[701px]:flex min-[701px]:w-auto min-[701px]:flex-wrap min-[701px]:gap-x-4 min-[701px]:gap-y-2">
             {section.links.map((link, index) =>
               link.label.trim() ? (
                 <Link
                   key={link.href}
                   href={link.href}
                   className={
-                    index === 0
-                      ? 'btn-primary inline-flex min-h-11 items-center justify-center gap-2 px-6'
-                      : index === 1
-                        ? 'btn-outline-primary inline-flex min-h-11 items-center justify-center gap-2 border-white/40 bg-white/10 px-6 text-white hover:bg-white/20'
-                        : 'inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius)] px-6 text-sm font-medium text-white/95 no-underline hover:bg-white/10'
+                    index === primaryIndex
+                      ? 'btn-primary inline-flex min-h-11 items-center justify-center gap-2 px-[18px] text-sm font-semibold text-[var(--color-ink)] min-[701px]:text-[0.875rem]'
+                      : 'inline-flex min-h-11 items-center justify-start gap-2 rounded-[var(--radius)] px-2 text-sm font-semibold text-[var(--header-fg)] underline decoration-1 underline-offset-4 min-[701px]:justify-center'
                   }
+                  data-home-primary={index === primaryIndex ? 'true' : undefined}
                 >
                   <span className="material-icons text-lg" aria-hidden>
                     {LINK_ICONS[index] ?? 'arrow_forward'}
@@ -131,14 +136,15 @@ function HomeSectionBlock({
 
   if (section.type === 'highlights') {
     return (
-      <section className="mb-10 grid gap-3 sm:grid-cols-3 md:mb-14">
+      <section data-home-section="highlights" className={`${fullWidthSectionClass} grid grid-cols-1 gap-0 border-y border-[var(--border)] sm:grid-cols-3`}>
         {section.items.map((item) => (
           <div
             key={`${item.value}-${item.label}`}
-            className="rounded-2xl border border-[var(--border)] bg-[var(--card)] px-5 py-6 text-center shadow-[var(--shadow-soft)]"
+            data-home-highlight="true"
+            className="flex min-h-[74px] items-center gap-4 border-b border-[var(--border)] px-4 py-[14px] last:border-b-0 sm:min-h-[94px] sm:border-b-0 sm:border-r sm:px-[22px] sm:py-[18px] sm:last:border-r-0"
           >
-            <p className="text-2xl font-bold text-[var(--color-brand-strong)]">{item.value}</p>
-            <p className="mt-2 text-sm text-[var(--muted)]">{item.label}</p>
+            <p className="m-0 text-[clamp(1.75rem,3vw,2.25rem)] font-extrabold leading-none text-[var(--home-accent-text)]">{item.value}</p>
+            <span className="max-w-[18ch] text-sm leading-[1.4] text-[var(--muted)]">{item.label}</span>
           </div>
         ))}
       </section>
@@ -148,7 +154,7 @@ function HomeSectionBlock({
   if (section.type === 'events') {
     const upcoming = upcomingPublicPresentations(events, section.limit);
     return (
-      <section className="mb-10 md:mb-14">
+      <section data-home-section="events" className={`${sectionClass} min-[961px]:col-start-1`}>
         <PublicSectionHeading
           title={section.title}
           description={section.description}
@@ -164,9 +170,9 @@ function HomeSectionBlock({
             <p className="text-[var(--muted)]">Nenhum evento público agendado no momento.</p>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-3">
+          <div data-home-event-grid="true" className="grid grid-cols-1 items-stretch gap-3">
             {upcoming.map((event) => (
-              <PresentationEventCard key={event.id} event={event} compact />
+              <PresentationEventCard key={event.id} event={event} compact layout="home" />
             ))}
           </div>
         )}
@@ -177,7 +183,7 @@ function HomeSectionBlock({
   if (section.type === 'blog') {
     const visiblePosts = publishedMediaPosts(posts, postOrder).slice(0, section.limit);
     return (
-      <section className="mb-10 md:mb-14">
+      <section data-home-section="blog" className={`${sectionClass} min-[961px]:col-start-2`}>
         <PublicSectionHeading
           title={section.title}
           description={section.description}
@@ -187,9 +193,9 @@ function HomeSectionBlock({
         {visiblePosts.length === 0 && !portalError ? (
           <p className="text-[var(--muted)]">Em breve novas publicações.</p>
         ) : (
-          <div className="grid gap-6 md:grid-cols-3">
-            {visiblePosts.map((post) => (
-              <BlogPostCard key={post.id} post={post} />
+          <div data-home-post-grid="true" className="grid grid-cols-1 gap-3">
+            {visiblePosts.map((post, index) => (
+              <BlogPostCard key={post.id} post={post} featured={index === 0} layout="home" />
             ))}
           </div>
         )}
@@ -199,10 +205,10 @@ function HomeSectionBlock({
 
   if (section.type === 'story') {
     return (
-      <section className="mb-10 grid gap-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-[var(--shadow-soft)] sm:p-6 md:mb-14 md:grid-cols-2 md:p-8">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">{section.title}</h2>
-          <p className="mt-4 whitespace-pre-line leading-relaxed text-[var(--muted)]">{section.body}</p>
+      <section data-home-section="story" className={`${fullWidthSectionClass} grid grid-cols-1 items-center gap-[22px] rounded-2xl border border-[var(--border)] bg-[var(--card)] p-[21px] shadow-[var(--shadow-soft)] sm:p-7 min-[701px]:gap-6 min-[961px]:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)] min-[961px]:gap-[clamp(24px,6vw,76px)]`}>
+        <div data-home-story-copy="true">
+          <h2 className="m-0 max-w-[16ch] text-[1.875rem] font-semibold leading-[1.1] tracking-[-0.03em] min-[961px]:text-[clamp(1.875rem,2.7vw,2.25rem)]">{section.title}</h2>
+          <p className="mt-4 whitespace-pre-line leading-[1.7] text-[var(--muted)]">{section.body}</p>
           <Link
             href="/sobre"
             className="mt-6 inline-flex min-h-11 items-center gap-1 font-medium text-[var(--color-brand-strong)] no-underline hover:underline"
@@ -213,9 +219,9 @@ function HomeSectionBlock({
             </span>
           </Link>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div data-home-gallery="true" className="grid grid-cols-[1.15fr_0.85fr] grid-rows-[repeat(2,minmax(100px,28vw))] gap-2 min-[701px]:grid-rows-[repeat(2,145px)]">
           {section.images.map((image) => (
-            <div key={image.src} className="relative aspect-square overflow-hidden rounded-xl">
+            <div key={image.src} className="relative min-h-0 overflow-hidden rounded-xl first:row-span-2">
               <Image src={image.src} alt={image.alt} fill className="object-cover" sizes="(max-width: 768px) 50vw, 25vw" />
             </div>
           ))}
@@ -227,11 +233,11 @@ function HomeSectionBlock({
   if (section.type === 'videos') {
     const ids = section.videoIds.slice(0, section.limit);
     return (
-      <section className="mb-10 md:mb-14">
+      <section data-home-section="videos" className={fullWidthSectionClass}>
         <PublicSectionHeading title={section.title} description={section.description} />
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-[14px] min-[701px]:grid-cols-3 min-[701px]:gap-[18px]">
           {ids.map((id, index) => (
-            <div key={id} className="aspect-video overflow-hidden rounded-2xl shadow-[var(--shadow-soft)]">
+            <div key={id} className="relative aspect-video overflow-hidden rounded-xl bg-[var(--color-ink)] shadow-[var(--shadow-soft)]">
               <iframe
                 src={`https://www.youtube.com/embed/${id}`}
                 title={`Vídeo ${index + 1} — Banda Carmelitana`}
@@ -250,12 +256,12 @@ function HomeSectionBlock({
   if (section.type !== 'cta') return null;
 
   return (
-    <section className="rounded-2xl bg-[var(--color-ink)] px-4 py-8 text-center text-[var(--header-fg)] sm:px-6 sm:py-10 md:px-10">
-      <h2 className="text-2xl font-semibold">{isLoggedIn ? section.titleLoggedIn : section.titleLoggedOut}</h2>
-      <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-white/80">
-        {isLoggedIn ? section.bodyLoggedIn : section.bodyLoggedOut}
-      </p>
-      <button type="button" className="btn-primary mt-6 min-h-11 px-8" onClick={onCta}>
+    <section data-home-section="cta" className={`${fullWidthSectionClass} flex flex-col items-start justify-between gap-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] px-5 py-6 text-[var(--foreground)] sm:p-7 min-[701px]:flex-row min-[701px]:items-center`}>
+      <div>
+        <h2 className="m-0 text-2xl text-[var(--foreground)]">{isLoggedIn ? section.titleLoggedIn : section.titleLoggedOut}</h2>
+        <p className="mt-2 max-w-[58ch] leading-6 text-[var(--muted)]">{isLoggedIn ? section.bodyLoggedIn : section.bodyLoggedOut}</p>
+      </div>
+      <button type="button" className="btn-primary min-h-[46px] shrink-0 px-5" onClick={onCta}>
         {isLoggedIn ? section.buttonLoggedIn : section.buttonLoggedOut}
       </button>
     </section>

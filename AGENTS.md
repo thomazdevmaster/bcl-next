@@ -48,6 +48,7 @@ Novo domínio: tipos em `src/domains/<nome>/` → `catalog.ts` → `permissions.
 
 ## Boas práticas (obrigatório)
 
+- **Estilização de UI: usar Tailwind CSS em 100% dos componentes e páginas novos ou alterados.** Escreva os estilos nas classes utilitárias do Tailwind; não crie arquivos CSS/SCSS por componente, módulos CSS/SCSS ou folhas separadas para implementar layout, cores, espaçamento, tipografia ou responsividade. Use folhas globais existentes somente para a importação/configuração do Tailwind, tokens do tema e estilos base realmente globais; mantenha CSS de terceiros apenas quando uma dependência exigir sua folha própria.
 - TypeScript estrito: sem `any` novo; tipos de domínio explícitos.
 - Client vs server: `'use client'` só quando houver estado, eventos ou APIs de browser. Não hidratar sessão do `localStorage` no SSR (usar o padrão já em `AuthContext`).
 - Permissões no **cliente e, no futuro, no servidor**. UI que esconde botão não é segurança.
