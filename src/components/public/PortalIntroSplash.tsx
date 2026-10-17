@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type TransitionEvent } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, type TransitionEvent } from 'react';
 import Image from 'next/image';
 
 const LOGO_WIDTH = 306;
@@ -14,12 +14,20 @@ interface PortalIntroSplashProps {
   playKey: number;
 }
 
+export function releasePortalIntroLock() {
+  if (typeof document === 'undefined') return;
+  document.documentElement.classList.remove('portal-intro-pending', 'portal-intro-active');
+  document.documentElement.style.background = '';
+  document.body.classList.remove('overflow-x-hidden');
+}
+
 export function PortalIntroSplash({ playKey }: PortalIntroSplashProps) {
   const shellRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<IntroPhase>('visible');
+  const [playMotion, setPlayMotion] = useState(false);
 
   const finishIntro = useCallback(() => {
-    document.body.classList.remove('portal-intro-active', 'overflow-x-hidden');
+    releasePortalIntroLock();
     setPhase('hidden');
   }, []);
 
@@ -59,20 +67,23 @@ export function PortalIntroSplash({ playKey }: PortalIntroSplashProps) {
         shell.style.width = `${rect.width}px`;
         shell.style.height = `${rect.height}px`;
         shell.style.borderRadius = '1rem';
+        document.documentElement.classList.remove('portal-intro-pending');
+        document.documentElement.style.background = '';
         setPhase('morph');
       });
     });
   }, [finishIntro]);
 
-  useEffect(() => {
-    document.body.classList.add('portal-intro-active', 'overflow-x-hidden');
+  useLayoutEffect(() => {
+    document.documentElement.classList.add('portal-intro-active');
+    document.body.classList.add('overflow-x-hidden');
+    setPlayMotion(true);
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const timer = window.setTimeout(startMorph, reduced ? 500 : MAIN_ANIM_MS);
 
     return () => {
       window.clearTimeout(timer);
-      document.body.classList.remove('portal-intro-active', 'overflow-x-hidden');
     };
   }, [playKey, startMorph]);
 
@@ -99,7 +110,7 @@ export function PortalIntroSplash({ playKey }: PortalIntroSplashProps) {
   return (
     <div
       ref={shellRef}
-      className={`portal-intro-splash ${phase === 'morph' || phase === 'exit' ? 'portal-intro-splash--morph' : ''}`}
+      className={`portal-intro-splash bg-black${playMotion ? ' portal-intro-splash--play' : ''}${phase === 'morph' || phase === 'exit' ? ' portal-intro-splash--morph' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="portal-intro-title"

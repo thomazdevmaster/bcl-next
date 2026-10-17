@@ -415,10 +415,30 @@
     filter: drop-shadow(0 0 2px rgba(220, 38, 38, 0.85));
   }
 
+  html.portal-intro-pending,
+  html.portal-intro-active {
+    background: #000;
+  }
+
+  html.portal-intro-pending body,
+  html.portal-intro-active body {
+    overflow: hidden;
+  }
+
+  html.portal-intro-pending body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 1999;
+    background: #000;
+    pointer-events: none;
+  }
+
   .portal-intro-splash {
     position: fixed;
     inset: 0;
     z-index: 2000;
+    background: #000;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -450,7 +470,6 @@
 
   .portal-intro-splash__bg-photo {
     opacity: 0;
-    animation: portalIntroPhotoIn 3s ease-out forwards;
     will-change: transform, opacity;
   }
 
@@ -465,7 +484,6 @@
       rgba(7, 19, 30, 0.72) 45%,
       rgba(7, 19, 30, 0.88) 100%
     );
-    animation: portalIntroScrimIn 1.4s ease-out 1.6s forwards;
   }
 
   .portal-intro-splash__veil {
@@ -473,7 +491,6 @@
     inset: 0;
     z-index: 2;
     background: #000;
-    animation: portalIntroVeilOut 2.8s ease-out forwards;
     pointer-events: none;
   }
 
@@ -488,7 +505,6 @@
     display: flex;
     justify-content: center;
     overflow: visible;
-    animation: portalIntroLogoIn 3.5s cubic-bezier(0.33, 1, 0.38, 1) forwards;
     opacity: 1;
     transform: scale(2);
     transform-origin: center center;
@@ -518,7 +534,6 @@
     letter-spacing: 0.28em;
     text-transform: uppercase;
     color: rgba(255, 255, 255, 0.82);
-    animation: portalIntroTextIn 0.85s ease-out 1.85s forwards;
     opacity: 0;
     transform: translateY(12px);
   }
@@ -529,7 +544,6 @@
     font-weight: 700;
     line-height: 1.25;
     letter-spacing: -0.02em;
-    animation: portalIntroTextIn 0.9s ease-out 2s forwards;
     opacity: 0;
     transform: translateY(14px);
   }
@@ -550,7 +564,6 @@
     color: #fff;
     cursor: pointer;
     backdrop-filter: blur(6px);
-    animation: portalIntroTextIn 0.7s ease-out 3.1s forwards;
     opacity: 0;
 
     &:hover {
@@ -560,6 +573,36 @@
     &:focus-visible {
       outline: 2px solid var(--color-brand);
       outline-offset: 2px;
+    }
+  }
+
+  .portal-intro-splash--play {
+    .portal-intro-splash__bg-photo {
+      animation: portalIntroPhotoIn 3s ease-out forwards;
+    }
+
+    .portal-intro-splash__scrim {
+      animation: portalIntroScrimIn 1.4s ease-out 1.6s forwards;
+    }
+
+    .portal-intro-splash__veil {
+      animation: portalIntroVeilOut 2.8s ease-out forwards;
+    }
+
+    .portal-intro-splash__logo-wrap {
+      animation: portalIntroLogoIn 3.5s cubic-bezier(0.33, 1, 0.38, 1) forwards;
+    }
+
+    .portal-intro-splash__eyebrow {
+      animation: portalIntroTextIn 0.85s ease-out 1.85s forwards;
+    }
+
+    .portal-intro-splash__title {
+      animation: portalIntroTextIn 0.9s ease-out 2s forwards;
+    }
+
+    .portal-intro-splash__skip {
+      animation: portalIntroTextIn 0.7s ease-out 3.1s forwards;
     }
   }
 

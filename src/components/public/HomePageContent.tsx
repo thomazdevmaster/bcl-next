@@ -10,7 +10,7 @@ import type { HomepageDocument, HomeSection } from '@/domains/homepage/types';
 import type { MediaPost } from '@/domains/media/types';
 import type { Presentation } from '@/domains/presentations/types';
 import { upcomingPublicPresentations, publishedMediaPosts } from '@/lib/publicPortal';
-import { UNDER_CONSTRUCTION_MESSAGE } from '@/lib/userMessages';
+import { failureMessage } from '@/lib/userMessages';
 
 interface HomePageContentProps {
   document: HomepageDocument;
@@ -39,22 +39,36 @@ export function HomePageContent({
 }: HomePageContentProps) {
   const router = useRouter();
   const visible = document.sections.filter((section) => section.enabled);
+  const hero = visible.find((section) => section.type === 'hero');
+  const rest = visible.filter((section) => section.type !== 'hero');
+  const onCta = () => router.push(isLoggedIn ? '/gestao' : '/login');
 
   return (
-    <div className="w-full" data-proposal={proposal}>
-      {showEditorLink ? (
-        <div className="mb-4 flex justify-end">
-          <Link href="/gestao/home" className="btn-outline-primary inline-flex min-h-11 items-center gap-2 px-4 text-sm">
-            <span className="material-icons text-lg" aria-hidden>
-              edit
-            </span>
-            Editar página inicial
-          </Link>
-        </div>
+    <div className="w-full pt-[30px] md:pt-9" data-proposal={proposal}>
+      {hero ? (
+        <HomeSectionBlock
+          section={hero}
+          events={events}
+          posts={posts}
+          portalError={portalError}
+          isLoggedIn={isLoggedIn}
+          onCta={onCta}
+          postOrder={postOrder}
+        />
       ) : null}
 
-      <div data-home-content="true" className="mx-auto grid w-full max-w-[1320px] grid-cols-1 gap-y-0 px-4 pb-[38px] pt-[30px] md:px-[22px] md:pb-[58px] md:pt-9 min-[961px]:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] min-[961px]:gap-x-6 min-[961px]:px-7">
-        {visible.map((section) => (
+      <div data-home-content="true" className="mx-auto grid w-full max-w-[1320px] grid-cols-1 gap-y-0 px-4 pb-[38px] md:px-[22px] md:pb-[58px] min-[961px]:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] min-[961px]:gap-x-6 min-[961px]:px-7">
+        {showEditorLink ? (
+          <div className="col-span-full mb-4 flex justify-end">
+            <Link href="/gestao/home" className="btn-outline-primary inline-flex min-h-11 items-center gap-2 px-4 text-sm">
+              <span className="material-icons text-lg" aria-hidden>
+                edit
+              </span>
+              Editar página inicial
+            </Link>
+          </div>
+        ) : null}
+        {rest.map((section) => (
           <HomeSectionBlock
             key={section.type}
             section={section}
@@ -62,7 +76,7 @@ export function HomePageContent({
             posts={posts}
             portalError={portalError}
             isLoggedIn={isLoggedIn}
-            onCta={() => router.push(isLoggedIn ? '/gestao' : '/login')}
+            onCta={onCta}
             postOrder={postOrder}
           />
         ))}
@@ -96,13 +110,13 @@ function HomeSectionBlock({
       <section
         id="portal-home-hero"
         data-home-section="hero"
-        className={`relative col-span-full mb-[42px] flex min-h-0 flex-col items-stretch overflow-hidden bg-[var(--header-bg)] transition-opacity duration-300 [body.portal-intro-active_&]:pointer-events-none [body.portal-intro-active_&]:opacity-0 min-[701px]:min-h-[400px] min-[701px]:flex-row min-[701px]:items-center min-[961px]:min-h-[430px] ${isLoggedIn ? 'ml-0 w-full' : 'ml-[calc(50%_-_50vw)] w-screen max-w-none'}`}
+        className="relative mb-[42px] flex w-full min-h-0 flex-col items-stretch overflow-hidden bg-[var(--header-bg)] transition-opacity duration-300 [html.portal-intro-pending_&]:pointer-events-none [html.portal-intro-pending_&]:opacity-0 [html.portal-intro-active_&]:pointer-events-none [html.portal-intro-active_&]:opacity-0 min-[701px]:min-h-[400px] min-[701px]:flex-row min-[701px]:items-center min-[961px]:min-h-[430px]"
       >
         <div data-home-image="true" className="relative order-first min-h-[250px] w-full shrink-0 overflow-hidden bg-[var(--header-bg)] min-[701px]:absolute min-[701px]:inset-0 min-[701px]:min-h-0 min-[701px]:opacity-50">
           <Image src={section.imageUrl} alt="" fill className="object-cover" priority sizes="(max-width: 700px) 100vw, 42vw" />
           <div className="absolute inset-0 bg-gradient-to-t from-[color-mix(in_srgb,var(--header-bg)_64%,transparent)] to-transparent min-[701px]:bg-gradient-to-r min-[701px]:from-[color-mix(in_srgb,var(--header-bg)_95%,transparent)] min-[701px]:via-[color-mix(in_srgb,var(--header-bg)_72%,transparent)] min-[701px]:to-transparent" />
         </div>
-        <div data-home-copy="true" className="relative z-[1] flex w-full max-w-none flex-col items-start justify-center px-5 py-[22px] min-[701px]:px-7 min-[701px]:py-16 min-[961px]:px-[max(2rem,calc((100vw_-_72rem)/2))]">
+        <div data-home-copy="true" className="relative z-[1] flex w-full max-w-none flex-col items-start justify-center px-5 py-[22px] min-[701px]:px-7 min-[701px]:py-16 min-[961px]:px-[max(2rem,calc((100%_-_72rem)/2))]">
           <p data-home-eyebrow="true" className="m-0 text-xs font-bold uppercase tracking-[0.14em] text-[var(--header-fg)]">{section.eyebrow}</p>
           <h1 className="mt-2 max-w-[30ch] text-[clamp(2rem,8vw,2.65rem)] font-bold leading-[1.03] tracking-[-0.03em] text-[var(--header-fg)] min-[701px]:mt-3 min-[701px]:text-[clamp(2.25rem,4.5vw,3.5rem)] min-[701px]:font-extrabold">
             {section.title}
@@ -163,7 +177,7 @@ function HomeSectionBlock({
         />
         {portalError ? (
           <p className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 text-[var(--muted)]">
-            {UNDER_CONSTRUCTION_MESSAGE}
+            {failureMessage(undefined, 'Não foi possível carregar os eventos agora.')}
           </p>
         ) : upcoming.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)] p-8 text-center">

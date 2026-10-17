@@ -35,7 +35,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-2 px-3 sm:gap-4 sm:px-4">
           <Link
             href="/"
-            className="flex min-w-0 flex-1 items-center gap-2.5 text-[var(--header-fg)] no-underline hover:no-underline md:flex-none"
+            className="flex min-w-0 flex-1 items-center gap-2.5 text-[var(--header-fg)] no-underline hover:text-[var(--header-fg)] hover:no-underline hover:opacity-100 md:flex-none"
           >
             <Image src="/assets/logo.png" alt="" width={306} height={270} className="h-10 w-10 shrink-0 object-contain" />
             <span className="truncate text-sm font-semibold tracking-tight sm:text-base">Banda Carmelitana</span>
@@ -46,10 +46,10 @@ export function PublicShell({ children }: { children: ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`inline-flex min-h-11 items-center rounded-full px-3 text-sm no-underline hover:no-underline ${
+                className={`inline-flex min-h-11 items-center rounded-full px-3 text-sm no-underline hover:no-underline hover:opacity-100 ${
                   isActive(item.href)
-                    ? 'bg-[var(--color-brand)] text-[var(--color-ink)]'
-                    : 'text-white/80 hover:text-white'
+                    ? 'bg-[var(--color-brand)] text-[var(--color-ink)] hover:bg-[var(--color-brand-strong)] hover:text-[var(--color-ink)]'
+                    : 'text-white/80 hover:bg-white/10 hover:text-white'
                 }`}
               >
                 {item.label}
@@ -59,7 +59,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
 
           <button
             type="button"
-            className="btn-primary hidden min-h-11 shrink-0 px-4 md:inline-flex"
+            className="btn-primary hidden min-h-11 shrink-0 px-4 text-[var(--color-ink)] hover:text-[var(--color-ink)] hover:opacity-100 md:inline-flex"
             onClick={() => router.push('/login')}
           >
             Entrar
@@ -115,8 +115,10 @@ export function PublicShell({ children }: { children: ReactNode }) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex min-h-12 items-center gap-3 rounded-xl px-3 text-base no-underline hover:no-underline ${
-                isActive(item.href) ? 'bg-[var(--color-brand)] font-semibold text-[var(--color-ink)]' : 'text-white/90'
+              className={`flex min-h-12 items-center gap-3 rounded-xl px-3 text-base no-underline hover:no-underline hover:opacity-100 ${
+                isActive(item.href)
+                  ? 'bg-[var(--color-brand)] font-semibold text-[var(--color-ink)] hover:bg-[var(--color-brand-strong)] hover:text-[var(--color-ink)]'
+                  : 'text-white/90 hover:bg-white/10 hover:text-white'
               }`}
               onClick={() => setOpenOnPath(null)}
             >
@@ -128,7 +130,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
           ))}
         </div>
         <div className="border-t border-white/10 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <button type="button" className="btn-primary min-h-12 w-full" onClick={() => router.push('/login')}>
+          <button type="button" className="btn-primary min-h-12 w-full text-[var(--color-ink)] hover:text-[var(--color-ink)] hover:opacity-100" onClick={() => router.push('/login')}>
             Entrar na área interna
           </button>
         </div>

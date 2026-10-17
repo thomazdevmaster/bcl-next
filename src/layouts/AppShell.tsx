@@ -241,7 +241,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </header>
         )}
 
-        <main className={`flex-1 overflow-x-hidden overflow-y-auto px-4 pt-6 pb-20 ${desktop ? 'ml-[var(--content-margin)]' : ''}`}>
+        <main
+          className={`flex-1 overflow-x-hidden overflow-y-auto pb-20 ${
+            pathname === '/' ? 'px-0 pt-0' : 'px-4 pt-6'
+          } ${desktop ? 'ml-[var(--content-margin)]' : ''}`}
+        >
           {children}
         </main>
       </div>
