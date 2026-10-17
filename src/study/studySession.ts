@@ -1,6 +1,6 @@
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
 import { Player, VerovioConverter } from '@music-i18n/musicxml-player';
-import { UNDER_CONSTRUCTION_MESSAGE } from '@/lib/userMessages';
+import { failureMessage } from '@/lib/userMessages';
 import { OsmdPlaybackRenderer } from './osmdPlaybackRenderer';
 import { StudyPlayerController } from './studyPlayerController';
 import {
@@ -587,7 +587,7 @@ export class StudySession {
       const mount = this.options.getOsmdContainer();
       if (!ready || !mount) {
         this.scoreLoading = false;
-        this.scoreError = UNDER_CONSTRUCTION_MESSAGE;
+        this.scoreError = failureMessage(undefined, 'Não foi possível montar a área da partitura.');
         this.emit();
         return;
       }
@@ -623,7 +623,7 @@ export class StudySession {
       console.error('Falha ao renderizar a partitura com o OSMD:', err);
       if (token === this.loadToken) {
         this.scoreLoading = false;
-        this.scoreError = UNDER_CONSTRUCTION_MESSAGE;
+        this.scoreError = failureMessage(err, 'Falha ao renderizar a partitura.');
       }
     }
     this.emit();
@@ -763,7 +763,9 @@ export class StudySession {
       const isVeryLarge = xmlLen > 2_000_000;
       this.midiOnlyMode = isVeryLarge;
       this.playerReady = true;
-      this.playerError = isVeryLarge ? null : UNDER_CONSTRUCTION_MESSAGE;
+      this.playerError = isVeryLarge
+        ? null
+        : failureMessage(undefined, 'Não foi possível preparar o áudio. Tente recarregar a partitura.');
     } finally {
       if (token === this.loadToken) {
         this.playerLoading = false;
@@ -1120,12 +1122,12 @@ export class StudySession {
       await this.loadMidiForCurrentScore(token);
       if (token !== this.loadToken) return;
       if (!this.midiLoaded) {
-        this.playerError = UNDER_CONSTRUCTION_MESSAGE;
+        this.playerError = failureMessage(undefined, 'MIDI não disponível para esta partitura.');
         if (!this.midiOnlyMode) this.playerReady = false;
       }
-    } catch {
+    } catch (caught) {
       if (token === this.loadToken) {
-        this.playerError = UNDER_CONSTRUCTION_MESSAGE;
+        this.playerError = failureMessage(caught, 'Player indisponível.');
         if (!this.midiOnlyMode) this.playerReady = false;
       }
     } finally {

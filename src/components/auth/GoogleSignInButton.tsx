@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { getGoogleClientId, loadGoogleIdentity } from '@/lib/googleIdentity';
-import { UNDER_CONSTRUCTION_MESSAGE, userFacingError } from '@/lib/userMessages';
+import { failureMessage, userFacingError } from '@/lib/userMessages';
 
 type Props = {
   /** Recebe o ID token do Google; quem usa decide se entra ou pré-preenche. */
@@ -97,7 +97,9 @@ export function GoogleSignInButton({ onCredential, text = 'continue_with', disab
           type="button"
           disabled={disabled}
           aria-describedby={notice ? 'google-signin-notice' : undefined}
-          onClick={() => setNotice(UNDER_CONSTRUCTION_MESSAGE)}
+          onClick={() =>
+            setNotice(failureMessage(undefined, 'Entrar com Google ainda não está disponível nesta instalação. Use usuário e senha.'))
+          }
           className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--input)] px-4 text-sm font-medium text-[var(--foreground)] transition hover:border-[var(--muted)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <GoogleMark />

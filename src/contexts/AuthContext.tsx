@@ -14,7 +14,7 @@ import { setAccessToken, getAccessToken, usesRemoteApi } from '@/core/auth/acces
 import { DEMO_USERS, demoUserByRole, findDemoUser } from '@/core/auth/demoUsers';
 import { apiFetch } from '@/lib/api';
 import { sealPassword } from '@/lib/passwordCipher';
-import { UNDER_CONSTRUCTION_MESSAGE } from '@/lib/userMessages';
+import { failureMessage } from '@/lib/userMessages';
 import {
   PUBLIC_ROLES,
   type AccessRoles,
@@ -114,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithGoogle = useCallback(async (credential: string, keepLoggedIn: boolean) => {
     if (!usesRemoteApi()) {
-      throw new Error(UNDER_CONSTRUCTION_MESSAGE);
+      throw new Error(failureMessage(undefined, 'Entrar com Google só funciona com a API conectada.'));
     }
     const session = await apiFetch<LoginPayload>('/auth/google', {
       method: 'POST',
@@ -133,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (usesRemoteApi()) {
       const match = DEMO_USERS.find((user) => user.roles.includes(role));
       if (!match) {
-        throw new Error(UNDER_CONSTRUCTION_MESSAGE);
+        throw new Error(failureMessage(undefined, `Usuário de demonstração não encontrado para o perfil ${role}`));
       }
       await login(match.username, match.password, keepLoggedIn);
       return;

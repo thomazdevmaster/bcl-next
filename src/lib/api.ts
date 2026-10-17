@@ -1,6 +1,6 @@
 import { getAccessToken } from '@/core/auth/accessToken';
 import { getApiUrl } from '../config/environment';
-import { UNDER_CONSTRUCTION_MESSAGE } from './userMessages';
+import { failureMessage } from './userMessages';
 
 export function apiAuthHeaders(headers?: HeadersInit): Headers {
   const merged = new Headers(headers);
@@ -25,20 +25,16 @@ export class ApiError extends Error {
   }
 }
 
-function errorMessage(text: string): string {
+function errorMessage(text: string, status: number): string {
   try {
     const parsed = JSON.parse(text) as { error?: string };
     if (typeof parsed.error === 'string' && parsed.error.trim()) {
-      const err = parsed.error.trim();
-      if (/^(Not found|Invalid JSON|Method not allowed|Unauthorized)$/i.test(err)) {
-        return UNDER_CONSTRUCTION_MESSAGE;
-      }
-      return err;
+      return failureMessage(undefined, parsed.error.trim());
     }
   } catch {
     /* corpo que não é JSON */
   }
-  return UNDER_CONSTRUCTION_MESSAGE;
+  return failureMessage(undefined, text || `Falha na API (${status}).`);
 }
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -48,13 +44,13 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
       ...options,
       headers: apiAuthHeaders(options.headers),
     });
-  } catch {
-    throw new ApiError(UNDER_CONSTRUCTION_MESSAGE, 0);
+  } catch (caught) {
+    throw new ApiError(failureMessage(caught, 'Falha de conexão com a API.'), 0);
   }
 
   if (!response.ok) {
     const text = await response.text();
-    throw new ApiError(errorMessage(text), response.status);
+    throw new ApiError(errorMessage(text, response.status), response.status);
   }
 
   if (response.status === 204) {

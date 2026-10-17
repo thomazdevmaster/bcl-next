@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { apiFetch } from '@/lib/api';
 import { sealPassword } from '@/lib/passwordCipher';
-import { UNDER_CONSTRUCTION_MESSAGE, userFacingError } from '@/lib/userMessages';
+import { failureMessage, userFacingError } from '@/lib/userMessages';
 import { usesRemoteApi } from '@/core/auth/accessToken';
 import { can } from '@/core/auth/permissions';
 import { hasRole, roleLabels } from '@/core/auth/roles';
@@ -86,8 +86,8 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
       .then((data) => {
         if (active) setItems(data);
       })
-      .catch(() => {
-        if (active) setError(UNDER_CONSTRUCTION_MESSAGE);
+      .catch((caught: unknown) => {
+        if (active) setError(failureMessage(caught, 'Não foi possível carregar os registros. Confirme se a API está rodando.'));
       })
       .finally(() => {
         if (active) setLoading(false);

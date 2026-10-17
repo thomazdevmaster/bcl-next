@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
-import { UNDER_CONSTRUCTION_MESSAGE } from '@/lib/userMessages';
+import { failureMessage } from '@/lib/userMessages';
 import {
   HOME_SECTION_LABELS,
   defaultHomepage,
@@ -28,9 +28,9 @@ export function HomepageEditor() {
   useEffect(() => {
     apiFetch<unknown>('/homepage')
       .then((payload) => setDraft(parseHomepagePayload(payload)))
-      .catch(() => {
+      .catch((caught: unknown) => {
         setDraft(defaultHomepage());
-        setError(UNDER_CONSTRUCTION_MESSAGE);
+        setError(failureMessage(caught, 'Não foi possível carregar a home salva. Você está editando o modelo padrão.'));
       })
       .finally(() => setLoading(false));
   }, []);
@@ -80,8 +80,8 @@ export function HomepageEditor() {
       });
       setDraft(parseHomepagePayload(savedDoc));
       setSaved(true);
-    } catch {
-      setError(UNDER_CONSTRUCTION_MESSAGE);
+    } catch (caught) {
+      setError(failureMessage(caught, 'Não foi possível salvar. Confira se a API está no ar.'));
     } finally {
       setSaving(false);
     }

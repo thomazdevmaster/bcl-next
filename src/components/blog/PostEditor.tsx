@@ -19,7 +19,7 @@ import {
 import type { AlbumLayout, MediaKind, MediaPost, MediaSize, MediaStatus, PostBlock, SectionLayout } from '@/domains/media/types';
 import { apiFetch } from '@/lib/api';
 import { uploadMediaFile } from '@/lib/uploadMedia';
-import { UNDER_CONSTRUCTION_MESSAGE, userFacingError } from '@/lib/userMessages';
+import { failureMessage, userFacingError } from '@/lib/userMessages';
 
 interface PostEditorProps {
   postId?: string;
@@ -54,7 +54,7 @@ export function PostEditor({ postId }: PostEditorProps) {
         setPost({ ...found, blocks: readBlocks(found) });
         setSlugTouched(true);
       })
-      .catch(() => setError(UNDER_CONSTRUCTION_MESSAGE))
+      .catch((caught: unknown) => setError(failureMessage(caught, 'Não foi possível carregar o post.')))
       .finally(() => setLoading(false));
   }, [postId]);
 
@@ -127,8 +127,8 @@ export function PostEditor({ postId }: PostEditorProps) {
         body: JSON.stringify({ ...payload, id: postId }),
       });
       setPost({ ...draft, ...payload, id: postId });
-    } catch {
-      setError(UNDER_CONSTRUCTION_MESSAGE);
+    } catch (caught) {
+      setError(failureMessage(caught, 'Não foi possível salvar o post.'));
     } finally {
       setSaving(false);
     }

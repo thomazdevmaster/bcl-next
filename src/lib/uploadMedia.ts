@@ -1,6 +1,6 @@
 import { getAccessToken } from '@/core/auth/accessToken';
 import { getApiUrl } from '@/config/environment';
-import { UNDER_CONSTRUCTION_MESSAGE } from '@/lib/userMessages';
+import { failureMessage } from '@/lib/userMessages';
 
 export async function uploadMediaFile(file: File): Promise<string> {
   const body = new FormData();
@@ -13,7 +13,7 @@ export async function uploadMediaFile(file: File): Promise<string> {
   });
   const payload = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
   if (!response.ok || !payload?.url) {
-    throw new Error(UNDER_CONSTRUCTION_MESSAGE);
+    throw new Error(failureMessage(undefined, payload?.error || 'Não foi possível enviar o arquivo.'));
   }
   return payload.url;
 }

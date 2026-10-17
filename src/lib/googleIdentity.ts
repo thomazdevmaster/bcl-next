@@ -1,4 +1,4 @@
-import { UNDER_CONSTRUCTION_MESSAGE } from '@/lib/userMessages';
+import { failureMessage } from '@/lib/userMessages';
 
 /**
  * Google Identity Services (botão "Entrar com Google").
@@ -58,14 +58,14 @@ export function loadGoogleIdentity(): Promise<GoogleAccountsId> {
     const done = () => {
       const api = window.google?.accounts?.id;
       if (api) resolve(api);
-      else reject(new Error(UNDER_CONSTRUCTION_MESSAGE));
+      else reject(new Error(failureMessage(undefined, 'O Google não carregou o login.')));
     };
     script.addEventListener('load', done, { once: true });
     script.addEventListener(
       'error',
       () => {
         scriptPromise = null;
-        reject(new Error(UNDER_CONSTRUCTION_MESSAGE));
+        reject(new Error(failureMessage(undefined, 'Sem conexão com o Google. Tente de novo.')));
       },
       { once: true },
     );

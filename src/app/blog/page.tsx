@@ -7,7 +7,7 @@ import { PortalPageHeader } from '@/components/public/PortalPageHeader';
 import { blogSection, defaultBlogPage, parseBlogPage, type BlogPageDocument } from '@/domains/blog/layout';
 import type { MediaKind, MediaPost } from '@/domains/media/types';
 import { apiFetch } from '@/lib/api';
-import { UNDER_CONSTRUCTION_MESSAGE } from '@/lib/userMessages';
+import { failureMessage } from '@/lib/userMessages';
 import { mediaKindLabel, publishedMediaPosts } from '@/lib/publicPortal';
 
 type KindFilter = 'all' | MediaKind;
@@ -33,7 +33,7 @@ export default function BlogPage() {
         setLayout(nextLayout);
         setPosts(publishedMediaPosts(items, nextLayout.postOrder));
       })
-      .catch(() => setError(UNDER_CONSTRUCTION_MESSAGE))
+      .catch((caught: unknown) => setError(failureMessage(caught, 'Não foi possível carregar o blog.')))
       .finally(() => setLoading(false));
   }, []);
 

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Song } from '@/domains/songs/types';
 import { apiFetch } from '@/lib/api';
-import { UNDER_CONSTRUCTION_MESSAGE } from '@/lib/userMessages';
+import { failureMessage } from '@/lib/userMessages';
 import {
   extractInstrumentsFromXml,
   type InstrumentInfo,
@@ -48,8 +48,8 @@ export function StudySongCatalog({ onStart }: StudySongCatalogProps) {
           );
         }
       })
-      .catch(() => {
-        if (active) setError(UNDER_CONSTRUCTION_MESSAGE);
+      .catch((caught: unknown) => {
+        if (active) setError(failureMessage(caught, 'Não foi possível carregar as músicas para estudo.'));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -87,8 +87,8 @@ export function StudySongCatalog({ onStart }: StudySongCatalogProps) {
         scoreInstrumentIds: allIds,
         midiInstrumentIds: allIds,
       });
-    } catch {
-      setError(UNDER_CONSTRUCTION_MESSAGE);
+    } catch (caught) {
+      setError(failureMessage(caught, `Não foi possível preparar a partitura de ${song.title}.`));
     } finally {
       setPreparingId(null);
     }

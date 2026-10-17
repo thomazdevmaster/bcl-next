@@ -6,7 +6,7 @@ import { usesRemoteApi } from '@/core/auth/accessToken';
 import { hasRole } from '@/core/auth/roles';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { UNDER_CONSTRUCTION_MESSAGE, userFacingError } from '@/lib/userMessages';
+import { failureMessage, userFacingError } from '@/lib/userMessages';
 
 type CatalogAction = { action: string; label: string };
 type CatalogResource = { resource: string; label: string; hint: string; actions: CatalogAction[] };
@@ -181,7 +181,9 @@ export default function PapeisPage() {
     return (
       <section className="mx-auto max-w-3xl rounded-xl border border-[var(--border)] bg-[var(--card)] p-6">
         <h1 className="text-xl font-semibold">Papéis</h1>
-        <p className="mt-2 text-[var(--muted)]">{UNDER_CONSTRUCTION_MESSAGE}</p>
+        <p className="mt-2 text-[var(--muted)]">
+          {failureMessage(undefined, 'A gestão de papéis usa o backend. O mock local não tem este cadastro.')}
+        </p>
       </section>
     );
   }

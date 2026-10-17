@@ -8,7 +8,7 @@ import { PostBlocks } from '@/components/blog/PostBlocks';
 import { readBlocks } from '@/domains/media/blocks';
 import { apiFetch } from '@/lib/api';
 import { formatPublishedDate, mediaKindLabel } from '@/lib/publicPortal';
-import { UNDER_CONSTRUCTION_MESSAGE } from '@/lib/userMessages';
+import { failureMessage } from '@/lib/userMessages';
 import type { MediaPost } from '@/domains/media/types';
 
 const postShellClass = 'mx-auto w-[85%] py-16';
@@ -38,7 +38,7 @@ export default function BlogPostPage() {
   if (loadError) {
     return (
       <div className={postShellClass}>
-        <p className="text-[var(--muted)]">{UNDER_CONSTRUCTION_MESSAGE}</p>
+        <p className="text-[var(--muted)]">{failureMessage(undefined, 'Não foi possível carregar o post.')}</p>
         <Link href="/blog" className="mt-4 inline-flex min-h-11 items-center text-[var(--color-brand-strong)]">
           Voltar ao blog
         </Link>
