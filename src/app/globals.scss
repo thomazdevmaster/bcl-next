@@ -415,19 +415,6 @@
     filter: drop-shadow(0 0 2px rgba(220, 38, 38, 0.85));
   }
 
-  body.portal-intro-active {
-    overflow: hidden;
-  }
-
-  .portal-home-hero {
-    transition: opacity 0.3s ease;
-  }
-
-  body.portal-intro-active .portal-home-hero {
-    pointer-events: none;
-    opacity: 0;
-  }
-
   .portal-intro-splash {
     position: fixed;
     inset: 0;

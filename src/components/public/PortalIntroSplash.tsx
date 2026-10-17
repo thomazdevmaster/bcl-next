@@ -19,7 +19,7 @@ export function PortalIntroSplash({ playKey }: PortalIntroSplashProps) {
   const [phase, setPhase] = useState<IntroPhase>('visible');
 
   const finishIntro = useCallback(() => {
-    document.body.classList.remove('portal-intro-active');
+    document.body.classList.remove('portal-intro-active', 'overflow-x-hidden');
     setPhase('hidden');
   }, []);
 
@@ -51,6 +51,9 @@ export function PortalIntroSplash({ playKey }: PortalIntroSplashProps) {
           `height ${MORPH_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`,
           `border-radius ${MORPH_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`,
         ].join(', ');
+        // Commit the starting geometry before changing targets, or the browser
+        // can skip the transition and never emit the event that unlocks scroll.
+        void shell.offsetWidth;
         shell.style.top = `${rect.top}px`;
         shell.style.left = `${rect.left}px`;
         shell.style.width = `${rect.width}px`;
@@ -62,14 +65,14 @@ export function PortalIntroSplash({ playKey }: PortalIntroSplashProps) {
   }, [finishIntro]);
 
   useEffect(() => {
-    document.body.classList.add('portal-intro-active');
+    document.body.classList.add('portal-intro-active', 'overflow-x-hidden');
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const timer = window.setTimeout(startMorph, reduced ? 500 : MAIN_ANIM_MS);
 
     return () => {
       window.clearTimeout(timer);
-      document.body.classList.remove('portal-intro-active');
+      document.body.classList.remove('portal-intro-active', 'overflow-x-hidden');
     };
   }, [playKey, startMorph]);
 
@@ -77,7 +80,7 @@ export function PortalIntroSplash({ playKey }: PortalIntroSplashProps) {
     const shell = shellRef.current;
     if (!shell || event.target !== shell) return;
 
-    if (phase === 'morph' && event.propertyName === 'width') {
+    if (phase === 'morph' && event.propertyName === 'height') {
       shell.style.transition = 'opacity 320ms ease-out';
       shell.style.opacity = '0';
       setPhase('exit');

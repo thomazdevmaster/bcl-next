@@ -73,7 +73,7 @@ export function PublicShell({ children }: { children: ReactNode }) {
             aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'}
             onClick={() => setOpenOnPath((current) => (current === pathname ? null : pathname))}
           >
-            <span className="material-icons text-[28px]" aria-hidden>
+            <span className="material-icons block w-7 shrink-0 overflow-hidden text-center text-[28px] leading-none" aria-hidden>
               {menuOpen ? 'close' : 'menu'}
             </span>
           </button>
