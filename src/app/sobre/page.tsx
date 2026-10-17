@@ -11,7 +11,7 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: 'Sobre · Banda Carmelitana Luminarense',
+  title: 'Sobre',
   description:
     'Fundada em 1894 em Luminárias (MG), a Banda Carmelitana Luminarense é patrimônio cultural vivo: mais de 130 anos de música, fé e formação gratuita de jovens músicos.',
 };

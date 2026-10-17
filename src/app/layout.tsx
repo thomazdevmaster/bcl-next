@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { getSiteUrl } from "@/config/environment";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { RootShell } from "@/layouts/RootShell";
@@ -11,9 +12,30 @@ const inter = Inter({
   display: "swap",
 });
 
+const SITE_NAME = "Banda Carmelitana Luminarense";
+const SITE_DESCRIPTION =
+  "Fundada em 1894 em Luminárias (MG): agenda, história, notícias e formação musical da Banda Carmelitana Luminarense.";
+
 export const metadata: Metadata = {
-  title: "Banda Carmelitana Luminarense",
-  description: "Portal e gestão da Banda Carmelitana Luminarense",
+  metadataBase: getSiteUrl(),
+  title: {
+    default: SITE_NAME,
+    template: `%s · ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  openGraph: {
+    type: "website",
+    locale: "pt_BR",
+    siteName: SITE_NAME,
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_NAME,
+    description: SITE_DESCRIPTION,
+  },
 };
 
 export default function RootLayout({
