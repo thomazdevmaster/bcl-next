@@ -23,6 +23,9 @@
   --color-mist: #f4f7fa;
   --color-white: #ffffff;
 
+  /* Home: accessible accent text; CTA reuses the semantic card palette. */
+  --home-accent-text: #007781;
+
   --background: var(--color-mist);
   --foreground: var(--color-ink);
   --muted: #5b6b7c;
@@ -69,6 +72,7 @@
   --color-brand: #2ad4de;
   --color-brand-strong: #00c2ce;
   --color-brand-soft: #12313a;
+  --home-accent-text: #2ad4de;
   --background: #07131e;
   --foreground: #e8f1f6;
   --muted: #8aa0b2;

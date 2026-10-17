@@ -47,3 +47,13 @@ next-env.d.ts
 # mídias enviadas pelo editor
 /public/uploads/*
 !/public/uploads/.gitkeep
+
+
+# SKILLS ESPECÍFICAS
+.agents/*
+skills-lock.json
+.impeccable/
+
+# PASTA DE PROTÓTIPOS DE DESIGN
+src/app/prototype
+src/components/prototype
