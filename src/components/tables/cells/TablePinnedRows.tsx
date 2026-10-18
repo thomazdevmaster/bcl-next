@@ -27,8 +27,21 @@ export function rowSelectionKey(
   return key;
 }
 
-export function TablePinnedRow<TData extends RowData>({ row, table }: { row: Row<typeof tableFeatures, TData>; table: TableInstance<TData> }) {
-  const bottomRows = table.getBottomRows();
+export function TablePinnedRow<TData extends RowData>({
+  row,
+  table,
+  topOffset,
+  bottomOffset,
+}: {
+  row: Row<typeof tableFeatures, TData>;
+  table: TableInstance<TData>;
+  /** Measured header height plus the heights of top pinned rows before this one. */
+  topOffset?: number;
+  /** Sum of the heights of bottom pinned rows after this one. */
+  bottomOffset?: number;
+}) {
+  const pinned = row.getIsPinned();
+  const offset = pinned === "top" ? topOffset : pinned === "bottom" ? bottomOffset : undefined;
   return (
     <Subscribe
       source={table.atoms.cellSelection}
@@ -38,11 +51,10 @@ export function TablePinnedRow<TData extends RowData>({ row, table }: { row: Row
         <tr
           className="bg-[var(--card-secondary)]"
           style={{
-            position: "sticky",
-            top: row.getIsPinned() === "top" ? `${row.getPinnedIndex() * 40 + 44}px` : undefined,
-            bottom:
-              row.getIsPinned() === "bottom" ? `${(bottomRows.length - 1 - row.getPinnedIndex()) * 40}px` : undefined,
-            zIndex: 1,
+            position: offset === undefined ? undefined : "sticky",
+            top: pinned === "top" ? topOffset : undefined,
+            bottom: pinned === "bottom" ? bottomOffset : undefined,
+            zIndex: offset === undefined ? undefined : 1,
           }}
         >
           {row.getVisibleCells().map((cell) => (

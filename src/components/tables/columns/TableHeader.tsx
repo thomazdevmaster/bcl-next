@@ -4,7 +4,9 @@ import { Subscribe } from "@tanstack/react-table";
 import type { Header, ReactTable } from "@tanstack/react-table";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useSelector } from "@tanstack/react-store";
 import type { CSSProperties } from "react";
+import type { KeyboardEvent } from "react";
 import type { RowData } from "@tanstack/react-table";
 import { TableColumnFilter } from "../filters/TableColumnFilter";
 import { tableFeatures } from "../core/table-features";
@@ -29,6 +31,17 @@ export function TableHeader<TData extends RowData>({
     disabled: !canReorder,
   });
   const column = header.column;
+  useSelector(table.atoms.columnSizing, (sizing) => sizing[column.id]);
+  const minSize = column.columnDef.minSize ?? 20;
+  const maxSize = column.columnDef.maxSize ?? Number.MAX_SAFE_INTEGER;
+  const resizeOnKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const increment = event.shiftKey ? 20 : 10;
+    const delta = event.key === "ArrowRight" ? increment : -increment;
+    const nextSize = Math.min(maxSize, Math.max(minSize, column.getSize() + delta));
+    table.setColumnSizing((current) => ({ ...current, [column.id]: nextSize }));
+  };
   const pinningStyles = getColumnPinningStyles(column);
   const style: CSSProperties = {
     ...pinningStyles,
@@ -150,11 +163,18 @@ export function TableHeader<TData extends RowData>({
           )}
           {column.getCanResize() && (
             <div
+              role="separator"
+              aria-orientation="vertical"
               aria-label={`Redimensionar coluna ${columnLabel}`}
+              aria-valuenow={column.getSize()}
+              aria-valuemin={minSize}
+              aria-valuemax={maxSize === Number.MAX_SAFE_INTEGER ? undefined : maxSize}
+              tabIndex={0}
+              onKeyDown={resizeOnKeyDown}
               onDoubleClick={() => column.resetSize()}
               onMouseDown={header.getResizeHandler()}
               onTouchStart={header.getResizeHandler()}
-              className={`absolute right-0 top-0 h-full w-3 cursor-col-resize touch-none ${column.getIsResizing() ? "bg-[var(--primary)]" : "bg-transparent hover:bg-[var(--primary)]/40"}`}
+              className={`absolute right-0 top-0 h-full min-h-11 w-11 cursor-col-resize touch-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] after:absolute after:right-0 after:top-0 after:h-full after:w-1 ${column.getIsResizing() ? "after:bg-[var(--primary)]" : "after:bg-transparent hover:after:bg-[var(--primary)]/40 focus-visible:after:bg-[var(--primary)]"}`}
             />
           )}
         </th>

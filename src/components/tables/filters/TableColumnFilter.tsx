@@ -1,8 +1,7 @@
 "use client";
 
 import type { Column, RowData } from "@tanstack/react-table";
-
-import { useMemo } from "react";
+import { useSelector } from "@tanstack/react-store";
 import { tableFeatures } from "../core/table-features";
 import { TableDebouncedInput } from "../inputs/TableDebouncedInput";
 
@@ -13,13 +12,17 @@ export function TableColumnFilter<TData extends RowData>({
   column: Column<typeof tableFeatures, TData, unknown>;
   columnLabel: string;
 }) {
+  // Facet helpers memoize their result, so subscribe to both inputs that can
+  // invalidate it before asking the column for its current values.
+  useSelector(column.table.store, (state) => state.columnFilters);
+  useSelector(column.table.store, (state) => state.globalFilter);
+  useSelector(column.table.optionsStore!, (options) => options.data);
+
   const variant = column.columnDef.meta?.filterVariant;
   const filterValue = column.getFilterValue();
   const minMax = variant === "range" ? column.getFacetedMinMaxValues() : undefined;
-  const uniqueValues = useMemo(
-    () => (variant === "range" ? [] : Array.from(column.getFacetedUniqueValues().keys()).sort().slice(0, 500)),
-    [column, variant],
-  );
+  const facetedValues = variant === "range" ? undefined : column.getFacetedUniqueValues();
+  const uniqueValues = facetedValues ? Array.from(facetedValues.keys()).sort().slice(0, 500) : [];
   const inputClass =
     "mt-2 min-h-11 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-2 text-sm font-normal text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]";
 
@@ -81,7 +84,7 @@ export function TableColumnFilter<TData extends RowData>({
         type="text"
         value={String(filterValue ?? "")}
         onChange={(value) => column.setFilterValue(value)}
-        placeholder={`Buscar (${column.getFacetedUniqueValues().size})`}
+        placeholder={`Buscar (${facetedValues?.size ?? 0})`}
         className={inputClass}
         list={`${column.id}-options`}
       />
