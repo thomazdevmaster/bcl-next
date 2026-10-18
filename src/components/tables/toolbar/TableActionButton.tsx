@@ -20,7 +20,7 @@ export function TableActionButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className={`group min-h-11 min-w-11 rounded-[var(--radius)] border border-[var(--primary)] px-3 text-sm font-medium text-[var(--primary)] hover:bg-[var(--primary)] hover:text-[var(--primary-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-45 ${tableButtonMotion}`}
+      className={`cursor-pointer group min-h-11 min-w-11 rounded-[var(--radius)] border border-[var(--info)] px-3 text-sm font-medium text-[var(--info)] hover:bg-[var(--info)] hover:text-[var(--info-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-65 ${tableButtonMotion}`}
     >
       {children}
     </button>

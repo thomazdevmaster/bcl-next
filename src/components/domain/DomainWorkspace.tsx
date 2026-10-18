@@ -349,7 +349,7 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
 
   return (
     <DomainGuard resource={resource}>
-      <section className="mx-auto max-w-6xl space-y-6">
+      <section className="mx-auto space-y-6">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Domínio</p>
@@ -381,6 +381,7 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
         <article className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
           <div className="p-4">
             <TableView
+              tableId={resource}
               data={rows}
               columns={tableColumns}
               getRowId={(row, index) => String(row.id ?? index)}

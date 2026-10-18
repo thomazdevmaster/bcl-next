@@ -50,6 +50,15 @@ const fuzzySort: SortFn<FuzzyFeatures, RowData> = (rowA, rowB, columnId) => {
     : sortFns.alphanumeric(rowA, rowB, columnId);
 };
 
+const ptBrSort: SortFn<FuzzyFeatures, RowData> = (rowA, rowB, columnId) => {
+  const valueA = rowA.getValue<unknown>(columnId);
+  const valueB = rowB.getValue<unknown>(columnId);
+  if (typeof valueA === "string" && typeof valueB === "string") {
+    return valueA.localeCompare(valueB, "pt-BR", { numeric: true, sensitivity: "base" });
+  }
+  return sortFns.alphanumeric(rowA, rowB, columnId);
+};
+
 export const tableFeatures = defineTableFeatures({
   ...stockFeatures,
   columnMeta: metaHelper<ColumnMeta>(),
@@ -63,7 +72,7 @@ export const tableFeatures = defineTableFeatures({
   sortedRowModel: createSortedRowModel(),
   expandedRowModel: createExpandedRowModel(),
   filterFns: { ...filterFns, fuzzy: fuzzyFilter },
-  sortFns: { ...sortFns, fuzzy: fuzzySort },
+  sortFns: { ...sortFns, fuzzy: fuzzySort, ptBR: ptBrSort },
   aggregationFns,
 });
 

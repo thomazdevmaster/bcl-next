@@ -5,13 +5,17 @@ import type { Header, ReactTable } from "@tanstack/react-table";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useSelector } from "@tanstack/react-store";
+import { useState } from "react";
 import type { CSSProperties } from "react";
-import type { KeyboardEvent } from "react";
 import type { RowData } from "@tanstack/react-table";
+import { TableColumnOptionsDialog } from "../TableColumnOptionsDialog";
 import { TableColumnFilter } from "../filters/TableColumnFilter";
 import { tableFeatures } from "../core/table-features";
 import type { TableState } from "../core/table-features";
 import { getColumnPinningStyles } from "./tablePinningStyles";
+import { DEFAULT_COLUMN_PRESENTATION } from "../core/tableColumnPresentation";
+import type { TableColumnPresentation } from "../core/tableColumnPresentation";
+import { tableButtonMotion, tableIconMotion } from "../core/tableMotion";
 
 type TableInstance<TData extends RowData> = ReactTable<typeof tableFeatures, TData, TableState>;
 
@@ -21,33 +25,34 @@ export function TableHeader<TData extends RowData>({
   columnLabel,
   canReorder = true,
   resetKey,
+  columnSizes,
+  columnPresentation,
+  onColumnPresentationChange,
 }: {
   header: Header<typeof tableFeatures, TData, unknown>;
   table: TableInstance<TData>;
   columnLabel: string;
   canReorder?: boolean;
   resetKey?: number;
+  columnSizes: Record<string, number>;
+  columnPresentation?: TableColumnPresentation;
+  onColumnPresentationChange: (presentation: TableColumnPresentation) => void;
 }) {
   const { attributes, isDragging, listeners, setNodeRef, transform } = useSortable({
     id: header.column.id,
     disabled: !canReorder,
   });
   const column = header.column;
+  const [optionsOpen, setOptionsOpen] = useState(false);
   useSelector(table.atoms.columnSizing, (sizing) => sizing[column.id]);
   const minSize = column.columnDef.minSize ?? table.getDefaultColumnDef().minSize ?? 20;
   const maxSize = column.columnDef.maxSize ?? table.getDefaultColumnDef().maxSize ?? Number.MAX_SAFE_INTEGER;
-  const resizeOnKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    event.preventDefault();
-    event.stopPropagation();
-    const increment = event.shiftKey ? 20 : 10;
-    const delta = event.key === "ArrowRight" ? increment : -increment;
-    const nextSize = Math.min(maxSize, Math.max(minSize, column.getSize() + delta));
-    table.setColumnSizing((current) => ({ ...current, [column.id]: nextSize }));
-  };
-  const pinningStyles = getColumnPinningStyles(column);
+  const hasColumnOptions = canReorder || column.getCanPin() || column.getCanGroup() || column.getCanResize();
+  const displaySize = columnSizes[column.id] ?? column.getSize();
+  const pinningStyles = getColumnPinningStyles(column, table, columnSizes);
   const style: CSSProperties = {
     ...pinningStyles,
+    background: undefined,
     opacity: isDragging ? 0.75 : 1,
     transform: CSS.Translate.toString(transform),
     transition: "width transform 0.2s ease",
@@ -70,121 +75,69 @@ export function TableHeader<TData extends RowData>({
                 ? "ascending"
                 : "descending"
           }
-          className="relative border-b border-[var(--border)] bg-[var(--card-secondary)] p-3 pb-14 text-left align-top text-xs font-semibold uppercase tracking-wide text-[var(--muted)]"
+          className="relative border-b border-r border-[var(--border)] bg-[var(--table-header-bg)] p-3 text-left align-top text-xs font-semibold uppercase tracking-wide text-[var(--table-header-fg)]"
         >
           {header.isPlaceholder ? null : (
-            <div className="flex min-w-32 items-start gap-2">
-              {canReorder && (
-                <button
-                  type="button"
-                  {...attributes}
-                  {...listeners}
-                  aria-label={`Reordenar coluna ${columnLabel}`}
-                  className="min-h-11 min-w-11 cursor-grab rounded text-[var(--muted)] active:cursor-grabbing"
-                  title="Arraste para reordenar"
-                >
-                  <span className="material-icons text-base" aria-hidden="true">
-                    drag_indicator
-                  </span>
-                </button>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1">
-                  {column.getCanPin() && (
-                    <>
-                      {column.getIsPinned() !== "start" && (
-                        <button
-                          type="button"
-                          aria-label={`Fixar ${columnLabel} à esquerda`}
-                          className="min-h-11 min-w-11 rounded text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]"
-                          title="Fixar à esquerda"
-                          onClick={() => column.pin("start")}
-                        >
-                          <span className="material-icons text-base" aria-hidden="true">
-                            keyboard_arrow_left
-                          </span>
-                        </button>
-                      )}
-                      {column.getIsPinned() && (
-                        <button
-                          type="button"
-                          aria-label={`Desafixar ${columnLabel}`}
-                          className="min-h-11 min-w-11 rounded text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]"
-                          title="Desafixar coluna"
-                          onClick={() => column.pin(false)}
-                        >
-                          <span className="material-icons text-base" aria-hidden="true">
-                            push_pin
-                          </span>
-                        </button>
-                      )}
-                      {column.getIsPinned() !== "end" && (
-                        <button
-                          type="button"
-                          aria-label={`Fixar ${columnLabel} à direita`}
-                          className="min-h-11 min-w-11 rounded text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]"
-                          title="Fixar à direita"
-                          onClick={() => column.pin("end")}
-                        >
-                          <span className="material-icons text-base" aria-hidden="true">
-                            keyboard_arrow_right
-                          </span>
-                        </button>
-                      )}
-                    </>
-                  )}
-                  {column.getCanGroup() && (
-                    <button
-                      type="button"
-                      aria-label={column.getIsGrouped() ? "Remover agrupamento" : "Agrupar por esta coluna"}
-                      className="min-h-11 min-w-11 rounded text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]"
-                      title={column.getIsGrouped() ? "Remover agrupamento" : "Agrupar por esta coluna"}
-                      onClick={column.getToggleGroupingHandler()}
-                    >
-                      <span className="material-icons text-base" aria-hidden="true">
-                        {column.getIsGrouped() ? "group_off" : "group_work"}
-                      </span>
-                    </button>
-                  )}
-                  {column.getCanSort() ? (
-                    <button
-                      type="button"
-                      aria-label={`Ordenar por ${columnLabel}`}
-                      className="min-h-11 text-left text-[var(--foreground)] hover:text-[var(--color-brand-strong)]"
-                      onClick={column.getToggleSortingHandler()}
-                    >
-                      <table.FlexRender header={header} />
-                      {column.getIsSorted() && (
-                        <span
-                          className="material-icons ml-1 align-middle text-base"
-                          aria-label={column.getIsSorted() === "asc" ? "ordem crescente" : "ordem decrescente"}
-                        >
-                          {column.getIsSorted() === "asc" ? "arrow_upward" : "arrow_downward"}
-                        </span>
-                      )}
-                    </button>
-                  ) : (
+            <div className="min-w-32">
+              <div className="flex min-h-11 items-center gap-1 text-[var(--table-header-fg)]">
+                {canReorder && (
+                  <button
+                    type="button"
+                    {...attributes}
+                    {...listeners}
+                    aria-label={`Reordenar coluna ${columnLabel}`}
+                    title="Arraste para reordenar"
+                    className="inline-flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-[var(--radius)] text-[var(--table-header-fg)] hover:bg-[var(--accent)] active:cursor-grabbing"
+                  >
+                    <span className="material-icons text-base" aria-hidden="true">drag_indicator</span>
+                  </button>
+                )}
+                {column.getCanSort() ? (
+                  <button
+                    type="button"
+                    aria-label={`Ordenar por ${columnLabel}`}
+                    title={column.getIsSorted() === "asc" ? "Ordem crescente" : column.getIsSorted() === "desc" ? "Ordem decrescente" : "Ordenar alfabeticamente"}
+                    onClick={column.getToggleSortingHandler()}
+                    className={`group min-h-11 min-w-0 cursor-pointer flex-1 text-left hover:text-[var(--color-brand-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${tableButtonMotion}`}
+                  >
                     <table.FlexRender header={header} />
-                  )}
-                </div>
-                {column.getCanFilter() && <TableColumnFilter column={column} columnLabel={columnLabel} resetKey={resetKey} />}
+                    {column.getIsSorted() && (
+                      <span className={`material-icons ml-1 align-middle text-base ${tableIconMotion} ${column.getIsSorted() === "desc" ? "rotate-180" : ""}`} aria-hidden="true">
+                        arrow_upward
+                      </span>
+                    )}
+                  </button>
+                ) : (
+                  <table.FlexRender header={header} />
+                )}
+                {hasColumnOptions && (
+                  <button
+                    type="button"
+                    aria-label={`Opções da coluna ${columnLabel}`}
+                    aria-haspopup="dialog"
+                    aria-expanded={optionsOpen}
+                    onClick={() => setOptionsOpen(true)}
+                    className={`group inline-flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-[var(--radius)] text-[var(--table-header-fg)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${tableButtonMotion}`}
+                  >
+                    <span className={`material-icons text-base group-hover:rotate-45 motion-reduce:group-hover:rotate-0 ${tableIconMotion}`} aria-hidden="true">settings</span>
+                  </button>
+                )}
               </div>
+              {column.getCanFilter() && <TableColumnFilter column={column} columnLabel={columnLabel} resetKey={resetKey} />}
             </div>
           )}
-          {column.getCanResize() && (
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label={`Redimensionar coluna ${columnLabel}`}
-              aria-valuenow={column.getSize()}
-              aria-valuemin={minSize}
-              aria-valuemax={maxSize}
-              tabIndex={0}
-              onKeyDownCapture={resizeOnKeyDown}
-              onDoubleClick={() => column.resetSize()}
-              onMouseDown={header.getResizeHandler()}
-              onTouchStart={header.getResizeHandler()}
-              className={`absolute bottom-0 right-0 h-11 w-11 cursor-col-resize touch-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] after:absolute after:right-0 after:top-0 after:h-full after:w-1 ${column.getIsResizing() ? "after:bg-[var(--primary)]" : "after:bg-transparent hover:after:bg-[var(--primary)]/40 focus-visible:after:bg-[var(--primary)]"}`}
+          {hasColumnOptions && (
+            <TableColumnOptionsDialog
+              open={optionsOpen}
+              onClose={() => setOptionsOpen(false)}
+              column={column}
+              table={table}
+              columnLabel={columnLabel}
+              displaySize={displaySize}
+              columnPresentation={columnPresentation ?? DEFAULT_COLUMN_PRESENTATION}
+              onColumnPresentationChange={onColumnPresentationChange}
+              minSize={minSize}
+              maxSize={maxSize}
             />
           )}
         </th>

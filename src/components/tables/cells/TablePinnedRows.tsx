@@ -5,6 +5,7 @@ import type { CellSelectionBounds, CellSelectionState, ReactTable, Row, RowData 
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { TableCell } from "./TableCell";
 import { tableFeatures } from "../core/table-features";
+import type { TableColumnPresentation } from "../core/tableColumnPresentation";
 import type { TableState } from "../core/table-features";
 
 type TableInstance<TData extends RowData> = ReactTable<typeof tableFeatures, TData, TableState>;
@@ -32,6 +33,8 @@ export function TablePinnedRow<TData extends RowData>({
   table,
   topOffset,
   bottomOffset,
+  columnSizes,
+  columnPresentations,
 }: {
   row: Row<typeof tableFeatures, TData>;
   table: TableInstance<TData>;
@@ -39,6 +42,8 @@ export function TablePinnedRow<TData extends RowData>({
   topOffset?: number;
   /** Sum of the heights of bottom pinned rows after this one. */
   bottomOffset?: number;
+  columnSizes: Record<string, number>;
+  columnPresentations: Record<string, TableColumnPresentation>;
 }) {
   const pinned = row.getIsPinned();
   const offset = pinned === "top" ? topOffset : pinned === "bottom" ? bottomOffset : undefined;
@@ -49,7 +54,7 @@ export function TablePinnedRow<TData extends RowData>({
     >
       {() => (
         <tr
-          className="bg-[var(--card-secondary)]"
+          className="group"
           style={{
             position: offset === undefined ? undefined : "sticky",
             top: pinned === "top" ? topOffset : undefined,
@@ -59,7 +64,7 @@ export function TablePinnedRow<TData extends RowData>({
         >
           {row.getVisibleCells().map((cell) => (
             <SortableContext key={cell.id} items={table.state.columnOrder} strategy={horizontalListSortingStrategy}>
-              <TableCell cell={cell} table={table} />
+              <TableCell cell={cell} table={table} columnSizes={columnSizes} columnPresentations={columnPresentations} />
             </SortableContext>
           ))}
         </tr>
