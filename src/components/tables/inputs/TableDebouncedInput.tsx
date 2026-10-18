@@ -2,6 +2,7 @@
 
 import type { InputHTMLAttributes } from "react";
 import { useTableDebouncedInput } from "./useTableDebouncedInput";
+import { tableControlMotion } from "../core/tableMotion";
 
 type TableDebouncedInputProps = {
   value: string | number;
@@ -15,6 +16,7 @@ export function TableDebouncedInput({
   onChange,
   delay,
   resetKey,
+  className,
   ...props
 }: TableDebouncedInputProps) {
   const { value, setValue } = useTableDebouncedInput({
@@ -24,5 +26,5 @@ export function TableDebouncedInput({
     resetKey,
   });
 
-  return <input {...props} value={value} onChange={(event) => setValue(event.target.value)} />;
+  return <input {...props} className={`${className ?? ""} ${tableControlMotion}`} value={value} onChange={(event) => setValue(event.target.value)} />;
 }

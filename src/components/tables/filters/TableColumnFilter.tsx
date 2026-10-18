@@ -4,6 +4,7 @@ import type { Column, RowData } from "@tanstack/react-table";
 import { useSelector } from "@tanstack/react-store";
 import { tableFeatures } from "../core/table-features";
 import { TableDebouncedInput } from "../inputs/TableDebouncedInput";
+import { tableControlMotion } from "../core/tableMotion";
 
 export function TableColumnFilter<TData extends RowData>({
   column,
@@ -27,7 +28,7 @@ export function TableColumnFilter<TData extends RowData>({
   const facetedValues = isRange ? undefined : column.getFacetedUniqueValues();
   const uniqueValues = facetedValues ? Array.from(facetedValues.keys()).sort().slice(0, 500) : [];
   const inputClass =
-    "mt-2 min-h-11 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-2 text-sm font-normal text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]";
+    `mt-2 min-h-11 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-2 text-sm font-normal text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${tableControlMotion}`;
 
   if (isRange) {
     const range = filterValue as [number | undefined, number | undefined] | undefined;

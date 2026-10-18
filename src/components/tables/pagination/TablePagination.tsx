@@ -1,6 +1,7 @@
 "use client";
 
 import { TableActionButton } from "../toolbar/TableActionButton";
+import { tableControlMotion, tableIconMotion } from "../core/tableMotion";
 
 interface TablePaginationProps {
   currentPage: number;
@@ -42,22 +43,22 @@ export function TablePagination({
   return (
     <nav aria-label="Paginação da tabela" className="flex flex-wrap items-center gap-2">
       <TableActionButton onClick={onFirstPage} disabled={!canGoToPreviousPage} ariaLabel="Primeira página">
-        <span className="material-icons text-base" aria-hidden="true">
+        <span className={`material-icons text-base ${tableIconMotion}`} aria-hidden="true">
           first_page
         </span>
       </TableActionButton>
       <TableActionButton onClick={onPreviousPage} disabled={!canGoToPreviousPage} ariaLabel="Página anterior">
-        <span className="material-icons text-base" aria-hidden="true">
+        <span className={`material-icons text-base ${tableIconMotion}`} aria-hidden="true">
           chevron_left
         </span>
       </TableActionButton>
       <TableActionButton onClick={onNextPage} disabled={!canGoToNextPage} ariaLabel="Próxima página">
-        <span className="material-icons text-base" aria-hidden="true">
+        <span className={`material-icons text-base ${tableIconMotion}`} aria-hidden="true">
           chevron_right
         </span>
       </TableActionButton>
       <TableActionButton onClick={onLastPage} disabled={!canGoToLastPage} ariaLabel="Última página">
-        <span className="material-icons text-base" aria-hidden="true">
+        <span className={`material-icons text-base ${tableIconMotion}`} aria-hidden="true">
           last_page
         </span>
       </TableActionButton>
@@ -72,7 +73,7 @@ export function TablePagination({
           max={Math.max(1, pageCount)}
           value={currentPage}
           onChange={(event) => onGoToPage(event.target.value ? Number(event.target.value) : 1)}
-          className="min-h-11 w-20 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-2 text-[var(--foreground)]"
+          className={`min-h-11 w-20 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-2 text-[var(--foreground)] ${tableControlMotion}`}
         />
       </label>
       <label className="flex min-h-11 items-center gap-2 text-sm">
@@ -80,7 +81,7 @@ export function TablePagination({
         <select
           value={pageSize}
           onChange={(event) => onPageSizeChange(Number(event.target.value))}
-          className="min-h-11 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-2 text-[var(--foreground)]"
+          className={`min-h-11 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-2 text-[var(--foreground)] ${tableControlMotion}`}
         >
           {pageSizeOptions.map((size) => (
             <option key={size} value={size}>
