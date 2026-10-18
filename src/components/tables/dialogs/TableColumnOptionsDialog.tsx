@@ -2,13 +2,17 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { createPortal } from "react-dom";
 import type { Column, RowData, ReactTable } from "@tanstack/react-table";
-import { tableFeatures } from "./core/table-features";
-import type { TableState } from "./core/table-features";
-import { getColumnPresentationClasses } from "./core/tableColumnPresentation";
-import type { TableColumnAlignment, TableColumnPresentation, TableColumnVerticalAlignment } from "./core/tableColumnPresentation";
-import { tableButtonMotion as buttonMotion, tableIconMotion as iconMotion } from "./core/tableMotion";
+import { EntityDialog } from "../../shared/EntityDialog";
+import { tableFeatures } from "../core/table-features";
+import type { TableState } from "../core/table-features";
+import { getColumnPresentationClasses } from "../core/tableColumnPresentation";
+import type {
+  TableColumnAlignment,
+  TableColumnPresentation,
+  TableColumnVerticalAlignment,
+} from "../core/tableColumnPresentation";
+import { tableButtonMotion as buttonMotion, tableIconMotion as iconMotion } from "../core/tableMotion";
 
 type TableInstance<TData extends RowData> = ReactTable<typeof tableFeatures, TData, TableState>;
 
@@ -43,9 +47,10 @@ function ColumnFormatMenu({
       Math.max(horizontalPadding, window.innerWidth - popoverRect.width - horizontalPadding),
     );
     const below = triggerRect.bottom + 8;
-    const top = below + popoverRect.height <= window.innerHeight - horizontalPadding
-      ? below
-      : Math.max(horizontalPadding, triggerRect.top - popoverRect.height - 8);
+    const top =
+      below + popoverRect.height <= window.innerHeight - horizontalPadding
+        ? below
+        : Math.max(horizontalPadding, triggerRect.top - popoverRect.height - 8);
 
     popover.style.left = `${left}px`;
     popover.style.top = `${top}px`;
@@ -87,7 +92,13 @@ function ColumnFormatMenu({
         onClick={togglePopover}
         className={`group inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-[var(--radius)] border border-[var(--border)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${buttonMotion} ${active ? "bg-[var(--accent)] text-[var(--accent-foreground)]" : "hover:bg-[var(--accent)]"}`}
       >
-        <span className={`material-icons text-base ${iconMotion}`} style={iconColor ? { color: iconColor } : undefined} aria-hidden="true">{icon}</span>
+        <span
+          className={`material-icons text-base ${iconMotion}`}
+          style={iconColor ? { color: iconColor } : undefined}
+          aria-hidden="true"
+        >
+          {icon}
+        </span>
       </button>
       <div
         id={popoverId}
@@ -129,19 +140,7 @@ export function TableColumnOptionsDialog<TData extends RowData>({
   minSize,
   maxSize,
 }: TableColumnOptionsDialogProps<TData>) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
   const formattingTitleId = useId();
-
-  useEffect(() => {
-    if (open && dialogRef.current && !dialogRef.current.open) {
-      dialogRef.current.showModal();
-    }
-  }, [open]);
-
-  if (!open || typeof document === "undefined") return null;
-
-  const closeDialog = () => dialogRef.current?.close();
   const alignments: { value: TableColumnAlignment; label: string; icon: string }[] = [
     { value: "left", label: "Alinhar à esquerda", icon: "format_align_left" },
     { value: "center", label: "Centralizar texto", icon: "format_align_center" },
@@ -159,36 +158,18 @@ export function TableColumnOptionsDialog<TData extends RowData>({
     const popover = button.closest<HTMLElement>("[popover]");
     if (popover?.matches(":popover-open")) popover.hidePopover();
   };
-  const menuChoiceClass = (active: boolean) => `group flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-[var(--radius)] px-3 text-left text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${buttonMotion} ${active ? "bg-[var(--accent)] text-[var(--accent-foreground)]" : "hover:bg-[var(--accent)]"}`;
+  const menuChoiceClass = (active: boolean) =>
+    `group flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-[var(--radius)] px-3 text-left text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${buttonMotion} ${active ? "bg-[var(--accent)] text-[var(--accent-foreground)]" : "hover:bg-[var(--accent)]"}`;
 
-  return createPortal(
-    <dialog
-      ref={dialogRef}
-      aria-labelledby={titleId}
-      onClose={onClose}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) closeDialog();
-      }}
-      className="fixed inset-0 m-auto max-h-[min(92dvh,38rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--card)] p-0 text-[var(--foreground)] shadow-2xl backdrop:bg-black/50"
-    >
-      <div className="flex min-h-16 items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
-        <div>
-          <h2 id={titleId} className="text-lg font-semibold">Opções da coluna</h2>
-          <p className="text-sm text-[var(--muted)]">{columnLabel}</p>
-        </div>
-        <button
-          type="button"
-          aria-label="Fechar opções da coluna"
-          onClick={closeDialog}
-          className={`group inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-[var(--radius)] text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${buttonMotion}`}
-        >
-          <span className={`material-icons group-hover:rotate-90 motion-reduce:group-hover:rotate-0 ${iconMotion}`} aria-hidden="true">close</span>
-        </button>
-      </div>
-
+  return (
+    <EntityDialog open={open} title="Opções da coluna" description={columnLabel} size="md" onClose={onClose}>
       <div className="flex flex-col gap-3 p-4">
         {column.getCanPin() && (
-          <div role="group" aria-label={`Fixar coluna ${columnLabel}`} className="flex flex-wrap gap-2 border-b border-[var(--border)] pb-3">
+          <div
+            role="group"
+            aria-label={`Fixar coluna ${columnLabel}`}
+            className="flex flex-wrap gap-2 border-b border-[var(--border)] pb-3"
+          >
             {column.getIsPinned() !== "start" && (
               <button
                 type="button"
@@ -197,7 +178,9 @@ export function TableColumnOptionsDialog<TData extends RowData>({
                 onClick={() => column.pin("start")}
                 className={`group inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-[var(--radius)] border border-[var(--border)] hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${buttonMotion}`}
               >
-                <span className={`material-icons -rotate-90 text-base ${iconMotion}`} aria-hidden="true">push_pin</span>
+                <span className={`material-icons -rotate-90 text-base ${iconMotion}`} aria-hidden="true">
+                  push_pin
+                </span>
               </button>
             )}
             {column.getIsPinned() && (
@@ -208,7 +191,9 @@ export function TableColumnOptionsDialog<TData extends RowData>({
                 onClick={() => column.pin(false)}
                 className={`group inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-[var(--radius)] border border-[var(--border)] hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${buttonMotion}`}
               >
-                <span className={`material-icons text-base ${iconMotion}`} aria-hidden="true">push_pin</span>
+                <span className={`material-icons text-base ${iconMotion}`} aria-hidden="true">
+                  push_pin
+                </span>
               </button>
             )}
             {column.getIsPinned() !== "end" && (
@@ -219,7 +204,9 @@ export function TableColumnOptionsDialog<TData extends RowData>({
                 onClick={() => column.pin("end")}
                 className={`group inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-[var(--radius)] border border-[var(--border)] hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${buttonMotion}`}
               >
-                <span className={`material-icons rotate-90 text-base ${iconMotion}`} aria-hidden="true">push_pin</span>
+                <span className={`material-icons rotate-90 text-base ${iconMotion}`} aria-hidden="true">
+                  push_pin
+                </span>
               </button>
             )}
           </div>
@@ -232,18 +219,28 @@ export function TableColumnOptionsDialog<TData extends RowData>({
             onClick={column.getToggleGroupingHandler()}
             className={`group flex min-h-11 cursor-pointer items-center gap-2 self-start rounded-[var(--radius)] border border-[var(--border)] px-3 text-sm hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${buttonMotion}`}
           >
-            <span className={`material-icons text-base ${iconMotion}`} aria-hidden="true">{column.getIsGrouped() ? "group_off" : "group_work"}</span>
+            <span className={`material-icons text-base ${iconMotion}`} aria-hidden="true">
+              {column.getIsGrouped() ? "group_off" : "group_work"}
+            </span>
             {column.getIsGrouped() ? "Remover agrupamento" : "Agrupar por esta coluna"}
           </button>
         )}
 
-        <section aria-labelledby={formattingTitleId} className="flex flex-col gap-3 border-b border-[var(--border)] pb-3">
-          <h3 id={formattingTitleId} className="text-sm font-semibold">Formatação da coluna</h3>
+        <section
+          aria-labelledby={formattingTitleId}
+          className="flex flex-col gap-3 border-b border-[var(--border)] pb-3"
+        >
+          <h3 id={formattingTitleId} className="text-sm font-semibold">
+            Formatação da coluna
+          </h3>
 
           <div role="group" aria-label="Opções de formatação" className="flex flex-wrap items-center gap-2 pb-1">
             <ColumnFormatMenu
               label="Alinhamento horizontal"
-              icon={alignments.find((alignment) => alignment.value === columnPresentation.alignment)?.icon ?? "format_align_left"}
+              icon={
+                alignments.find((alignment) => alignment.value === columnPresentation.alignment)?.icon ??
+                "format_align_left"
+              }
               active={columnPresentation.alignment !== "left"}
             >
               {alignments.map((alignment) => (
@@ -257,7 +254,10 @@ export function TableColumnOptionsDialog<TData extends RowData>({
                   }}
                   className={menuChoiceClass(columnPresentation.alignment === alignment.value)}
                 >
-                  <span className="material-icons text-base" aria-hidden="true">{alignment.icon}</span>{alignment.label.replace(" texto", "")}
+                  <span className="material-icons text-base" aria-hidden="true">
+                    {alignment.icon}
+                  </span>
+                  {alignment.label.replace(" texto", "")}
                 </button>
               ))}
             </ColumnFormatMenu>
@@ -266,7 +266,10 @@ export function TableColumnOptionsDialog<TData extends RowData>({
 
             <ColumnFormatMenu
               label="Alinhamento vertical"
-              icon={verticalAlignments.find((alignment) => alignment.value === columnPresentation.verticalAlignment)?.icon ?? "vertical_align_center"}
+              icon={
+                verticalAlignments.find((alignment) => alignment.value === columnPresentation.verticalAlignment)
+                  ?.icon ?? "vertical_align_center"
+              }
               active={columnPresentation.verticalAlignment !== "middle"}
             >
               {verticalAlignments.map((alignment) => (
@@ -280,19 +283,28 @@ export function TableColumnOptionsDialog<TData extends RowData>({
                   }}
                   className={menuChoiceClass(columnPresentation.verticalAlignment === alignment.value)}
                 >
-                  <span className="material-icons text-base" aria-hidden="true">{alignment.icon}</span>{alignment.label}
+                  <span className="material-icons text-base" aria-hidden="true">
+                    {alignment.icon}
+                  </span>
+                  {alignment.label}
                 </button>
               ))}
             </ColumnFormatMenu>
 
             <span aria-hidden="true" className="h-8 w-px bg-[var(--border)]" />
 
-            <ColumnFormatMenu label="Caixa do texto" icon="text_fields" active={columnPresentation.textTransform !== "none"}>
-              {([
-                { value: "none", label: "Padrão" },
-                { value: "uppercase", label: "MAIÚSCULAS" },
-                { value: "lowercase", label: "minúsculas" },
-              ] as const).map((choice) => (
+            <ColumnFormatMenu
+              label="Caixa do texto"
+              icon="text_fields"
+              active={columnPresentation.textTransform !== "none"}
+            >
+              {(
+                [
+                  { value: "none", label: "Padrão" },
+                  { value: "uppercase", label: "MAIÚSCULAS" },
+                  { value: "lowercase", label: "minúsculas" },
+                ] as const
+              ).map((choice) => (
                 <button
                   key={choice.value}
                   type="button"
@@ -302,7 +314,9 @@ export function TableColumnOptionsDialog<TData extends RowData>({
                     closeMenu(event.currentTarget);
                   }}
                   className={menuChoiceClass(columnPresentation.textTransform === choice.value)}
-                >{choice.label}</button>
+                >
+                  {choice.label}
+                </button>
               ))}
             </ColumnFormatMenu>
 
@@ -311,44 +325,119 @@ export function TableColumnOptionsDialog<TData extends RowData>({
             <ColumnFormatMenu
               label="Estilo do texto"
               icon="format_bold"
-              active={columnPresentation.bold || columnPresentation.italic || columnPresentation.underline || columnPresentation.strikethrough}
+              active={
+                columnPresentation.bold ||
+                columnPresentation.italic ||
+                columnPresentation.underline ||
+                columnPresentation.strikethrough
+              }
             >
-              <button type="button" aria-label="Negrito" aria-pressed={columnPresentation.bold} onClick={() => toggleFormat("bold")} className={menuChoiceClass(columnPresentation.bold)}><span className="w-6 font-bold">B</span>Negrito</button>
-              <button type="button" aria-label="Itálico" aria-pressed={columnPresentation.italic} onClick={() => toggleFormat("italic")} className={menuChoiceClass(columnPresentation.italic)}><span className="w-6 italic">I</span>Itálico</button>
-              <button type="button" aria-label="Sublinhado" aria-pressed={columnPresentation.underline} onClick={() => toggleFormat("underline")} className={menuChoiceClass(columnPresentation.underline)}><span className="w-6 underline">U</span>Sublinhado</button>
-              <button type="button" aria-label="Tachado" aria-pressed={columnPresentation.strikethrough} onClick={() => toggleFormat("strikethrough")} className={menuChoiceClass(columnPresentation.strikethrough)}><span className="w-6 line-through">S</span>Tachado</button>
+              <button
+                type="button"
+                aria-label="Negrito"
+                aria-pressed={columnPresentation.bold}
+                onClick={() => toggleFormat("bold")}
+                className={menuChoiceClass(columnPresentation.bold)}
+              >
+                <span className="w-6 font-bold">B</span>Negrito
+              </button>
+              <button
+                type="button"
+                aria-label="Itálico"
+                aria-pressed={columnPresentation.italic}
+                onClick={() => toggleFormat("italic")}
+                className={menuChoiceClass(columnPresentation.italic)}
+              >
+                <span className="w-6 italic">I</span>Itálico
+              </button>
+              <button
+                type="button"
+                aria-label="Sublinhado"
+                aria-pressed={columnPresentation.underline}
+                onClick={() => toggleFormat("underline")}
+                className={menuChoiceClass(columnPresentation.underline)}
+              >
+                <span className="w-6 underline">U</span>Sublinhado
+              </button>
+              <button
+                type="button"
+                aria-label="Tachado"
+                aria-pressed={columnPresentation.strikethrough}
+                onClick={() => toggleFormat("strikethrough")}
+                className={menuChoiceClass(columnPresentation.strikethrough)}
+              >
+                <span className="w-6 line-through">S</span>Tachado
+              </button>
             </ColumnFormatMenu>
 
             <span aria-hidden="true" className="h-8 w-px bg-[var(--border)]" />
 
-            <ColumnFormatMenu label="Cor do texto" icon="format_color_text" active={Boolean(columnPresentation.textColor)} iconColor={columnPresentation.textColor ?? undefined}>
+            <ColumnFormatMenu
+              label="Cor do texto"
+              icon="format_color_text"
+              active={Boolean(columnPresentation.textColor)}
+              iconColor={columnPresentation.textColor ?? undefined}
+            >
               <label className="flex min-h-11 items-center justify-between gap-3 px-2 text-sm">
                 <span>Escolher cor do texto</span>
                 <input
                   aria-label="Cor do texto"
                   type="color"
                   value={columnPresentation.textColor ?? "#000000"}
-                  onChange={(event) => onColumnPresentationChange({ ...columnPresentation, textColor: event.target.value })}
+                  onChange={(event) =>
+                    onColumnPresentationChange({ ...columnPresentation, textColor: event.target.value })
+                  }
                   className="h-11 w-12 cursor-pointer rounded border border-[var(--border)] bg-transparent p-1"
                 />
               </label>
-              {columnPresentation.textColor && <button type="button" aria-label="Restaurar cor automática do texto" onClick={(event) => { onColumnPresentationChange({ ...columnPresentation, textColor: null }); closeMenu(event.currentTarget); }} className={menuChoiceClass(false)}>Restaurar cor automática</button>}
+              {columnPresentation.textColor && (
+                <button
+                  type="button"
+                  aria-label="Restaurar cor automática do texto"
+                  onClick={(event) => {
+                    onColumnPresentationChange({ ...columnPresentation, textColor: null });
+                    closeMenu(event.currentTarget);
+                  }}
+                  className={menuChoiceClass(false)}
+                >
+                  Restaurar cor automática
+                </button>
+              )}
             </ColumnFormatMenu>
 
             <span aria-hidden="true" className="h-8 w-px bg-[var(--border)]" />
 
-            <ColumnFormatMenu label="Cor da célula" icon="format_color_fill" active={Boolean(columnPresentation.cellColor)} iconColor={columnPresentation.cellColor ?? undefined}>
+            <ColumnFormatMenu
+              label="Cor da célula"
+              icon="format_color_fill"
+              active={Boolean(columnPresentation.cellColor)}
+              iconColor={columnPresentation.cellColor ?? undefined}
+            >
               <label className="flex min-h-11 items-center justify-between gap-3 px-2 text-sm">
                 <span>Escolher cor da célula</span>
                 <input
                   aria-label="Cor da célula"
                   type="color"
                   value={columnPresentation.cellColor ?? "#ffffff"}
-                  onChange={(event) => onColumnPresentationChange({ ...columnPresentation, cellColor: event.target.value })}
+                  onChange={(event) =>
+                    onColumnPresentationChange({ ...columnPresentation, cellColor: event.target.value })
+                  }
                   className="h-11 w-12 cursor-pointer rounded border border-[var(--border)] bg-transparent p-1"
                 />
               </label>
-              {columnPresentation.cellColor && <button type="button" aria-label="Restaurar cor automática da célula" onClick={(event) => { onColumnPresentationChange({ ...columnPresentation, cellColor: null }); closeMenu(event.currentTarget); }} className={menuChoiceClass(false)}>Restaurar cor automática</button>}
+              {columnPresentation.cellColor && (
+                <button
+                  type="button"
+                  aria-label="Restaurar cor automática da célula"
+                  onClick={(event) => {
+                    onColumnPresentationChange({ ...columnPresentation, cellColor: null });
+                    closeMenu(event.currentTarget);
+                  }}
+                  className={menuChoiceClass(false)}
+                >
+                  Restaurar cor automática
+                </button>
+              )}
             </ColumnFormatMenu>
           </div>
 
@@ -357,7 +446,9 @@ export function TableColumnOptionsDialog<TData extends RowData>({
             role="img"
             aria-label={`Prévia da coluna ${columnLabel}`}
             style={{
-              alignItems: { top: "flex-start", middle: "center", bottom: "flex-end" }[columnPresentation.verticalAlignment],
+              alignItems: { top: "flex-start", middle: "center", bottom: "flex-end" }[
+                columnPresentation.verticalAlignment
+              ],
               backgroundColor: columnPresentation.cellColor ?? "var(--card-secondary)",
               color: columnPresentation.textColor ?? "var(--foreground)",
             }}
@@ -380,7 +471,9 @@ export function TableColumnOptionsDialog<TData extends RowData>({
               max={maxSize}
               step={10}
               value={Math.round(displaySize)}
-              onChange={(event) => table.setColumnSizing((current) => ({ ...current, [column.id]: Number(event.target.value) }))}
+              onChange={(event) =>
+                table.setColumnSizing((current) => ({ ...current, [column.id]: Number(event.target.value) }))
+              }
               className="min-h-11 w-full accent-[var(--primary)]"
             />
           </label>
@@ -390,13 +483,12 @@ export function TableColumnOptionsDialog<TData extends RowData>({
       <div className="flex justify-end border-t border-[var(--border)] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <button
           type="button"
-          onClick={closeDialog}
+          onClick={onClose}
           className={`min-h-11 cursor-pointer rounded-[var(--radius)] border border-[var(--info)] px-4 text-sm font-medium text-[var(--info)] hover:bg-[var(--info)] hover:text-[var(--info-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${buttonMotion}`}
         >
           Fechar
         </button>
       </div>
-    </dialog>,
-    document.body,
+    </EntityDialog>
   );
 }

@@ -8,7 +8,7 @@ import { useSelector } from "@tanstack/react-store";
 import { useState } from "react";
 import type { CSSProperties } from "react";
 import type { RowData } from "@tanstack/react-table";
-import { TableColumnOptionsDialog } from "../TableColumnOptionsDialog";
+import { TableColumnOptionsDialog } from "../dialogs/TableColumnOptionsDialog";
 import { TableColumnFilter } from "../filters/TableColumnFilter";
 import { tableFeatures } from "../core/table-features";
 import type { TableState } from "../core/table-features";

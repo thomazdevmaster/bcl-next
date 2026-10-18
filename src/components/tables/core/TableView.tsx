@@ -20,6 +20,7 @@ import { TableActionButton } from "../toolbar/TableActionButton";
 import { TableCheckbox } from "../toolbar/TableCheckbox";
 import { TableToolbar } from "../toolbar/TableToolbar";
 import type { TableToolbarLabels } from "../toolbar/TableToolbar";
+import { TableResetConfirmationDialog } from "../dialogs/TableResetConfirmationDialog";
 import { tableFeatures } from "./table-features";
 import { getExpandedColumnSizes } from "./tableColumnSizing";
 import type { TableColumnPresentation } from "./tableColumnPresentation";
@@ -311,6 +312,7 @@ export function TableView<TData extends RowData>({
   const bottomRowCount = bottomRows.length;
   const [pinnedOffsets, setPinnedOffsets] = useState<PinnedOffsets>({ top: {}, bottom: {} });
   const [resetKey, setResetKey] = useState(0);
+  const [resetConfirmationOpen, setResetConfirmationOpen] = useState(false);
   const [availableTableWidth, setAvailableTableWidth] = useState(0);
   const [columnPresentations, setColumnPresentations] = useState<Record<string, TableColumnPresentation>>({});
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
@@ -504,18 +506,7 @@ export function TableView<TData extends RowData>({
           resetKey={resetKey}
           onRefresh={onRefresh}
           isLoading={loading}
-          onReset={() => {
-            skipPreferencesPersistenceRef.current = true;
-            try {
-              window.localStorage.removeItem(preferencesStorageKey);
-            } catch {
-              // Resetting table state still works when browser storage is unavailable.
-            }
-            setResetKey((current) => current + 1);
-            table.reset();
-            setColumnPresentations({});
-            if (cellSelectionEnabled) table.resetCellSelection(true);
-          }}
+          onReset={() => setResetConfirmationOpen(true)}
           selectedRowCount={table.getSelectedRowModel().flatRows.length}
           totalRowCount={totalRowCount}
           onClearRows={() => table.resetRowSelection(true)}
@@ -542,6 +533,22 @@ export function TableView<TData extends RowData>({
           rowSelectionEnabled={rowSelectionEnabled}
           cellSelectionEnabled={cellSelectionEnabled}
           columnVisibilityEnabled={columnVisibilityEnabled}
+        />
+        <TableResetConfirmationDialog
+          open={resetConfirmationOpen}
+          onClose={() => setResetConfirmationOpen(false)}
+          onConfirm={() => {
+            skipPreferencesPersistenceRef.current = true;
+            try {
+              window.localStorage.removeItem(preferencesStorageKey);
+            } catch {
+              // Resetting table state still works when browser storage is unavailable.
+            }
+            setResetKey((current) => current + 1);
+            table.reset();
+            setColumnPresentations({});
+            if (cellSelectionEnabled) table.resetCellSelection(true);
+          }}
         />
 
         {loading && <p role="status" className="rounded-xl border border-[var(--border)] bg-[var(--accent)] p-3 text-sm text-[var(--accent-foreground)]">Carregando registros…</p>}
