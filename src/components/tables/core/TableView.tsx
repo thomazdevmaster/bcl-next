@@ -9,6 +9,7 @@ import { DndContext, closestCenter } from "@dnd-kit/core";
 import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { TableCell } from "../cells/TableCell";
+import { TableAnimatedRow } from "../cells/TableAnimatedRow";
 import { TablePinnedRow, rowSelectionKey } from "../cells/TablePinnedRows";
 import { useTableCellSelectionHotkeys } from "../cells/useTableCellSelectionHotkeys";
 import { TableHeader } from "../columns/TableHeader";
@@ -387,13 +388,13 @@ export function TableView<TData extends RowData>({
                   selector={(ranges) => rowSelectionKey(ranges, table.getCellSelectionBounds(), row.getDisplayIndex(), row.id)}
                 >
                   {() => (
-                    <tr>
+                    <TableAnimatedRow index={row.getDisplayIndex()}>
                       {row.getVisibleCells().map((cell) => (
                         <SortableContext key={cell.id} items={sortableColumns} strategy={horizontalListSortingStrategy}>
                           <TableCell cell={cell} table={table} />
                         </SortableContext>
                       ))}
-                    </tr>
+                    </TableAnimatedRow>
                   )}
                 </Subscribe>
               ))}
