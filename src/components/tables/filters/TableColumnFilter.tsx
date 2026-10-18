@@ -125,7 +125,10 @@ function parseTemporalFilterValue(
         return new Date(year, month - 1, day);
       })()
     : new Date(value);
-  if (variant === "date" && bound === "max") date.setHours(23, 59, 59, 999);
+  if (bound === "max") {
+    if (variant === "date") date.setHours(23, 59, 59, 999);
+    else date.setSeconds(59, 999);
+  }
   return date.getTime();
 }
 
