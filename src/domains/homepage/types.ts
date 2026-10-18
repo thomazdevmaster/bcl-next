@@ -5,6 +5,7 @@ export const HOME_SECTION_TYPES = [
   'blog',
   'story',
   'videos',
+  'donations',
   'cta',
 ] as const;
 
@@ -17,8 +18,12 @@ export const HOME_SECTION_LABELS: Record<HomeSectionType, string> = {
   blog: 'Blog',
   story: 'Institucional',
   videos: 'Vídeos',
+  donations: 'Doações',
   cta: 'Chamada final',
 };
+
+export const DEFAULT_PIX_KEY = '20.408.324/0001-70';
+export const DEFAULT_PIX_QR_PATH = '/imgs/pix-doacao.png';
 
 export interface HomeLink {
   label: string;
@@ -78,6 +83,19 @@ export interface VideosSection extends HomeSectionBase {
   limit: number;
 }
 
+export interface DonationsSection extends HomeSectionBase {
+  type: 'donations';
+  eyebrow: string;
+  title: string;
+  body: string;
+  pixKeyLabel: string;
+  pixKey: string;
+  copyButtonLabel: string;
+  qrCodeUrl: string;
+  qrCodeAlt: string;
+  qrHint: string;
+}
+
 export interface CtaSection extends HomeSectionBase {
   type: 'cta';
   titleLoggedOut: string;
@@ -94,6 +112,7 @@ export type HomeSection =
   | FeedSection
   | StorySection
   | VideosSection
+  | DonationsSection
   | CtaSection;
 
 export interface HomepageDocument {
@@ -128,7 +147,7 @@ export function defaultHomepage(): HomepageDocument {
         enabled: true,
         items: [
           { value: '1894', label: 'Origens da tradição musical local' },
-          { value: '1910', label: 'Fundação associativa' },
+          { value: '1912', label: 'Primeiro estatuto' },
           { value: 'Hoje', label: 'Formação, ensaios e concertos' },
         ],
       },
@@ -168,6 +187,20 @@ export function defaultHomepage(): HomepageDocument {
         description: 'Registros de apresentações e momentos da banda.',
         videoIds: ['TbUGOc36r9s', 'zgNL45Nl1qA', 'eTjkMqHKOvo', 'sldhCGZ-KgQ', 'jaFIxhNqYnw'],
         limit: 3,
+      },
+      {
+        type: 'donations',
+        enabled: true,
+        eyebrow: 'Apoie a banda',
+        title: 'Música gratuita na praça, sustentada por quem acredita',
+        body:
+          'A Banda Carmelitana Luminarense leva concertos e tradição para Luminárias sem cobrar ingresso nas apresentações abertas ao público. Por trás do palco existem custos concretos: instrumentos e partituras, uniformes, deslocamentos, manutenção da sede e o trabalho de ensaio da corporação.\n\nSe a banda já marcou a sua história — ou se você quer que ela continue marcando a da cidade — pode colaborar com um Pix, no valor que couber. Cada doação ajuda a manter ensaios e apresentações ao longo do ano.',
+        pixKeyLabel: 'Chave Pix (CNPJ)',
+        pixKey: DEFAULT_PIX_KEY,
+        copyButtonLabel: 'Copiar chave Pix',
+        qrCodeUrl: DEFAULT_PIX_QR_PATH,
+        qrCodeAlt: 'QR Code Pix para doação à Banda Carmelitana Luminarense',
+        qrHint: 'Use o QR Code ou a chave ao lado. Qualquer valor faz diferença — obrigado por apoiar a BCL.',
       },
       {
         type: 'cta',
@@ -318,6 +351,23 @@ function sanitizeSection(raw: unknown): HomeSection | null {
     };
   }
 
+  if (type === 'donations') {
+    const base = sectionOf<DonationsSection>('donations');
+    return {
+      type: 'donations',
+      enabled: asBoolean(raw.enabled, base.enabled),
+      eyebrow: asString(raw.eyebrow, base.eyebrow),
+      title: asString(raw.title, base.title),
+      body: asString(raw.body, base.body),
+      pixKeyLabel: asString(raw.pixKeyLabel, base.pixKeyLabel),
+      pixKey: asString(raw.pixKey, base.pixKey).trim() || base.pixKey,
+      copyButtonLabel: asString(raw.copyButtonLabel, base.copyButtonLabel),
+      qrCodeUrl: safeAssetUrl(asString(raw.qrCodeUrl, base.qrCodeUrl), base.qrCodeUrl),
+      qrCodeAlt: asString(raw.qrCodeAlt, base.qrCodeAlt),
+      qrHint: asString(raw.qrHint, base.qrHint),
+    };
+  }
+
   const base = sectionOf<CtaSection>('cta');
   return {
     type: 'cta',
@@ -361,8 +411,18 @@ export function validateHomepage(document: HomepageDocument): string | null {
   for (const section of document.sections) {
     if (!section.enabled) continue;
     if (section.type === 'hero' && !section.title.trim()) return 'O destaque precisa de um título.';
-    if ((section.type === 'events' || section.type === 'blog' || section.type === 'story' || section.type === 'videos') && !section.title.trim()) {
+    if (
+      (section.type === 'events' ||
+        section.type === 'blog' ||
+        section.type === 'story' ||
+        section.type === 'videos' ||
+        section.type === 'donations') &&
+      !section.title.trim()
+    ) {
       return `A seção “${HOME_SECTION_LABELS[section.type]}” precisa de um título.`;
+    }
+    if (section.type === 'donations' && !section.pixKey.trim()) {
+      return 'A seção de doações precisa da chave Pix.';
     }
     if (section.type === 'cta' && (!section.titleLoggedOut.trim() || !section.titleLoggedIn.trim())) {
       return 'A chamada final precisa dos dois títulos.';

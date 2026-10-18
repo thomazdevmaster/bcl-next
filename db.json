@@ -510,8 +510,8 @@
               "label": "Origens da tradição musical local"
             },
             {
-              "value": "1910",
-              "label": "Fundação associativa"
+              "value": "1912",
+              "label": "Primeiro estatuto"
             },
             {
               "value": "Hoje",
@@ -573,6 +573,19 @@
             "jaFIxhNqYnw"
           ],
           "limit": 3
+        },
+        {
+          "type": "donations",
+          "enabled": true,
+          "eyebrow": "Apoie a banda",
+          "title": "Música gratuita na praça, sustentada por quem acredita",
+          "body": "A Banda Carmelitana Luminarense leva concertos e tradição para Luminárias sem cobrar ingresso nas apresentações abertas ao público. Por trás do palco existem custos concretos: instrumentos e partituras, uniformes, deslocamentos, manutenção da sede e o trabalho de ensaio da corporação.\n\nSe a banda já marcou a sua história — ou se você quer que ela continue marcando a da cidade — pode colaborar com um Pix, no valor que couber. Cada doação ajuda a manter ensaios e apresentações ao longo do ano.",
+          "pixKeyLabel": "Chave Pix (CNPJ)",
+          "pixKey": "20.408.324/0001-70",
+          "copyButtonLabel": "Copiar chave Pix",
+          "qrCodeUrl": "/imgs/pix-doacao.png",
+          "qrCodeAlt": "QR Code Pix para doação à Banda Carmelitana Luminarense",
+          "qrHint": "Use o QR Code ou a chave ao lado. Qualquer valor faz diferença — obrigado por apoiar a BCL."
         },
         {
           "type": "cta",

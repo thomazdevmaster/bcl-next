@@ -10,6 +10,7 @@ import type { HomepageDocument, HomeSection } from '@/domains/homepage/types';
 import type { MediaPost } from '@/domains/media/types';
 import type { Presentation } from '@/domains/presentations/types';
 import { upcomingPublicPresentations, publishedMediaPosts } from '@/lib/publicPortal';
+import { HomeDonationSection } from '@/components/public/HomeDonationSection';
 import { failureMessage } from '@/lib/userMessages';
 
 interface HomePageContentProps {
@@ -42,6 +43,7 @@ export function HomePageContent({
   const hero = visible.find((section) => section.type === 'hero');
   const rest = visible.filter((section) => section.type !== 'hero');
   const onCta = () => router.push(isLoggedIn ? '/gestao' : '/login');
+  const showDonationLink = visible.some((section) => section.type === 'donations');
 
   return (
     <div className="w-full pt-[30px] md:pt-9" data-proposal={proposal}>
@@ -54,6 +56,7 @@ export function HomePageContent({
           isLoggedIn={isLoggedIn}
           onCta={onCta}
           postOrder={postOrder}
+          showDonationLink={showDonationLink}
         />
       ) : null}
 
@@ -93,6 +96,7 @@ function HomeSectionBlock({
   isLoggedIn,
   onCta,
   postOrder,
+  showDonationLink = false,
 }: {
   section: HomeSection;
   events: Presentation[];
@@ -101,6 +105,7 @@ function HomeSectionBlock({
   isLoggedIn: boolean;
   onCta: () => void;
   postOrder: string[];
+  showDonationLink?: boolean;
 }) {
   if (section.type === 'hero') {
     const agendaIndex = section.links.findIndex((link) => link.href === '/agenda');
@@ -142,6 +147,17 @@ function HomeSectionBlock({
                 </Link>
               ) : null,
             )}
+            {showDonationLink ? (
+              <Link
+                href="#apoie-a-banda"
+                className="inline-flex min-h-11 items-center justify-start gap-2 rounded-[var(--radius)] px-2 text-sm font-semibold text-[var(--header-fg)] underline decoration-1 underline-offset-4 min-[701px]:justify-center"
+              >
+                <span className="material-icons text-lg" aria-hidden>
+                  favorite
+                </span>
+                Apoie a banda
+              </Link>
+            ) : null}
           </div>
         </div>
       </section>
@@ -265,6 +281,10 @@ function HomeSectionBlock({
         </div>
       </section>
     );
+  }
+
+  if (section.type === 'donations') {
+    return <HomeDonationSection section={section} className={fullWidthSectionClass} />;
   }
 
   if (section.type !== 'cta') return null;

@@ -265,6 +265,26 @@ function SectionFields({ section, onChange }: { section: HomeSection; onChange: 
     return <VideoFields section={section} onChange={onChange} />;
   }
 
+  if (section.type === 'donations') {
+    return (
+      <div className="space-y-3">
+        <Field label="Linha acima do título" value={section.eyebrow} onChange={(eyebrow) => onChange({ ...section, eyebrow })} />
+        <Field label="Título" value={section.title} onChange={(title) => onChange({ ...section, title })} />
+        <Field label="Texto" value={section.body} onChange={(body) => onChange({ ...section, body })} multiline />
+        <Field label="Rótulo da chave" value={section.pixKeyLabel} onChange={(pixKeyLabel) => onChange({ ...section, pixKeyLabel })} />
+        <Field label="Chave Pix" value={section.pixKey} onChange={(pixKey) => onChange({ ...section, pixKey })} />
+        <Field label="Botão copiar" value={section.copyButtonLabel} onChange={(copyButtonLabel) => onChange({ ...section, copyButtonLabel })} />
+        <Field
+          label="Imagem do QR Code (caminho em public/ ou https)"
+          value={section.qrCodeUrl}
+          onChange={(qrCodeUrl) => onChange({ ...section, qrCodeUrl })}
+        />
+        <Field label="Descrição do QR (acessibilidade)" value={section.qrCodeAlt} onChange={(qrCodeAlt) => onChange({ ...section, qrCodeAlt })} />
+        <Field label="Texto abaixo do QR" value={section.qrHint} onChange={(qrHint) => onChange({ ...section, qrHint })} multiline />
+      </div>
+    );
+  }
+
   if (section.type !== 'cta') return null;
 
   return (
