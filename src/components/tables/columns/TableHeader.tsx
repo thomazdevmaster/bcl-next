@@ -63,7 +63,13 @@ export function TableHeader<TData extends RowData>({
           ref={setNodeRef}
           style={style}
           colSpan={header.colSpan}
-          aria-sort={column.getIsSorted() === "asc" ? "ascending" : column.getIsSorted() === "desc" ? "descending" : "none"}
+          aria-sort={
+            header.isPlaceholder || !column.getIsSorted()
+              ? undefined
+              : column.getIsSorted() === "asc"
+                ? "ascending"
+                : "descending"
+          }
           className="relative border-b border-[var(--border)] bg-[var(--card-secondary)] p-3 pb-14 text-left align-top text-xs font-semibold uppercase tracking-wide text-[var(--muted)]"
         >
           {header.isPlaceholder ? null : (
