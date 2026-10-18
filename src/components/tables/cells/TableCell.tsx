@@ -54,7 +54,7 @@ export function TableCell<TData extends RowData>({
       className={`border-b border-[var(--border)] px-3 py-2 align-middle text-sm text-[var(--foreground)] ${backgroundClass} ${groupedClass} ${cell.getCanSelect() ? "cursor-cell focus:outline-none" : ""} ${cell.getIsFocused() ? "ring-2 ring-inset ring-[var(--ring)]" : ""}`}
     >
       {cell.getIsGrouped() ? (
-        <button type="button" className="min-h-11 text-left" onClick={cell.row.getToggleExpandedHandler()}>
+        <button type="button" aria-expanded={cell.row.getIsExpanded()} className="min-h-11 text-left" onClick={cell.row.getToggleExpandedHandler()}>
           {cell.row.getIsExpanded() ? "⌄" : "›"} <table.FlexRender cell={cell} /> ({cell.row.subRows.length})
         </button>
       ) : (

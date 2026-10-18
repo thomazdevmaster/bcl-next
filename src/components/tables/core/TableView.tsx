@@ -13,10 +13,10 @@ import { TablePinnedRow, rowSelectionKey } from "../cells/TablePinnedRows";
 import { useTableCellSelectionHotkeys } from "../cells/useTableCellSelectionHotkeys";
 import { TableHeader } from "../columns/TableHeader";
 import { useTableColumnDnd } from "../columns/useTableColumnDnd";
-import { TableDebouncedInput } from "../inputs/TableDebouncedInput";
 import { TablePagination } from "../pagination/TablePagination";
 import { TableActionButton } from "../toolbar/TableActionButton";
 import { TableCheckbox } from "../toolbar/TableCheckbox";
+import { TableToolbar } from "../toolbar/TableToolbar";
 import type { TableToolbarLabels } from "../toolbar/TableToolbar";
 import { tableFeatures } from "./table-features";
 import type { TableColumnDef, TableState } from "./table-features";
@@ -83,95 +83,6 @@ function CellSelectionHotkeys<TData extends RowData>({
 }) {
   useTableCellSelectionHotkeys(table, target);
   return null;
-}
-
-function TableViewToolbar<TData extends RowData>({
-  table,
-  loading,
-  onRefresh,
-  globalFilterLabel,
-  labels,
-  globalFilterEnabled,
-  rowSelectionEnabled,
-  cellSelectionEnabled,
-  columnVisibilityEnabled,
-}: {
-  table: TableInstance<TData>;
-  loading: boolean;
-  onRefresh: () => void;
-  globalFilterLabel: string;
-  labels?: Partial<TableToolbarLabels>;
-  globalFilterEnabled: boolean;
-  rowSelectionEnabled: boolean;
-  cellSelectionEnabled: boolean;
-  columnVisibilityEnabled: boolean;
-}) {
-  return (
-    <section
-      aria-label={labels?.section ?? "Controles da tabela"}
-      className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] p-3 sm:p-4"
-    >
-      <div className="flex flex-col gap-2 sm:flex-row">
-        {globalFilterEnabled && (
-          <TableDebouncedInput
-            value={String(table.state.globalFilter ?? "")}
-            onChange={(value) => table.setGlobalFilter(String(value))}
-            className="min-h-11 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-3 text-sm text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] sm:max-w-md"
-            placeholder={labels?.searchPlaceholder ?? globalFilterLabel}
-            aria-label={labels?.search ?? globalFilterLabel}
-          />
-        )}
-        <TableActionButton onClick={onRefresh} disabled={loading}>
-          {loading ? (labels?.refreshing ?? "Carregando…") : (labels?.refresh ?? "Atualizar dados")}
-        </TableActionButton>
-        <TableActionButton onClick={() => {
-          table.reset();
-          if (cellSelectionEnabled) table.resetCellSelection(true);
-        }}>
-          {labels?.reset ?? "Redefinir tabela"}
-        </TableActionButton>
-      </div>
-      {(rowSelectionEnabled || cellSelectionEnabled) && (
-        <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
-          {rowSelectionEnabled && (
-            <span>
-              {table.getSelectedRowModel().flatRows.length.toLocaleString("pt-BR")} de {table.getCoreRowModel().flatRows.length.toLocaleString("pt-BR")} linhas selecionadas
-            </span>
-          )}
-          {cellSelectionEnabled && (
-            <>
-              <Subscribe source={table.atoms.cellSelection}>
-                {() => <span>{table.getSelectedCellCount().toLocaleString("pt-BR")} células selecionadas</span>}
-              </Subscribe>
-              <TableActionButton onClick={() => table.resetCellSelection(true)}>Limpar células</TableActionButton>
-              <TableActionButton onClick={() => table.selectAllCells()}>Selecionar todas as células</TableActionButton>
-            </>
-          )}
-        </div>
-      )}
-      {columnVisibilityEnabled && (
-        <details className="text-sm">
-          <summary className="min-h-11 cursor-pointer py-3 font-medium">{labels?.columns ?? "Visibilidade das colunas"}</summary>
-          <div className="flex flex-wrap gap-x-5 gap-y-2">
-            <label className="flex min-h-11 items-center gap-2">
-              <TableCheckbox checked={table.getIsAllColumnsVisible()} onChange={table.getToggleAllColumnsVisibilityHandler()} />
-              Todas
-            </label>
-            {table.getAllLeafColumns().map((column) => (
-              <label key={column.id} className="flex min-h-11 items-center gap-2">
-                <TableCheckbox
-                  checked={column.getIsVisible()}
-                  disabled={!column.getCanHide()}
-                  onChange={column.getToggleVisibilityHandler()}
-                />
-                {typeof column.columnDef.header === "string" ? column.columnDef.header : column.id}
-              </label>
-            ))}
-          </div>
-        </details>
-      )}
-    </section>
-  );
 }
 
 export function TableView<TData extends RowData>({
@@ -271,7 +182,7 @@ export function TableView<TData extends RowData>({
         enableHiding: false,
         enableCellSelection: false,
         enableCellSpanning: false,
-        cell: ({ row }) => renderRowActions(row.original),
+        cell: ({ row }) => row.getIsGrouped() ? null : renderRowActions(row.original),
       }));
     }
     return result;
@@ -337,6 +248,7 @@ export function TableView<TData extends RowData>({
   const centerRowCount = centerRows.length;
   const bottomRowCount = bottomRows.length;
   const [pinnedOffsets, setPinnedOffsets] = useState<PinnedOffsets>({ top: {}, bottom: {} });
+  const [resetKey, setResetKey] = useState(0);
 
   useEffect(() => {
     const header = theadRef.current;
@@ -386,11 +298,36 @@ export function TableView<TData extends RowData>({
   return (
     <section className="flex min-w-0 flex-col gap-4 text-[var(--foreground)]">
         {cellSelectionEnabled && <CellSelectionHotkeys table={table} target={tableRef} />}
-        <TableViewToolbar
-          table={table}
-          loading={loading}
+        <TableToolbar
+          searchValue={String(table.state.globalFilter ?? "")}
+          onSearchChange={(value) => table.setGlobalFilter(String(value))}
+          resetKey={resetKey}
           onRefresh={onRefresh}
-          globalFilterLabel={globalFilterLabel}
+          isLoading={loading}
+          onReset={() => {
+            setResetKey((current) => current + 1);
+            table.reset();
+            if (cellSelectionEnabled) table.resetCellSelection(true);
+          }}
+          selectedRowCount={table.getSelectedRowModel().flatRows.length}
+          totalRowCount={totalRowCount}
+          selectedCellCount={
+            <Subscribe source={table.atoms.cellSelection}>
+              {() => <span>{table.getSelectedCellCount().toLocaleString("pt-BR")} células selecionadas</span>}
+            </Subscribe>
+          }
+          onClearCells={() => table.resetCellSelection(true)}
+          onSelectAllCells={() => table.selectAllCells()}
+          allColumnsVisible={table.getIsAllColumnsVisible()}
+          onToggleAllColumns={table.getToggleAllColumnsVisibilityHandler()}
+          columns={table.getAllLeafColumns().map((column) => ({
+            id: column.id,
+            label: typeof column.columnDef.header === "string" ? column.columnDef.header : column.id,
+            checked: column.getIsVisible(),
+            disabled: !column.getCanHide(),
+            onChange: column.getToggleVisibilityHandler(),
+          }))}
+          searchLabel={globalFilterLabel}
           labels={toolbarLabels}
           globalFilterEnabled={globalFilterEnabled}
           rowSelectionEnabled={rowSelectionEnabled}
@@ -433,6 +370,7 @@ export function TableView<TData extends RowData>({
                           table={table}
                           columnLabel={typeof header.column.columnDef.header === "string" ? header.column.columnDef.header : header.column.id}
                           canReorder={columnReorderingEnabled && header.column.id !== ROW_CONTROLS_ID && header.column.id !== ROW_ACTIONS_ID}
+                          resetKey={resetKey}
                         />
                       ))}
                     </SortableContext>

@@ -8,9 +8,11 @@ import { TableDebouncedInput } from "../inputs/TableDebouncedInput";
 export function TableColumnFilter<TData extends RowData>({
   column,
   columnLabel,
+  resetKey,
 }: {
   column: Column<typeof tableFeatures, TData, unknown>;
   columnLabel: string;
+  resetKey?: number;
 }) {
   // State changes rerender through these subscriptions. Data replacement
   // rerenders the parent header through useTable's render-phase options update.
@@ -54,6 +56,7 @@ export function TableColumnFilter<TData extends RowData>({
       <div className="mt-2 flex gap-1">
         <TableDebouncedInput
           aria-label={`Mínimo: ${columnLabel}`}
+          resetKey={resetKey}
           type={inputType}
           min={boundMin}
           max={boundMax}
@@ -64,6 +67,7 @@ export function TableColumnFilter<TData extends RowData>({
         />
         <TableDebouncedInput
           aria-label={`Máximo: ${columnLabel}`}
+          resetKey={resetKey}
           type={inputType}
           min={boundMin}
           max={boundMax}
@@ -103,6 +107,7 @@ export function TableColumnFilter<TData extends RowData>({
       </datalist>
       <TableDebouncedInput
         aria-label={`Filtrar ${columnLabel}`}
+        resetKey={resetKey}
         type="text"
         value={String(filterValue ?? "")}
         onChange={(value) => column.setFilterValue(value)}

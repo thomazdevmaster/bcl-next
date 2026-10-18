@@ -20,11 +20,13 @@ export function TableHeader<TData extends RowData>({
   table,
   columnLabel,
   canReorder = true,
+  resetKey,
 }: {
   header: Header<typeof tableFeatures, TData, unknown>;
   table: TableInstance<TData>;
   columnLabel: string;
   canReorder?: boolean;
+  resetKey?: number;
 }) {
   const { attributes, isDragging, listeners, setNodeRef, transform } = useSortable({
     id: header.column.id,
@@ -61,6 +63,7 @@ export function TableHeader<TData extends RowData>({
           ref={setNodeRef}
           style={style}
           colSpan={header.colSpan}
+          aria-sort={column.getIsSorted() === "asc" ? "ascending" : column.getIsSorted() === "desc" ? "descending" : "none"}
           className="relative border-b border-[var(--border)] bg-[var(--card-secondary)] p-3 pb-14 text-left align-top text-xs font-semibold uppercase tracking-wide text-[var(--muted)]"
         >
           {header.isPlaceholder ? null : (
@@ -158,7 +161,7 @@ export function TableHeader<TData extends RowData>({
                     <table.FlexRender header={header} />
                   )}
                 </div>
-                {column.getCanFilter() && <TableColumnFilter column={column} columnLabel={columnLabel} />}
+                {column.getCanFilter() && <TableColumnFilter column={column} columnLabel={columnLabel} resetKey={resetKey} />}
               </div>
             </div>
           )}
