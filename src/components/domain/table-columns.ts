@@ -24,6 +24,7 @@ export function createDomainTableColumns(
         id: column.path,
         header: column.label,
         meta: { filterVariant },
+        ...(filterVariant === 'select' ? { filterFn: 'equalsString' as const } : {}),
         cell: ({ row }) => formatCell(row.original, column),
       },
     );
