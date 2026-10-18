@@ -1,16 +1,17 @@
-export const ROLES = ['public', 'aluno', 'musico', 'maestro', 'admin'] as const;
+export const ROLES = ['public', 'amigos', 'aluno', 'musico', 'maestro', 'admin'] as const;
 
 export type Role = (typeof ROLES)[number];
 
 export const ROLE_LABEL: Record<Role, string> = {
   public: 'Público',
+  amigos: 'Amigos',
   aluno: 'Aluno',
   musico: 'Músico',
   maestro: 'Maestro',
   admin: 'Administrador',
 };
 
-export const AUTHENTICATED_ROLES = ['aluno', 'musico', 'maestro', 'admin'] as const;
+export const AUTHENTICATED_ROLES = ['amigos', 'aluno', 'musico', 'maestro', 'admin'] as const;
 export type AuthenticatedRole = (typeof AUTHENTICATED_ROLES)[number];
 export type AccessRoles = readonly string[];
 

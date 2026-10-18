@@ -79,7 +79,13 @@ export function loadGoogleIdentity(): Promise<GoogleAccountsId> {
   return scriptPromise;
 }
 
-export type GoogleProfile = { email?: string; givenName?: string; familyName?: string; name?: string };
+export type GoogleProfile = {
+  email?: string;
+  givenName?: string;
+  familyName?: string;
+  name?: string;
+  picture?: string;
+};
 
 /** Lê o perfil do ID token só para pré-preencher formulário. A verificação é feita pela API. */
 export function readGoogleProfile(credential: string): GoogleProfile {
@@ -90,7 +96,13 @@ export function readGoogleProfile(credential: string): GoogleProfile {
     const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
     const claims = JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
     const text = (key: string) => (typeof claims[key] === 'string' ? (claims[key] as string) : undefined);
-    return { email: text('email'), givenName: text('given_name'), familyName: text('family_name'), name: text('name') };
+    return {
+      email: text('email'),
+      givenName: text('given_name'),
+      familyName: text('family_name'),
+      name: text('name'),
+      picture: text('picture'),
+    };
   } catch {
     return {};
   }

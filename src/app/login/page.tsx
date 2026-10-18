@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,6 +15,11 @@ export default function LoginPage() {
   const [keep, setKeep] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!auth.isHydrated || !auth.isLoggedIn) return;
+    router.replace(auth.user?.mustChangePassword ? '/alterar-senha' : '/');
+  }, [auth.isHydrated, auth.isLoggedIn, auth.user?.mustChangePassword, router]);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();

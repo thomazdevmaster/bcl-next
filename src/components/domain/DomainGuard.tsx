@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { can, type Action, type Resource } from '@/core/auth/permissions';
-import { hasRole, roleLabels } from '@/core/auth/roles';
+import { roleLabels } from '@/core/auth/roles';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDomain } from '@/domains/catalog';
 
@@ -14,15 +14,18 @@ interface DomainGuardProps {
 }
 
 export function DomainGuard({ resource, action = 'read', children }: DomainGuardProps) {
-  const { roles, permissions } = useAuth();
+  const { roles, permissions, isHydrated, isLoggedIn } = useAuth();
   const router = useRouter();
   const allowed = can(roles, resource, action, permissions);
 
   useEffect(() => {
+    if (!isHydrated) return;
     if (!allowed) {
-      router.replace(hasRole(roles, 'public') ? '/login' : '/gestao');
+      router.replace(isLoggedIn ? '/gestao' : '/login');
     }
-  }, [allowed, roles, router]);
+  }, [allowed, isHydrated, isLoggedIn, router]);
+
+  if (!isHydrated) return null;
 
   if (!allowed) {
     const domain = getDomain(resource);

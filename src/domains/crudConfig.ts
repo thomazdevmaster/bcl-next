@@ -209,6 +209,7 @@ const users: DomainCrudConfig = {
       type: 'multiselect',
       section: 'Perfis',
       options: [
+        { value: 'amigos', label: 'Amigos' },
         { value: 'aluno', label: 'Aluno' },
         { value: 'musico', label: 'Músico' },
         { value: 'maestro', label: 'Maestro' },

@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { userFacingError } from '@/lib/userMessages';
 
-type PendingUser = { id: string | number; username: string; name: string; email?: string | null };
+type PendingUser = { id: string | number; username: string; name: string; email?: string | null; roles?: string[] };
 
 const contactLine = (user: PendingUser) => [`@${user.username}`, user.email].filter(Boolean).join(' · ');
 type RoleOption = { code: string; name: string };
@@ -33,6 +33,14 @@ export function UserApprovals() {
         setPending(signups);
         setResets(requests);
         setOptions(roleOptions);
+        setSelectedRoles((current) => {
+          const next = { ...current };
+          signups.forEach((user) => {
+            if (next[user.id]) return;
+            next[user.id] = user.roles?.length ? user.roles : ['amigos'];
+          });
+          return next;
+        });
         setError(null);
       })
       .catch((caught: unknown) => {

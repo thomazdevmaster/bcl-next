@@ -664,6 +664,15 @@
       "systemRole": true,
       "locked": true,
       "permissions": []
+    },
+    {
+      "id": "role-amigos",
+      "code": "amigos",
+      "name": "Amigos",
+      "description": "Cadastro público da comunidade. Acesso ao painel interno.",
+      "systemRole": true,
+      "locked": true,
+      "permissions": ["portal:read"]
     }
   ]
 }

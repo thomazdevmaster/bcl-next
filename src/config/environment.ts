@@ -1,9 +1,15 @@
 /**
- * API Spring quando a URL não é o mock `/bcl-api`.
- * Na Vercel: NEXT_PUBLIC_USE_REMOTE_API=true e NEXT_PUBLIC_API_URL=https://api…
- * Sem URL, o site usa o mock embutido.
+ * Em produção (Vercel) o site fala só com a API Spring.
+ * O mock `/bcl-api` existe apenas no desenvolvimento local.
  */
+const PRODUCTION_API_URL = 'https://api.bandacarmelitana.org';
+
+function isHostedProduction(): boolean {
+  return process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
+}
+
 export function usesRemoteApi(): boolean {
+  if (isHostedProduction()) return true;
   if (process.env.NEXT_PUBLIC_USE_REMOTE_API === 'true') return true;
   if (process.env.NEXT_PUBLIC_USE_REMOTE_API === 'false') return false;
   const url = process.env.NEXT_PUBLIC_API_URL?.trim() ?? '';
@@ -23,8 +29,6 @@ export function getSiteUrl(): URL {
 }
 
 function embeddedMockBase(): string {
-  const site = getSiteUrl().origin;
-  if (site && !site.includes('localhost')) return `${site}/bcl-api`;
   const port = process.env.PORT ?? '3000';
   return `http://127.0.0.1:${port}/bcl-api`;
 }
@@ -37,5 +41,7 @@ export function getApiUrl(): string {
     }
     return embeddedMockBase();
   }
-  return (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
+  const url = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
+  if (url && !url.includes('/bcl-api')) return url;
+  return PRODUCTION_API_URL;
 }

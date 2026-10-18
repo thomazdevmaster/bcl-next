@@ -5,14 +5,14 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
-  useSyncExternalStore,
   type ReactNode,
 } from 'react';
 import { setAccessToken, getAccessToken, usesRemoteApi } from '@/core/auth/accessToken';
 import { findDemoUser } from '@/core/auth/demoUsers';
-import { apiFetch } from '@/lib/api';
+import { ApiError, apiFetch } from '@/lib/api';
 import { sealPassword } from '@/lib/passwordCipher';
 import { failureMessage } from '@/lib/userMessages';
 import { PUBLIC_ROLES, type AccessRoles } from '@/core/auth/roles';
@@ -39,17 +39,52 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-const subscribeToHydration = () => () => undefined;
 
 function persist(user: SessionUser | null, keepLoggedIn: boolean) {
   if (typeof window === 'undefined') return;
-  if (user && keepLoggedIn) {
-    localStorage.setItem(AUTH_KEEP_LOGGED_KEY, 'true');
-    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
-    return;
-  }
   localStorage.removeItem(AUTH_KEEP_LOGGED_KEY);
   localStorage.removeItem(AUTH_USER_KEY);
+  sessionStorage.removeItem(AUTH_USER_KEY);
+  if (!user) return;
+  if (keepLoggedIn) localStorage.setItem(AUTH_KEEP_LOGGED_KEY, 'true');
+  const store = keepLoggedIn ? localStorage : sessionStorage;
+  store.setItem(AUTH_USER_KEY, JSON.stringify(user));
+}
+
+function parseStoredUser(raw: string | null): SessionUser | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<SessionUser>;
+    const roles = Array.isArray(parsed.roles)
+      ? parsed.roles.filter((role): role is string => typeof role === 'string' && /^[a-z][a-z0-9_]{1,31}$/.test(role))
+      : [];
+    if (roles.length === 0) return null;
+    return { ...parsed, roles } as SessionUser;
+  } catch {
+    return null;
+  }
+}
+
+/** Lê a sessão do storage. `sessionStorage` cobre F5 sem “manter conectado”. */
+function restoreUser(): SessionUser | null {
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem(AUTH_USER_KEY) ?? sessionStorage.getItem(AUTH_USER_KEY);
+  if (!raw) return null;
+  if (usesRemoteApi() && !getAccessToken()) {
+    return null;
+  }
+  const user = parseStoredUser(raw);
+  if (!user) {
+    localStorage.removeItem(AUTH_USER_KEY);
+    sessionStorage.removeItem(AUTH_USER_KEY);
+  }
+  return user;
+}
+
+function keptLoggedIn(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (localStorage.getItem(AUTH_KEEP_LOGGED_KEY) === 'true') return true;
+  return Boolean(localStorage.getItem(AUTH_USER_KEY));
 }
 
 type LoginPayload = {
@@ -57,37 +92,18 @@ type LoginPayload = {
   user: SessionUser;
 };
 
-function restoreUser(): SessionUser | null {
-  if (typeof window === 'undefined') return null;
-  const keep = localStorage.getItem(AUTH_KEEP_LOGGED_KEY) === 'true';
-  if (!keep) return null;
-  if (usesRemoteApi() && !localStorage.getItem('app.auth.token')) return null;
-  const stored = localStorage.getItem(AUTH_USER_KEY);
-  if (!stored) return null;
-  try {
-    const parsed = JSON.parse(stored) as Partial<SessionUser>;
-    const roles = Array.isArray(parsed.roles)
-      ? parsed.roles.filter((role): role is string => typeof role === 'string' && /^[a-z][a-z0-9_]{1,31}$/.test(role))
-      : [];
-    if (roles.length === 0) return null;
-    return { ...parsed, roles } as SessionUser;
-  } catch {
-    localStorage.removeItem(AUTH_USER_KEY);
-    return null;
-  }
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<SessionUser | null>(() => restoreUser());
-  const isHydrated = useSyncExternalStore(
-    subscribeToHydration,
-    () => true,
-    () => false,
-  );
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useLayoutEffect(() => {
+    getAccessToken();
+    setUser(restoreUser());
+    setIsHydrated(true);
+  }, []);
 
   const login = useCallback(async (identifier: string, password: string, keepLoggedIn: boolean) => {
     if (usesRemoteApi()) {
-      // A senha nunca vai em claro: é cifrada com a chave pública da API.
       const sealed = await sealPassword(password);
       const session = await apiFetch<LoginPayload>('/auth/login', {
         method: 'POST',
@@ -128,29 +144,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!usesRemoteApi() || !getAccessToken()) return;
+    if (!isHydrated || !usesRemoteApi() || !getAccessToken()) return;
     let active = true;
     apiFetch<SessionUser>('/auth/me')
       .then((me) => {
         if (!active) return;
         setUser(me);
-        if (localStorage.getItem(AUTH_KEEP_LOGGED_KEY) === 'true') {
-          localStorage.setItem(AUTH_USER_KEY, JSON.stringify(me));
-        }
+        persist(me, keptLoggedIn());
       })
-      .catch(() => undefined);
+      .catch((caught: unknown) => {
+        if (!active) return;
+        if (caught instanceof ApiError && caught.status === 401) {
+          setAccessToken(null, false);
+          setUser(null);
+          persist(null, false);
+        }
+      });
     return () => {
       active = false;
     };
-  }, []);
+  }, [isHydrated]);
 
   const updateProfile = useCallback((patch: Partial<SessionUser>) => {
     setUser((prev) => {
       if (!prev) return prev;
       const next = { ...prev, ...patch, updatedAt: new Date().toISOString() };
-      if (localStorage.getItem(AUTH_KEEP_LOGGED_KEY) === 'true') {
-        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(next));
-      }
+      persist(next, keptLoggedIn());
       return next;
     });
   }, []);

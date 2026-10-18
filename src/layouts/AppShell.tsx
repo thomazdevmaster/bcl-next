@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { roleLabels } from '@/core/auth/roles';
 import { getManagementNav, PUBLIC_NAV, titleForPath } from '@/core/navigation/menus';
+import { UserAvatar } from '@/components/auth/UserAvatar';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [desktop, setDesktop] = useState(false);
@@ -125,6 +126,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <NavLink key={`public-${item.href}`} {...item} />
           ))}
         </nav>
+        {desktop && auth.user && (
+          <Link
+            href="/profile"
+            className={`mx-2 mb-2 flex min-h-11 items-center gap-3 rounded-lg px-2 py-2 no-underline hover:bg-white/10 hover:no-underline ${
+              sidenavCollapsed ? 'justify-center' : ''
+            }`}
+            title="Meu perfil"
+          >
+            <UserAvatar url={auth.user.pictureUrl} name={auth.user.name} className="h-10 w-10 shrink-0 text-[40px] leading-none" />
+            {!sidenavCollapsed && (
+              <span className="min-w-0 truncate text-sm text-[var(--sidebar-fg)]">{auth.displayName ?? auth.user.name}</span>
+            )}
+          </Link>
+        )}
         {desktop && (
           <div className="flex-shrink-0 px-2 py-3 border-t border-[var(--sidebar-border)] flex items-center justify-between">
             <button
@@ -169,7 +184,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 aria-expanded={userMenuOpen}
                 onClick={() => setUserMenuOpen((v) => !v)}
               >
-                <span className="material-icons">account_circle</span>
+                <UserAvatar url={auth.user?.pictureUrl} name={auth.user?.name} className="h-9 w-9 text-[28px] leading-none" />
               </button>
               {userMenuOpen && (
                 <div className="absolute top-full right-0 mt-2 bg-[var(--card)] border border-[var(--border)] rounded-md shadow-lg z-50 min-w-48">
@@ -225,6 +240,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {desktop && (
           <header className="sticky top-0 z-40 flex h-14 items-center justify-end gap-3 border-b border-[var(--border)] bg-[var(--card)] px-6 ml-[var(--content-margin)]">
+            <UserAvatar url={auth.user?.pictureUrl} name={auth.user?.name} className="h-9 w-9 text-[28px] leading-none" />
             <p className="text-sm text-[var(--muted)]">Olá, {auth.displayName}</p>
             <Link href="/profile" className="text-sm no-underline">Perfil</Link>
             <Link href="/settings" className="text-sm no-underline">Configurações</Link>

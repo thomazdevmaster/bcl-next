@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
+import { usesRemoteApi } from '@/config/environment';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,9 @@ const EXTENSION_BY_TYPE: Record<string, string> = {
 const MAX_BYTES = 25 * 1024 * 1024;
 
 export async function POST(request: Request) {
+  if (usesRemoteApi()) {
+    return Response.json({ error: 'Not found' }, { status: 404 });
+  }
   const form = await request.formData();
   const file = form.get('file');
   if (!(file instanceof File)) {

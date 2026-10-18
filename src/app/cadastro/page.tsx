@@ -9,6 +9,7 @@ import { readGoogleProfile } from '@/lib/googleIdentity';
 import { isPersonUnderage } from '@/domains/people/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
+import { UserAvatar } from '@/components/auth/UserAvatar';
 import { userFacingError } from '@/lib/userMessages';
 
 function formatPhoneNumber(value: string): string {
@@ -38,6 +39,8 @@ export default function CadastroPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [googleCredential, setGoogleCredential] = useState<string | null>(null);
+  const [googlePicture, setGooglePicture] = useState<string | null>(null);
 
   const onGoogleCredential = async (credential: string) => {
     setError(null);
@@ -48,12 +51,13 @@ export default function CadastroPage() {
       router.push(session.mustChangePassword ? '/alterar-senha' : '/gestao');
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 404) {
-        // Sem conta ainda: aproveita nome e e-mail do Google e segue no formulário.
         const profile = readGoogleProfile(credential);
         if (profile.givenName) setFirstName(profile.givenName);
         if (profile.familyName) setLastName(profile.familyName);
         if (profile.email) setEmail(profile.email);
-        setNotice('Ainda não há cadastro para esta conta Google. Complete os dados abaixo para pedir acesso.');
+        setGoogleCredential(credential);
+        setGooglePicture(profile.picture ?? null);
+        setNotice('Ainda não há cadastro para esta conta Google. Complete os dados abaixo para pedir acesso. O perfil será Amigos e usaremos sua foto do Google.');
       } else {
         setError(userFacingError(caught));
       }
@@ -92,7 +96,16 @@ export default function CadastroPage() {
       const sealed = await sealPassword(password);
       const response = await apiFetch<{ message: string }>('/auth/signup', {
         method: 'POST',
-        body: JSON.stringify({ firstName, lastName, email, phone, birthDate, username, password: sealed }),
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          email,
+          phone,
+          birthDate,
+          username,
+          password: sealed,
+          googleCredential: googleCredential || undefined,
+        }),
       });
       setMessage(response.message);
     } catch (caught) {
@@ -108,7 +121,7 @@ export default function CadastroPage() {
         <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Faça parte da nossa comunidade</p>
         <h1 className="mt-2 text-3xl font-semibold">Criar cadastro</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          A conta só entra no sistema depois que alguém com permissão de autorizar usuários aprovar.
+          O cadastro entra no perfil Amigos. A conta só fica ativa depois que alguém da banda autorizar.
         </p>
         {message ? (
           <div className="mt-8 space-y-4">
@@ -128,9 +141,10 @@ export default function CadastroPage() {
               <span className="h-px flex-1 bg-[var(--border)]" />
             </div>
             {notice && (
-              <p className="mb-4 rounded-md border border-[var(--border)] bg-[var(--card-secondary)] px-3 py-2 text-sm" role="status">
-                {notice}
-              </p>
+              <div className="mb-4 flex items-center gap-3 rounded-md border border-[var(--border)] bg-[var(--card-secondary)] px-3 py-2 text-sm" role="status">
+                {googlePicture ? <UserAvatar url={googlePicture} className="h-11 w-11 shrink-0" /> : null}
+                <p className="m-0">{notice}</p>
+              </div>
             )}
             <form className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-x-6 lg:gap-y-3" onSubmit={onSubmit}>
               <label className={LABEL}>

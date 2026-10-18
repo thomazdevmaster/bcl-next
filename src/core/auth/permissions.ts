@@ -44,6 +44,9 @@ const ROLE_ACTIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
   public: {
     portal: ['read'],
   },
+  amigos: {
+    portal: ['read'],
+  },
   aluno: {
     portal: ['read'],
     songs: ['read'],

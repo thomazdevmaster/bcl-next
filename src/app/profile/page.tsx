@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { UserAvatar } from '@/components/auth/UserAvatar';
 import { roleLabels } from '@/core/auth/roles';
 import { useAuth, type SessionUser } from '@/contexts/AuthContext';
 
@@ -11,19 +12,25 @@ export default function ProfilePage() {
   const [form, setForm] = useState<Partial<SessionUser>>(auth.user ?? {});
 
   useEffect(() => {
+    if (!auth.isHydrated) return;
     if (!auth.isLoggedIn) {
       router.push('/login');
     }
-  }, [auth.isLoggedIn, router]);
+  }, [auth.isHydrated, auth.isLoggedIn, router]);
 
-  if (!auth.isLoggedIn || !auth.user) return null;
+  if (!auth.isHydrated || !auth.isLoggedIn || !auth.user) return null;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
-      <h1 className="text-3xl font-semibold">Meu perfil</h1>
-      <p className="mt-2 text-[var(--muted)]">
-        Perfis: <strong>{roleLabels(auth.user.roles)}</strong>
-      </p>
+      <div className="flex items-center gap-4">
+        <UserAvatar url={auth.user.pictureUrl} name={auth.user.name} className="h-16 w-16 text-[64px] leading-none" />
+        <div>
+          <h1 className="text-3xl font-semibold">Meu perfil</h1>
+          <p className="mt-2 text-[var(--muted)]">
+            Perfis: <strong>{roleLabels(auth.user.roles)}</strong>
+          </p>
+        </div>
+      </div>
 
       <div className="mt-8 flex flex-col gap-4">
         <label className="flex flex-col gap-1.5 text-sm">

@@ -9,7 +9,7 @@ import { AppShell } from '@/layouts/AppShell';
 import { PublicShell } from '@/layouts/PublicShell';
 
 export function RootShell({ children }: { children: ReactNode }) {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, isHydrated } = useAuth();
   const pathname = usePathname() ?? '/';
   const forcePublic = pathname === '/login';
   // Só na carga inicial da home (entrar no site em / ou F5 em /).
@@ -22,12 +22,13 @@ export function RootShell({ children }: { children: ReactNode }) {
     }
   }, [pathname]);
 
-  const shell =
-    !isLoggedIn || forcePublic ? (
-      <PublicShell>{children}</PublicShell>
-    ) : (
-      <AppShell>{children}</AppShell>
-    );
+  const shell = !isHydrated ? (
+    <div className="min-h-[100dvh] bg-[var(--background)]" aria-busy="true" />
+  ) : !isLoggedIn || forcePublic ? (
+    <PublicShell>{children}</PublicShell>
+  ) : (
+    <AppShell>{children}</AppShell>
+  );
 
   return (
     <>
