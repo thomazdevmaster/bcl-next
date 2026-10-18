@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
+import { postLoginRoute } from '@/core/auth/postLoginRoute';
 import { userFacingError } from '@/lib/userMessages';
 
 export default function LoginPage() {
@@ -18,8 +19,8 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!auth.isHydrated || !auth.isLoggedIn) return;
-    router.replace(auth.user?.mustChangePassword ? '/alterar-senha' : '/');
-  }, [auth.isHydrated, auth.isLoggedIn, auth.user?.mustChangePassword, router]);
+    router.replace(auth.user ? postLoginRoute(auth.user) : '/');
+  }, [auth.isHydrated, auth.isLoggedIn, auth.user, router]);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -27,7 +28,7 @@ export default function LoginPage() {
     setBusy(true);
     try {
       const session = await auth.login(identifier, password, keep);
-      router.push(session.mustChangePassword ? '/alterar-senha' : '/gestao');
+      router.push(postLoginRoute(session));
     } catch (err) {
       setError(userFacingError(err));
     } finally {
@@ -40,7 +41,7 @@ export default function LoginPage() {
     setBusy(true);
     try {
       const session = await auth.loginWithGoogle(credential, keep);
-      router.push(session.mustChangePassword ? '/alterar-senha' : '/gestao');
+      router.push(postLoginRoute(session));
     } catch (err) {
       setError(userFacingError(err));
     } finally {

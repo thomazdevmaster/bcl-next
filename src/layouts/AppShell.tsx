@@ -39,8 +39,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (!auth.isHydrated || !auth.isLoggedIn) return;
     if (auth.user?.mustChangePassword && pathname !== '/alterar-senha') {
       router.replace('/alterar-senha');
+      return;
     }
-  }, [auth.isHydrated, auth.isLoggedIn, auth.user?.mustChangePassword, pathname, router]);
+    if (auth.user?.needsProfileCompletion && pathname !== '/completar-cadastro') {
+      router.replace('/completar-cadastro');
+    }
+  }, [
+    auth.isHydrated,
+    auth.isLoggedIn,
+    auth.user?.mustChangePassword,
+    auth.user?.needsProfileCompletion,
+    pathname,
+    router,
+  ]);
 
   useEffect(() => {
     if (!moreOpen || desktop) return;

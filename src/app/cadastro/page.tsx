@@ -3,9 +3,9 @@
 import { FormEvent, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ApiError, apiFetch } from '@/lib/api';
+import { apiFetch } from '@/lib/api';
+import { postLoginRoute } from '@/core/auth/postLoginRoute';
 import { sealPassword } from '@/lib/passwordCipher';
-import { readGoogleProfile } from '@/lib/googleIdentity';
 import { isPersonUnderage } from '@/domains/people/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
@@ -48,19 +48,9 @@ export default function CadastroPage() {
     setSaving(true);
     try {
       const session = await auth.loginWithGoogle(credential, true);
-      router.push(session.mustChangePassword ? '/alterar-senha' : '/gestao');
+      router.push(postLoginRoute(session));
     } catch (caught) {
-      if (caught instanceof ApiError && caught.status === 404) {
-        const profile = readGoogleProfile(credential);
-        if (profile.givenName) setFirstName(profile.givenName);
-        if (profile.familyName) setLastName(profile.familyName);
-        if (profile.email) setEmail(profile.email);
-        setGoogleCredential(credential);
-        setGooglePicture(profile.picture ?? null);
-        setNotice('Ainda não há cadastro para esta conta Google. Complete os dados abaixo para pedir acesso. O perfil será Amigos e usaremos sua foto do Google.');
-      } else {
-        setError(userFacingError(caught));
-      }
+      setError(userFacingError(caught));
     } finally {
       setSaving(false);
     }
@@ -121,7 +111,8 @@ export default function CadastroPage() {
         <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Faça parte da nossa comunidade</p>
         <h1 className="mt-2 text-3xl font-semibold">Criar cadastro</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          O cadastro entra no perfil Amigos. A conta só fica ativa depois que alguém da banda autorizar.
+          Com Google, criamos seu perfil Amigos na hora — você só completa telefone e usuário. Pelo formulário abaixo, a
+          conta aguarda autorização da banda.
         </p>
         {message ? (
           <div className="mt-8 space-y-4">

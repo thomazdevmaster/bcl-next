@@ -13,6 +13,8 @@ export interface AppUser extends Auditable {
   personId: EntityId;
   isActive: boolean;
   mustChangePassword?: boolean;
+  /** Conta criada via Google: falta telefone e usuário definitivo. */
+  needsProfileCompletion?: boolean;
   approvalStatus?: 'pending' | 'approved';
   passwordResetRequested?: boolean;
   pictureUrl?: string | null;
