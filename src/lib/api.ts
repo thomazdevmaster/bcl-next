@@ -2,11 +2,16 @@ import { getAccessToken } from '@/core/auth/accessToken';
 import { getApiUrl } from '../config/environment';
 import { failureMessage } from './userMessages';
 
-export function apiAuthHeaders(headers?: HeadersInit): Headers {
+function jsonHeaders(headers?: HeadersInit): Headers {
   const merged = new Headers(headers);
   if (!merged.has('Content-Type')) {
     merged.set('Content-Type', 'application/json');
   }
+  return merged;
+}
+
+export function apiAuthHeaders(headers?: HeadersInit): Headers {
+  const merged = jsonHeaders(headers);
   const token = getAccessToken();
   if (token && !merged.has('Authorization')) {
     merged.set('Authorization', `Bearer ${token}`);
@@ -37,12 +42,18 @@ function errorMessage(text: string, status: number): string {
   return failureMessage(undefined, text || `Falha na API (${status}).`);
 }
 
-export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+type ApiFetchOptions = RequestInit & {
+  /** Endpoints públicos: não enviar Bearer (a API recusa a chave de senha se o login ainda exige troca). */
+  skipAuth?: boolean;
+};
+
+export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+  const { skipAuth, ...requestInit } = options;
   let response: Response;
   try {
     response = await fetch(`${getApiUrl()}${path}`, {
-      ...options,
-      headers: apiAuthHeaders(options.headers),
+      ...requestInit,
+      headers: skipAuth ? jsonHeaders(requestInit.headers) : apiAuthHeaders(requestInit.headers),
     });
   } catch (caught) {
     throw new ApiError(failureMessage(caught, 'Falha de conexão com a API.'), 0);

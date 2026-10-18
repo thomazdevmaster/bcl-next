@@ -24,7 +24,7 @@ const HASH_BYTES = 32;
 const MAX_PASSWORD_BYTES = 190; // 2048 bits: k - 2·hLen - 2
 
 async function fetchPublicKey(): Promise<PasswordPublicKey> {
-  const key = await apiFetch<PasswordPublicKey>('/auth/public-key');
+  const key = await apiFetch<PasswordPublicKey>('/auth/public-key', { skipAuth: true });
   if (!key || key.kty !== 'RSA' || !key.n || !key.e) {
     throw new Error('A API não forneceu a chave para proteger a senha.');
   }
