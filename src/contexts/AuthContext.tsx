@@ -11,15 +11,11 @@ import {
   type ReactNode,
 } from 'react';
 import { setAccessToken, getAccessToken, usesRemoteApi } from '@/core/auth/accessToken';
-import { DEMO_USERS, demoUserByRole, findDemoUser } from '@/core/auth/demoUsers';
+import { findDemoUser } from '@/core/auth/demoUsers';
 import { apiFetch } from '@/lib/api';
 import { sealPassword } from '@/lib/passwordCipher';
 import { failureMessage } from '@/lib/userMessages';
-import {
-  PUBLIC_ROLES,
-  type AccessRoles,
-  type AuthenticatedRole,
-} from '@/core/auth/roles';
+import { PUBLIC_ROLES, type AccessRoles } from '@/core/auth/roles';
 import type { AppUser } from '@/domains/users/types';
 
 const AUTH_USER_KEY = 'app.auth.user';
@@ -38,7 +34,6 @@ type AuthContextValue = {
   login: (identifier: string, password: string, keepLoggedIn: boolean) => Promise<SessionUser>;
   /** `credential` é o ID token do Google Identity Services. Só com a API Spring. */
   loginWithGoogle: (credential: string, keepLoggedIn: boolean) => Promise<SessionUser>;
-  loginAs: (role: AuthenticatedRole, keepLoggedIn: boolean) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (patch: Partial<SessionUser>) => void;
 };
@@ -126,23 +121,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return session.user;
   }, []);
 
-  const loginAs = useCallback(async (role: AuthenticatedRole, keepLoggedIn: boolean) => {
-    if (role === 'admin' || role === 'maestro') {
-      throw new Error('Administrador e maestro entram com usuário e senha.');
-    }
-    if (usesRemoteApi()) {
-      const match = DEMO_USERS.find((user) => user.roles.includes(role));
-      if (!match) {
-        throw new Error(failureMessage(undefined, `Usuário de demonstração não encontrado para o perfil ${role}`));
-      }
-      await login(match.username, match.password, keepLoggedIn);
-      return;
-    }
-    const found = demoUserByRole(role);
-    setUser(found);
-    persist(found, keepLoggedIn);
-  }, [login]);
-
   const logout = useCallback(async () => {
     setAccessToken(null, false);
     setUser(null);
@@ -189,12 +167,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         displayName: hydratedUser ? hydratedUser.name.split(' ')[0] : null,
         login,
         loginWithGoogle,
-        loginAs,
         logout,
         updateProfile,
       };
     },
-    [isHydrated, user, login, loginWithGoogle, loginAs, logout, updateProfile],
+    [isHydrated, user, login, loginWithGoogle, logout, updateProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

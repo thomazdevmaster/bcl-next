@@ -26,6 +26,18 @@ export type CrudResource = Exclude<Resource, 'portal' | 'homepage' | 'blogpage'>
 
 export type PeopleReadScope = 'none' | 'students' | 'members';
 
+export const ACTION_LABEL: Record<Action, string> = {
+  read: 'Ver',
+  create: 'Criar',
+  update: 'Editar',
+  delete: 'Excluir',
+  read_members: 'Ver membros',
+  view_sensitive: 'Ver dados sensíveis',
+  approve: 'Aprovar',
+  manage_roles: 'Gerir papéis',
+  assign_admin: 'Atribuir administrador',
+};
+
 const FULL_CRUD: Action[] = ['read', 'create', 'update', 'delete'];
 
 const ROLE_ACTIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
@@ -70,6 +82,14 @@ const ROLE_ACTIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
     blogpage: ['read', 'update'],
   },
 };
+
+export function permissionKeysForRole(role: string): string[] {
+  const grants = ROLE_ACTIONS[role as Role];
+  if (!grants) return [];
+  return Object.entries(grants).flatMap(([resource, actions]) =>
+    (actions ?? []).map((action) => `${resource}:${action}`),
+  );
+}
 
 export function can(
   roles: AccessRoles,

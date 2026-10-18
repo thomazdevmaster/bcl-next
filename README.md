@@ -53,7 +53,16 @@ O frontend fica em `http://localhost:3000`. Portal em `/`, login em `/login`, ge
 
 A URL da API vem de `NEXT_PUBLIC_API_URL`. Sem essa variável, o browser usa o mock do próprio Next em `/bcl-api`. Reinicie o `npm run dev` depois de mudar qualquer `.env`.
 
-No deploy de produção o site **usa o mock** (`/bcl-api`), porque o backend ainda não está publicado. Quando a API real estiver no ar, defina no ambiente de produção `NEXT_PUBLIC_USE_REMOTE_API=true` e `NEXT_PUBLIC_API_URL`.
+Publicação: o site vai para a **Vercel**; a API (Postgres + MinIO) sobe na VM Oracle. Na Vercel defina as variáveis de build (elas entram no bundle do browser):
+
+```env
+NEXT_PUBLIC_USE_REMOTE_API=true
+NEXT_PUBLIC_API_URL=https://api.seudominio.com.br
+NEXT_PUBLIC_SITE_URL=https://SEU_PROJETO.vercel.app
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=
+```
+
+`NEXT_PUBLIC_API_URL` precisa ser **HTTPS** (o site na Vercel é HTTPS). Depois de mudar essas variáveis, faça um novo deploy. Sem elas no build, o Next usa o mock `/bcl-api`.
 
 ## Variáveis de ambiente
 

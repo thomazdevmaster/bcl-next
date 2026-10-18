@@ -10,7 +10,6 @@
  * implementação em BigInt do mesmo RSA-OAEP para esse caso.
  */
 import { apiFetch } from '@/lib/api';
-import { failureMessage } from '@/lib/userMessages';
 
 export type PasswordPublicKey = {
   kty: 'RSA';
@@ -27,7 +26,7 @@ const MAX_PASSWORD_BYTES = 190; // 2048 bits: k - 2·hLen - 2
 async function fetchPublicKey(): Promise<PasswordPublicKey> {
   const key = await apiFetch<PasswordPublicKey>('/auth/public-key');
   if (!key || key.kty !== 'RSA' || !key.n || !key.e) {
-    throw new Error(failureMessage(undefined, 'A API não forneceu a chave para proteger a senha.'));
+    throw new Error('A API não forneceu a chave para proteger a senha.');
   }
   return key;
 }

@@ -36,9 +36,16 @@ export default function ProfilePage() {
         </label>
       </div>
 
-      <div className="mt-8 flex gap-3">
-        <button type="button" className="btn-primary" onClick={() => auth.updateProfile(form)}>
+      <div className="mt-8 flex flex-wrap gap-3">
+        <button type="button" className="btn-primary min-h-11" onClick={() => auth.updateProfile(form)}>
           Salvar
+        </button>
+        <button
+          type="button"
+          className="btn-outline-primary min-h-11"
+          onClick={() => router.push('/alterar-senha')}
+        >
+          Alterar senha
         </button>
         <button
           type="button"

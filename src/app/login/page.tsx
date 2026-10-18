@@ -3,7 +3,6 @@
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AUTHENTICATED_ROLES, ROLE_LABEL } from '@/core/auth/roles';
 import { useAuth } from '@/contexts/AuthContext';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
 import { userFacingError } from '@/lib/userMessages';
@@ -11,13 +10,10 @@ import { userFacingError } from '@/lib/userMessages';
 export default function LoginPage() {
   const auth = useAuth();
   const router = useRouter();
-  const [identifier, setIdentifier] = useState('admin');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [keep, setKeep] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const goIn = () => router.push('/gestao');
-
   const [busy, setBusy] = useState(false);
 
   const onSubmit = async (event: FormEvent) => {
@@ -53,7 +49,7 @@ export default function LoginPage() {
         <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Acesso interno</p>
         <h1 className="mt-2 text-3xl font-semibold">Entrar</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Entre com seu nome de usuário ou e-mail. Aluno e músico podem usar o acesso rápido.
+          Entre com seu nome de usuário ou e-mail e a senha da banda.
         </p>
 
         <div className="mt-8">
@@ -113,22 +109,6 @@ export default function LoginPage() {
             </Link>
           </div>
         </form>
-
-        <div className="mt-8">
-          <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Acesso rápido</p>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {AUTHENTICATED_ROLES.filter((role) => role !== 'admin' && role !== 'maestro').map((role) => (
-              <button
-                key={role}
-                type="button"
-                className="btn-outline-primary min-h-11 text-sm"
-                onClick={() => auth.loginAs(role, keep).then(goIn)}
-              >
-                {ROLE_LABEL[role]}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );

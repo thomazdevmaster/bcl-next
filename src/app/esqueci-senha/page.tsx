@@ -16,11 +16,14 @@ export default function EsqueciSenhaPage() {
     setError(null);
     setSaving(true);
     try {
-      const response = await apiFetch<{ message: string }>('/auth/forgot-password', {
+      const response = await apiFetch<{ message?: string }>('/auth/forgot-password', {
         method: 'POST',
         body: JSON.stringify({ username: identifier.trim() }),
       });
-      setMessage(response.message);
+      setMessage(
+        response?.message?.trim() ||
+          'Se o usuário estiver cadastrado e aprovado, a equipe libera uma senha nova no painel.',
+      );
     } catch (caught) {
       setError(userFacingError(caught));
     } finally {
@@ -34,7 +37,7 @@ export default function EsqueciSenhaPage() {
         <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Acesso interno</p>
         <h1 className="mt-2 text-3xl font-semibold">Esqueci a senha</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          O pedido chega para quem pode autorizar usuários. Essa pessoa gera uma senha nova e te envia.
+          Informe usuário ou e-mail. Quem autoriza cadastros vê o pedido no painel, gera uma senha nova e te envia.
         </p>
         {message ? (
           <div className="mt-8 space-y-4">

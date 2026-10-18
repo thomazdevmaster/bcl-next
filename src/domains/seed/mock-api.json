@@ -9,7 +9,8 @@
       ],
       "isActive": true,
       "createdAt": "2024-01-10T10:00:00.000Z",
-      "updatedAt": "2024-01-10T10:00:00.000Z"
+      "updatedAt": "2024-01-10T10:00:00.000Z",
+      "username": "admin"
     },
     {
       "id": "user-maestro",
@@ -21,7 +22,8 @@
       "personId": "person-maestro",
       "isActive": true,
       "createdAt": "2024-01-10T10:00:00.000Z",
-      "updatedAt": "2024-01-10T10:00:00.000Z"
+      "updatedAt": "2024-01-10T10:00:00.000Z",
+      "username": "maestro"
     },
     {
       "id": "user-musico",
@@ -33,7 +35,8 @@
       "personId": "person-helena",
       "isActive": true,
       "createdAt": "2024-02-01T10:00:00.000Z",
-      "updatedAt": "2024-02-01T10:00:00.000Z"
+      "updatedAt": "2024-02-01T10:00:00.000Z",
+      "username": "musico"
     },
     {
       "id": "user-aluno",
@@ -45,7 +48,8 @@
       "personId": "person-pedro",
       "isActive": true,
       "createdAt": "2024-03-01T10:00:00.000Z",
-      "updatedAt": "2024-03-01T10:00:00.000Z"
+      "updatedAt": "2024-03-01T10:00:00.000Z",
+      "username": "aluno"
     },
     {
       "id": "user-ambos",
@@ -58,7 +62,8 @@
       "personId": "person-luisa",
       "isActive": true,
       "createdAt": "2024-03-12T10:00:00.000Z",
-      "updatedAt": "2024-03-12T10:00:00.000Z"
+      "updatedAt": "2024-03-12T10:00:00.000Z",
+      "username": "ambos"
     }
   ],
   "people": [
@@ -621,6 +626,44 @@
           "href": "/agenda"
         }
       ]
+    }
+  ],
+  "roles": [
+    {
+      "id": "role-admin",
+      "code": "admin",
+      "name": "Administrador",
+      "description": "Acesso total ao portal e à gestão.",
+      "systemRole": true,
+      "locked": true,
+      "permissions": []
+    },
+    {
+      "id": "role-maestro",
+      "code": "maestro",
+      "name": "Maestro",
+      "description": "Gerencia cadastros, repertório, agenda e pessoas da banda.",
+      "systemRole": true,
+      "locked": true,
+      "permissions": []
+    },
+    {
+      "id": "role-musico",
+      "code": "musico",
+      "name": "Músico",
+      "description": "Acessa estudo, agenda e dados da corporação com máscara.",
+      "systemRole": true,
+      "locked": true,
+      "permissions": []
+    },
+    {
+      "id": "role-aluno",
+      "code": "aluno",
+      "name": "Aluno",
+      "description": "Acessa o estudo e vê os próprios dados.",
+      "systemRole": true,
+      "locked": true,
+      "permissions": []
     }
   ]
 }

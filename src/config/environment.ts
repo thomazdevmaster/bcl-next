@@ -1,10 +1,11 @@
 /**
- * Em produção o backend ainda não está publicado: o site usa o mock `/bcl-api`.
- * Quando a API real estiver no ar, defina NEXT_PUBLIC_USE_REMOTE_API=true e NEXT_PUBLIC_API_URL.
+ * API Spring quando a URL não é o mock `/bcl-api`.
+ * Na Vercel: NEXT_PUBLIC_USE_REMOTE_API=true e NEXT_PUBLIC_API_URL=https://api…
+ * Sem URL, o site usa o mock embutido.
  */
 export function usesRemoteApi(): boolean {
   if (process.env.NEXT_PUBLIC_USE_REMOTE_API === 'true') return true;
-  if (process.env.NODE_ENV === 'production') return false;
+  if (process.env.NEXT_PUBLIC_USE_REMOTE_API === 'false') return false;
   const url = process.env.NEXT_PUBLIC_API_URL?.trim() ?? '';
   return url.length > 0 && !url.includes('/bcl-api');
 }

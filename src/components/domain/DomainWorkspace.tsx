@@ -98,7 +98,7 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
   }, [domain.apiResource]);
 
   useEffect(() => {
-    if (resource !== 'users' || !managesRoles || !usesRemoteApi()) return;
+    if (resource !== 'users' || !managesRoles) return;
     let active = true;
     apiFetch<Array<{ code: string; name: string }>>('/roles')
       .then((data) => {

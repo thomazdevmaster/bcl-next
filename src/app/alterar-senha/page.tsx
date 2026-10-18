@@ -11,6 +11,7 @@ import type { AppUser } from '@/domains/users/types';
 export default function AlterarSenhaPage() {
   const auth = useAuth();
   const router = useRouter();
+  const forced = Boolean(auth.user?.mustChangePassword);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -21,12 +22,8 @@ export default function AlterarSenhaPage() {
     if (!auth.isHydrated) return;
     if (!auth.isLoggedIn) {
       router.replace('/login');
-      return;
     }
-    if (!auth.user?.mustChangePassword) {
-      router.replace('/gestao');
-    }
-  }, [auth.isHydrated, auth.isLoggedIn, auth.user?.mustChangePassword, router]);
+  }, [auth.isHydrated, auth.isLoggedIn, router]);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -41,8 +38,10 @@ export default function AlterarSenhaPage() {
     }
     setSaving(true);
     try {
-      // As duas senhas vão cifradas com a chave pública da API.
-      const [sealedCurrent, sealedNext] = await Promise.all([sealPassword(currentPassword), sealPassword(newPassword)]);
+      const [sealedCurrent, sealedNext] = await Promise.all([
+        sealPassword(currentPassword),
+        sealPassword(newPassword),
+      ]);
       const updated = await apiFetch<AppUser>('/auth/password', {
         method: 'POST',
         body: JSON.stringify({ currentPassword: sealedCurrent, newPassword: sealedNext }),
@@ -56,25 +55,29 @@ export default function AlterarSenhaPage() {
     }
   };
 
-  if (!auth.isLoggedIn || !auth.user?.mustChangePassword) return null;
+  if (!auth.isHydrated || !auth.isLoggedIn) return null;
 
   return (
     <div className="mx-auto max-w-md px-4 py-10">
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-[var(--shadow-soft)] sm:p-8">
-        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Primeiro acesso</p>
+        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+          {forced ? 'Primeiro acesso' : 'Conta'}
+        </p>
         <h1 className="mt-2 text-3xl font-semibold">Alterar senha</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          A senha inicial vale só para este acesso. Escolha outra para continuar.
+          {forced
+            ? 'A senha inicial vale só para este acesso. Escolha outra para continuar.'
+            : 'Informe a senha atual e a nova senha.'}
         </p>
         <form className="mt-8 flex flex-col gap-4" onSubmit={onSubmit}>
           <label className="flex flex-col gap-1.5 text-sm font-medium">
-            Senha inicial
+            {forced ? 'Senha inicial' : 'Senha atual'}
             <input
               className="min-h-11 w-full"
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}
               type="password"
-              placeholder="Senha que você recebeu"
+              placeholder={forced ? 'Senha que você recebeu' : 'Sua senha atual'}
               autoComplete="current-password"
               required
             />
@@ -105,7 +108,11 @@ export default function AlterarSenhaPage() {
               required
             />
           </label>
-          {error && <p className="text-sm text-[var(--destructive)]">{error}</p>}
+          {error && (
+            <p className="text-sm text-[var(--destructive)]" role="alert">
+              {error}
+            </p>
+          )}
           <button type="submit" className="btn-primary min-h-11" disabled={saving}>
             {saving ? 'Salvando…' : 'Salvar e continuar'}
           </button>

@@ -176,16 +176,17 @@ Arquivos pequenos de config não vão para o bucket. XML/MIDI/fotos sim.
 
 ### Fase 1 — primeiro backend real (MVP)
 
-Um `docker compose`:
+Um `docker compose` na VM (pasta `bcl/`):
 
 | Peça | Papel |
 | --- | --- |
-| API (Python FastAPI **ou** Java Spring) | CRUD + auth + metadados + enqueue |
+| API Spring | CRUD + auth + arquivos em `/files/**` |
 | PostgreSQL 16 | dados |
-| MinIO | bucket S3 |
+| MinIO | bucket S3 (só na rede interna) |
+| Caddy | HTTPS 80/443 na frente da API |
 | (opcional) worker no mesmo compose | geração MIDI; pode ser o mesmo image com `CMD worker` |
 
-Infra mínima de produção equivalente: **1 VM** (2–4 vCPU, 4–8 GB RAM) + volume Postgres + volume MinIO, ou Postgres gerenciado + R2/S3 e a API na mesma VM. HTTPS (Caddy/nginx). Sem Kubernetes no dia 1.
+O site Next fica na **Vercel** e chama a API pelo `NEXT_PUBLIC_API_URL` público (HTTPS). Infra mínima: **1 VM** Oracle (Always Free Ampere com ≥ 4 GB RAM) + volume Postgres + volume MinIO. Sem Kubernetes no dia 1.
 
 Observabilidade mínima: logs estruturados, health `/health`, métrica de duração de job.
 

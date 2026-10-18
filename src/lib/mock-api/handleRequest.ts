@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { handleRolesRequest } from './handleRoles';
 import { getCollection, isMockCollection, persistMockDb } from './store';
 import type { MockCollection, MockRecord } from './types';
 
@@ -12,6 +13,21 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 function notFound(): Response {
+  return jsonResponse({ error: 'Not found' }, 404);
+}
+
+function handleAuthRequest(request: Request, segments: string[]): Response | null {
+  if (segments[0] !== 'auth' || segments.length < 2) return null;
+  const action = segments[1];
+  const method = request.method.toUpperCase();
+  if (method === 'POST' && action === 'forgot-password') {
+    return jsonResponse({
+      message: 'Se o usuário estiver cadastrado e aprovado, um responsável vai liberar a nova senha.',
+    });
+  }
+  if (method === 'POST' && action === 'password') {
+    return jsonResponse({ mustChangePassword: false });
+  }
   return jsonResponse({ error: 'Not found' }, 404);
 }
 
@@ -35,6 +51,13 @@ export async function handleMockApiRequest(
   request: Request,
   path: string[] | undefined,
 ): Promise<Response> {
+  const segments = path?.filter(Boolean) ?? [];
+  const rolesResponse = await handleRolesRequest(request, segments);
+  if (rolesResponse) return rolesResponse;
+
+  const authResponse = handleAuthRequest(request, segments);
+  if (authResponse) return authResponse;
+
   const parsed = parseSegments(path);
   if (!parsed) return notFound();
 

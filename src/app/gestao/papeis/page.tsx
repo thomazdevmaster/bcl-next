@@ -2,11 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { usesRemoteApi } from '@/core/auth/accessToken';
 import { hasRole } from '@/core/auth/roles';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api';
-import { failureMessage, userFacingError } from '@/lib/userMessages';
+import { userFacingError } from '@/lib/userMessages';
 
 type CatalogAction = { action: string; label: string };
 type CatalogResource = { resource: string; label: string; hint: string; actions: CatalogAction[] };
@@ -52,7 +51,7 @@ export default function PapeisPage() {
   }, [admin, isLoggedIn, router]);
 
   useEffect(() => {
-    if (!admin || !usesRemoteApi()) {
+    if (!admin) {
       setLoading(false);
       return;
     }
@@ -176,17 +175,6 @@ export default function PapeisPage() {
   };
 
   if (!admin) return null;
-
-  if (!usesRemoteApi()) {
-    return (
-      <section className="mx-auto max-w-3xl rounded-xl border border-[var(--border)] bg-[var(--card)] p-6">
-        <h1 className="text-xl font-semibold">Papéis</h1>
-        <p className="mt-2 text-[var(--muted)]">
-          {failureMessage(undefined, 'A gestão de papéis usa o backend. O mock local não tem este cadastro.')}
-        </p>
-      </section>
-    );
-  }
 
   return (
     <section className="mx-auto max-w-6xl space-y-6">

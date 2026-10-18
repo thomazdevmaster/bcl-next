@@ -29,7 +29,7 @@ function errorMessage(text: string, status: number): string {
   try {
     const parsed = JSON.parse(text) as { error?: string };
     if (typeof parsed.error === 'string' && parsed.error.trim()) {
-      return failureMessage(undefined, parsed.error.trim());
+      return parsed.error.trim();
     }
   } catch {
     /* corpo que não é JSON */
