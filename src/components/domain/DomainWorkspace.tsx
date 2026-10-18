@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { apiFetch } from '@/lib/api';
 import { sealPassword } from '@/lib/passwordCipher';
 import { failureMessage, userFacingError } from '@/lib/userMessages';
@@ -20,6 +20,8 @@ import {
 import type { CrudResource } from '@/core/auth/permissions';
 import { filterPeopleForRole } from '@/domains/people/visibility';
 import type { Person } from '@/domains/people/types';
+import { TableView } from '@/components/tables/core/TableView';
+import { createDomainTableColumns } from './table-columns';
 import { DomainGuard } from './DomainGuard';
 
 interface DomainWorkspaceProps {
@@ -54,7 +56,6 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>(config.defaults);
@@ -78,24 +79,21 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
   const needsPeople = sources.has('people') || sources.has('people-without-user');
   const needsInstruments = sources.has('instruments');
 
-  useEffect(() => {
-    let active = true;
+  const fetchItems = useCallback(async () => {
     setLoading(true);
     setError(null);
-    apiFetch<Record<string, unknown>[]>(`/${domain.apiResource}`)
-      .then((data) => {
-        if (active) setItems(data);
-      })
-      .catch((caught: unknown) => {
-        if (active) setError(failureMessage(caught, 'Não foi possível carregar os registros. Confirme se a API está rodando.'));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
+    try {
+      setItems(await apiFetch<Record<string, unknown>[]>(`/${domain.apiResource}`));
+    } catch (caught) {
+      setError(failureMessage(caught, 'Não foi possível carregar os registros. Confirme se a API está rodando.'));
+    } finally {
+      setLoading(false);
+    }
   }, [domain.apiResource]);
+
+  useEffect(() => {
+    void fetchItems();
+  }, [fetchItems]);
 
   useEffect(() => {
     if (resource !== 'users' || !managesRoles) return;
@@ -191,16 +189,17 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
         permissions,
       ) as unknown as Record<string, unknown>[];
     }
-    const normalizedSearch = search.trim().toLocaleLowerCase('pt-BR');
-    if (!normalizedSearch) return visibleItems;
-    return visibleItems.filter((item) =>
-      config.columns.some((column) =>
-        String(getValue(item, column.path) ?? '')
-          .toLocaleLowerCase('pt-BR')
-          .includes(normalizedSearch),
-      ),
-    );
-  }, [config, items, permissions, resource, roles, search]);
+    return visibleItems;
+  }, [config, items, permissions, resource, roles]);
+
+  const tableColumns = useMemo(
+    () => createDomainTableColumns(
+      config.columns,
+      (row, column) => formatCell(row, column, roleChoices, choices.people),
+      resource,
+    ),
+    [choices.people, config.columns, resource, roleChoices],
+  );
 
   const openCreate = () => {
     setSelected(null);
@@ -209,7 +208,7 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
     setDialogMode('create');
   };
 
-  const openItem = (item: Record<string, unknown>, mode: 'view' | 'edit') => {
+  const openItem = useCallback((item: Record<string, unknown>, mode: 'view' | 'edit') => {
     setSelected(item);
     setValues({
       ...config.defaults,
@@ -217,7 +216,25 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
     });
     setFormErrors({});
     setDialogMode(mode);
-  };
+  }, [config]);
+
+  const renderRowActions = useCallback((row: Record<string, unknown>) => (
+    <div className="flex justify-end gap-1">
+      <ActionButton icon="visibility" label="Visualizar" onClick={() => openItem(row, 'view')} />
+      {canUpdate && (
+        <ActionButton icon="edit" label="Editar" onClick={() => openItem(row, 'edit')} />
+      )}
+      {canDelete && (
+        <ActionButton
+          icon="delete"
+          label="Excluir"
+          danger
+          disabled={resource === 'users' && String(row.id) === String(user?.id)}
+          onClick={() => setDeleteTarget(row)}
+        />
+      )}
+    </div>
+  ), [canDelete, canUpdate, openItem, resource, user?.id]);
 
   const closeDialog = () => {
     if (saving) return;
@@ -361,76 +378,22 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
           </article>
         </div>
 
-        {error && (
-          <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-            {error}
-          </div>
-        )}
-
         <article className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
-          <div className="border-b border-[var(--border)] p-4">
-            <label className="relative block max-w-md">
-              <span className="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" aria-hidden="true">
-                search
-              </span>
-              <input
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={`Buscar ${domain.label.toLocaleLowerCase('pt-BR')}...`}
-                aria-label={`Buscar ${domain.label.toLocaleLowerCase('pt-BR')}`}
-                className="min-h-11 w-full pl-10"
-              />
-            </label>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-[var(--card-secondary)] text-[var(--muted)]">
-                <tr>
-                  {config.columns.map((column) => (
-                    <th key={column.path} className="px-4 py-3 font-medium">
-                      {column.label}
-                    </th>
-                  ))}
-                  <th className="px-4 py-3 text-right font-medium">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, index) => (
-                  <tr key={String(row.id ?? index)} className="border-t border-[var(--border)]">
-                    {config.columns.map((column) => (
-                      <td key={column.path} className="px-4 py-3">
-                        {formatCell(row, column, roleChoices, choices.people)}
-                      </td>
-                    ))}
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-1">
-                        <ActionButton icon="visibility" label="Visualizar" onClick={() => openItem(row, 'view')} />
-                        {canUpdate && (
-                          <ActionButton icon="edit" label="Editar" onClick={() => openItem(row, 'edit')} />
-                        )}
-                        {canDelete && (
-                          <ActionButton
-                            icon="delete"
-                            label="Excluir"
-                            danger
-                            disabled={resource === 'users' && String(row.id) === String(user?.id)}
-                            onClick={() => setDeleteTarget(row)}
-                          />
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {!loading && rows.length === 0 && (
-                  <tr>
-                    <td className="px-4 py-8 text-center text-[var(--muted)]" colSpan={config.columns.length + 1}>
-                      Nenhum registro encontrado.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          <div className="p-4">
+            <TableView
+              data={rows}
+              columns={tableColumns}
+              getRowId={(row, index) => String(row.id ?? index)}
+              loading={loading}
+              error={error}
+              onRefresh={() => void fetchItems()}
+              globalFilterLabel={`Buscar ${domain.label.toLocaleLowerCase('pt-BR')}`}
+              emptyMessage={`Nenhum registro de ${domain.label.toLocaleLowerCase('pt-BR')} encontrado.`}
+              noResultsMessage="Nenhum registro corresponde à busca ou aos filtros."
+              getRowLabel={(row) => config.itemLabel(row)}
+              renderRowActions={renderRowActions}
+              toolbarLabels={{ section: `Controles de ${domain.label.toLocaleLowerCase('pt-BR')}` }}
+            />
           </div>
         </article>
       </section>
@@ -583,8 +546,6 @@ function EntityDialog({
     onChange('scoreMimeType', file.type || 'application/xml');
   };
 
-  let lastSection: string | undefined;
-
   return (
     <div className="fixed inset-0 z-[190] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="entity-dialog-title">
       <div className="flex max-h-[100dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl sm:max-h-[92dvh] sm:rounded-2xl">
@@ -596,14 +557,13 @@ function EntityDialog({
         </div>
         <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4 sm:p-6 md:grid-cols-2">
-            {visibleFields.map((field) => {
+            {visibleFields.map((field, index) => {
               const value = values[field.name];
               const options = optionsForField(field, values, roleChoices, dynamicChoices);
               const fieldLocked =
                 readOnly || (field.name === 'roles' && rolesLocked) || (editing && Boolean(field.lockOnEdit));
-              const heading =
-                hasSections && field.section && field.section !== lastSection ? field.section : null;
-              if (field.section) lastSection = field.section;
+              const previousSection = visibleFields[index - 1]?.section;
+              const heading = hasSections && field.section && field.section !== previousSection ? field.section : null;
               const wide = field.type === 'textarea' || field.type === 'xml' || field.type === 'multiselect';
               return (
                 <FieldSlot key={field.name} heading={heading} wide={wide}>
