@@ -12,11 +12,10 @@ export function TableColumnFilter<TData extends RowData>({
   column: Column<typeof tableFeatures, TData, unknown>;
   columnLabel: string;
 }) {
-  // Facet helpers memoize their result, so subscribe to both inputs that can
-  // invalidate it before asking the column for its current values.
+  // State changes rerender through these subscriptions. Data replacement
+  // rerenders the parent header through useTable's render-phase options update.
   useSelector(column.table.store, (state) => state.columnFilters);
   useSelector(column.table.store, (state) => state.globalFilter);
-  useSelector(column.table.optionsStore!, (options) => options.data);
 
   const variant = column.columnDef.meta?.filterVariant;
   const filterValue = column.getFilterValue();

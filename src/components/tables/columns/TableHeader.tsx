@@ -32,8 +32,8 @@ export function TableHeader<TData extends RowData>({
   });
   const column = header.column;
   useSelector(table.atoms.columnSizing, (sizing) => sizing[column.id]);
-  const minSize = column.columnDef.minSize ?? 20;
-  const maxSize = column.columnDef.maxSize ?? Number.MAX_SAFE_INTEGER;
+  const minSize = column.columnDef.minSize ?? table.getDefaultColumnDef().minSize ?? 20;
+  const maxSize = column.columnDef.maxSize ?? table.getDefaultColumnDef().maxSize ?? Number.MAX_SAFE_INTEGER;
   const resizeOnKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     event.preventDefault();
@@ -60,7 +60,7 @@ export function TableHeader<TData extends RowData>({
           ref={setNodeRef}
           style={style}
           colSpan={header.colSpan}
-          className="relative border-b border-[var(--border)] bg-[var(--card-secondary)] p-3 text-left align-top text-xs font-semibold uppercase tracking-wide text-[var(--muted)]"
+          className="relative border-b border-[var(--border)] bg-[var(--card-secondary)] p-3 pb-14 text-left align-top text-xs font-semibold uppercase tracking-wide text-[var(--muted)]"
         >
           {header.isPlaceholder ? null : (
             <div className="flex min-w-32 items-start gap-2">
@@ -168,13 +168,13 @@ export function TableHeader<TData extends RowData>({
               aria-label={`Redimensionar coluna ${columnLabel}`}
               aria-valuenow={column.getSize()}
               aria-valuemin={minSize}
-              aria-valuemax={maxSize === Number.MAX_SAFE_INTEGER ? undefined : maxSize}
+              aria-valuemax={maxSize}
               tabIndex={0}
               onKeyDown={resizeOnKeyDown}
               onDoubleClick={() => column.resetSize()}
               onMouseDown={header.getResizeHandler()}
               onTouchStart={header.getResizeHandler()}
-              className={`absolute right-0 top-0 h-full min-h-11 w-11 cursor-col-resize touch-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] after:absolute after:right-0 after:top-0 after:h-full after:w-1 ${column.getIsResizing() ? "after:bg-[var(--primary)]" : "after:bg-transparent hover:after:bg-[var(--primary)]/40 focus-visible:after:bg-[var(--primary)]"}`}
+              className={`absolute bottom-0 right-0 h-11 w-11 cursor-col-resize touch-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] after:absolute after:right-0 after:top-0 after:h-full after:w-1 ${column.getIsResizing() ? "after:bg-[var(--primary)]" : "after:bg-transparent hover:after:bg-[var(--primary)]/40 focus-visible:after:bg-[var(--primary)]"}`}
             />
           )}
         </th>
