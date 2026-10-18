@@ -32,6 +32,10 @@ interface DomainWorkspaceProps {
 
 type DialogMode = 'create' | 'view' | 'edit' | null;
 
+const buttonMotion = 'transition-[transform,background-color,color,border-color,box-shadow] duration-150 ease-out active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100';
+const iconMotion = 'transition-transform duration-200 ease-out group-hover:scale-110 group-active:scale-75 motion-reduce:transition-none motion-reduce:group-hover:scale-100 motion-reduce:group-active:scale-100';
+const controlMotion = 'transition-[border-color,background-color,box-shadow] duration-150 ease-out motion-reduce:transition-none';
+
 /** Opção de pessoa com o que o formulário precisa para filtrar (sem conta, não é a própria). */
 interface PersonChoice extends CrudOption {
   hasUser: boolean;
@@ -357,7 +361,7 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
             <p className="mt-2 max-w-2xl text-[var(--muted)]">{domain.description}</p>
           </div>
           {canCreate && (
-            <button type="button" className="btn-primary min-h-11" onClick={openCreate}>
+            <button type="button" className={`btn-primary min-h-11 ${buttonMotion}`} onClick={openCreate}>
               Novo cadastro
             </button>
           )}
@@ -444,10 +448,10 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
               Confirma a exclusão de <strong>{config.itemLabel(deleteTarget)}</strong>? Esta ação não pode ser desfeita.
             </p>
             <div className="mt-6 flex justify-end gap-3">
-              <button type="button" className="btn-ghost min-h-11" disabled={saving} onClick={() => setDeleteTarget(null)}>
+              <button type="button" className={`btn-ghost min-h-11 ${buttonMotion}`} disabled={saving} onClick={() => setDeleteTarget(null)}>
                 Cancelar
               </button>
-              <button type="button" className="btn-danger min-h-11" disabled={saving} onClick={() => void handleDelete()}>
+              <button type="button" className={`btn-danger min-h-11 ${buttonMotion}`} disabled={saving} onClick={() => void handleDelete()}>
                 {saving ? 'Excluindo…' : 'Excluir'}
               </button>
             </div>
@@ -465,16 +469,16 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
             </p>
             <label className="mt-4 flex flex-col gap-1.5 text-sm">
               Usuário
-              <input readOnly value={issuedPassword.username} className="min-h-11 font-mono" onFocus={(event) => event.currentTarget.select()} />
+              <input readOnly value={issuedPassword.username} className={`min-h-11 font-mono ${controlMotion}`} onFocus={(event) => event.currentTarget.select()} />
             </label>
             <label className="mt-3 flex flex-col gap-1.5 text-sm">
               Senha
-              <input readOnly value={issuedPassword.password} className="min-h-11 font-mono" onFocus={(event) => event.currentTarget.select()} />
+              <input readOnly value={issuedPassword.password} className={`min-h-11 font-mono ${controlMotion}`} onFocus={(event) => event.currentTarget.select()} />
             </label>
             <div className="mt-6 flex flex-wrap justify-end gap-3">
               <button
                 type="button"
-                className="btn-outline-primary min-h-11"
+                className={`btn-outline-primary min-h-11 ${buttonMotion}`}
                 onClick={() => {
                   void navigator.clipboard
                     .writeText(`Usuário: ${issuedPassword.username}\nSenha: ${issuedPassword.password}`)
@@ -483,7 +487,7 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
               >
                 Copiar
               </button>
-              <button type="button" className="btn-primary min-h-11" onClick={() => setIssuedPassword(null)}>
+              <button type="button" className={`btn-primary min-h-11 ${buttonMotion}`} onClick={() => setIssuedPassword(null)}>
                 Já anotei
               </button>
             </div>
@@ -552,8 +556,8 @@ function EntityDialog({
       <div className="flex max-h-[100dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl sm:max-h-[92dvh] sm:rounded-2xl">
         <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--card)] px-4 py-3 sm:px-6 sm:py-4">
           <h2 id="entity-dialog-title" className="text-xl font-semibold">{title}</h2>
-          <button type="button" className="btn-ghost min-h-11 min-w-11" onClick={onClose} aria-label="Fechar">
-            <span className="material-icons" aria-hidden="true">close</span>
+          <button type="button" className={`group btn-ghost min-h-11 min-w-11 ${buttonMotion}`} onClick={onClose} aria-label="Fechar">
+            <span className={`material-icons group-hover:rotate-90 motion-reduce:group-hover:rotate-0 ${iconMotion}`} aria-hidden="true">close</span>
           </button>
         </div>
         <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
@@ -574,7 +578,7 @@ function EntityDialog({
                         type="checkbox"
                         checked={Boolean(value)}
                         disabled={fieldLocked}
-                        className="h-5 w-5"
+                        className="h-5 w-5 transition-transform duration-150 ease-out active:scale-90 motion-reduce:transition-none motion-reduce:active:scale-100"
                         onChange={(event) => onChange(field.name, event.target.checked)}
                       />
                       <span className="font-medium">{field.label}</span>
@@ -598,7 +602,7 @@ function EntityDialog({
                             <label key={option.value} className="flex min-h-11 items-center gap-2 px-1">
                               <input
                                 type="checkbox"
-                                className="h-5 w-5"
+                                className="h-5 w-5 transition-transform duration-150 ease-out active:scale-90 motion-reduce:transition-none motion-reduce:active:scale-100"
                                 checked={selectedValues.includes(option.value)}
                                 disabled={fieldLocked}
                                 onChange={(event) =>
@@ -620,7 +624,7 @@ function EntityDialog({
                     <select
                       value={String(value ?? '')}
                       disabled={fieldLocked}
-                      className="min-h-11"
+                      className={`min-h-11 ${controlMotion}`}
                       onChange={(event) => onChange(field.name, event.target.value)}
                     >
                       {options.map((option) => (
@@ -636,7 +640,7 @@ function EntityDialog({
                       readOnly={fieldLocked}
                       placeholder={field.placeholder}
                       onChange={(event) => onChange(field.name, event.target.value)}
-                      className="rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2"
+                      className={`rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 ${controlMotion}`}
                     />
                   ) : field.type === 'xml' ? (
                     readOnly ? (
@@ -648,6 +652,7 @@ function EntityDialog({
                         <input
                           type="file"
                           accept={field.accept}
+                          className={controlMotion}
                           onChange={(event) => void handleFile(event, field)}
                         />
                         {Boolean(values.scoreFileName) && (
@@ -663,7 +668,7 @@ function EntityDialog({
                       value={String(value ?? '')}
                       readOnly={fieldLocked}
                       placeholder={field.placeholder}
-                      className="min-h-11"
+                      className={`min-h-11 ${controlMotion}`}
                       autoComplete={field.type === 'password' ? 'new-password' : undefined}
                       inputMode={field.type === 'tel' ? 'tel' : undefined}
                       step={field.type === 'number' ? '0.01' : undefined}
@@ -698,15 +703,15 @@ function EntityDialog({
             })}
           </div>
           <div className="flex justify-end gap-3 border-t border-[var(--border)] bg-[var(--card)] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
-            <button type="button" className="btn-ghost min-h-11" disabled={saving} onClick={onClose}>
+            <button type="button" className={`btn-ghost min-h-11 ${buttonMotion}`} disabled={saving} onClick={onClose}>
               Fechar
             </button>
             {readOnly && onEdit ? (
-              <button type="button" className="btn-primary min-h-11" onClick={onEdit}>
+              <button type="button" className={`btn-primary min-h-11 ${buttonMotion}`} onClick={onEdit}>
                 Editar
               </button>
             ) : !readOnly ? (
-              <button type="submit" className="btn-primary min-h-11" disabled={saving}>
+              <button type="submit" className={`btn-primary min-h-11 ${buttonMotion}`} disabled={saving}>
                 {saving ? 'Salvando…' : 'Salvar'}
               </button>
             ) : null}
@@ -759,11 +764,11 @@ function ActionButton({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
+      className={`group inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full disabled:cursor-not-allowed disabled:opacity-30 ${buttonMotion} ${
         danger ? 'text-red-600 hover:bg-red-50' : 'text-[var(--color-brand-strong)] hover:bg-[var(--color-brand-soft)]'
       }`}
     >
-      <span className="material-icons text-lg" aria-hidden="true">{icon}</span>
+      <span className={`material-icons text-lg ${iconMotion}`} aria-hidden="true">{icon}</span>
     </button>
   );
 }
