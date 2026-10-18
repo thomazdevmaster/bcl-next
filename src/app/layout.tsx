@@ -4,7 +4,7 @@ import { getSiteUrl } from "@/config/environment";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { RootShell } from "@/layouts/RootShell";
-import "./globals.scss";
+import "./globals.css";
 
 const inter = Inter({
   subsets: ["latin"],

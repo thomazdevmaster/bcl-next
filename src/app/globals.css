@@ -2,7 +2,7 @@
 @import "../core/theme/tokens.css";
 
 @layer utilities {
-  // Utilitários de texto
+  /* Utilitários de texto */
   .text-foreground { 
     color: var(--foreground); 
   }
@@ -28,7 +28,7 @@
     color: var(--card-foreground); 
   }
 
-  // Utilitários de background
+  /* Utilitários de background */
   .bg-primary { 
     background-color: var(--primary);
     transition: background-color 0.2s ease;
@@ -52,7 +52,7 @@
     background-color: var(--card-secondary); 
   }
 
-  // Utilitários de borda
+  /* Utilitários de borda */
   .border-primary { 
     border-color: var(--primary);
     transition: border-color 0.2s ease;
@@ -69,7 +69,7 @@
     border-color: var(--muted); 
   }
 
-  // Botões
+  /* Botões */
   .btn-primary { 
     background-color: var(--primary);
     color: var(--primary-foreground);
@@ -203,7 +203,7 @@
     }
   }
 
-  // Variantes de botões com outline
+  /* Variantes de botões com outline */
   .btn-outline-primary {
     background-color: transparent;
     color: var(--primary);
@@ -256,7 +256,7 @@
     }
   }
 
-  // Variantes de botões ghost (sem bg/border)
+  /* Variantes de botões ghost (sem bg/border) */
   .btn-ghost {
     background-color: transparent;
     color: var(--primary);
@@ -282,7 +282,7 @@
     }
   }
 
-  // Estados de link
+  /* Estados de link */
   a {
     color: var(--primary);
     transition: color 0.2s ease;
@@ -301,7 +301,7 @@
     }
   }
 
-  // Transições genéricas
+  /* Transições genéricas */
   .transition-all {
     transition: all 0.2s ease;
   }
@@ -310,7 +310,7 @@
     transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
   }
 
-  // Estados de input — todos os tipos de campo com a mesma cara (borda fina, mesmo padding)
+  /* Estados de input — todos os tipos de campo com a mesma cara (borda fina, mesmo padding) */
   input:not([type]),
   input[type="text"],
   input[type="email"],
@@ -355,7 +355,7 @@
     }
   }
 
-  // iOS desenha sombra interna e altura própria em campos de texto/data; igualamos ao restante
+  /* iOS desenha sombra interna e altura própria em campos de texto/data; igualamos ao restante */
   input[type="text"],
   input[type="email"],
   input[type="password"],
@@ -367,7 +367,7 @@
     appearance: none;
   }
 
-  // Campo de data vazio: mostra o texto de ajuda igual a um placeholder (WebKit/Blink)
+  /* Campo de data vazio: mostra o texto de ajuda igual a um placeholder (WebKit/Blink) */
   input[type="date"] {
     min-width: 0;
 

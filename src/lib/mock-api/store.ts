@@ -47,19 +47,19 @@ export function persistMockDb(): Promise<void> {
 }
 
 export function getCollection(name: MockCollection): MockRecord[] {
-  const db = getMockDb();
+  const db = getMockDb() as Record<MockCollection, MockRecord[]>;
   let rows = db[name];
   if (!Array.isArray(rows)) {
-    const seeded = readSeedFile()[name];
+    const seeded = (readSeedFile() as Record<MockCollection, MockRecord[]>)[name];
     if (Array.isArray(seeded)) {
-      db[name] = seeded as MockDb[MockCollection];
+      db[name] = seeded;
       rows = seeded;
     }
   }
   if (!Array.isArray(rows)) {
     throw new Error(`Coleção inválida: ${name}`);
   }
-  return rows as MockRecord[];
+  return rows;
 }
 
 export function isMockCollection(name: string): name is MockCollection {
