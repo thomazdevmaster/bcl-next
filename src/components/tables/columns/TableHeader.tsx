@@ -37,6 +37,7 @@ export function TableHeader<TData extends RowData>({
   const resizeOnKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     event.preventDefault();
+    event.stopPropagation();
     const increment = event.shiftKey ? 20 : 10;
     const delta = event.key === "ArrowRight" ? increment : -increment;
     const nextSize = Math.min(maxSize, Math.max(minSize, column.getSize() + delta));
@@ -170,7 +171,7 @@ export function TableHeader<TData extends RowData>({
               aria-valuemin={minSize}
               aria-valuemax={maxSize}
               tabIndex={0}
-              onKeyDown={resizeOnKeyDown}
+              onKeyDownCapture={resizeOnKeyDown}
               onDoubleClick={() => column.resetSize()}
               onMouseDown={header.getResizeHandler()}
               onTouchStart={header.getResizeHandler()}

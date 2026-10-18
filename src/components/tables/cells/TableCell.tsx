@@ -29,13 +29,18 @@ export function TableCell<TData extends RowData>({
     transform: CSS.Translate.toString(transform),
     transition: "width transform 0.2s ease",
     width: `calc(var(--col-${cell.column.id}-size) * 1px)`,
-    background: cell.getIsSelected() ? "var(--accent)" : "var(--card)",
+    background: undefined,
   };
   const groupedClass = cell.getIsGrouped()
-    ? "bg-[var(--card-secondary)] font-semibold"
+    ? "font-semibold"
     : cell.getIsAggregated()
-      ? "bg-[var(--card-secondary)] italic"
+      ? "italic"
       : "";
+  const backgroundClass = cell.getIsSelected()
+    ? "bg-[var(--accent)]"
+    : cell.getIsGrouped() || cell.getIsAggregated()
+      ? "bg-[var(--card-secondary)]"
+      : "bg-[var(--card)]";
 
   return (
     <td
@@ -46,7 +51,7 @@ export function TableCell<TData extends RowData>({
       tabIndex={cell.getCanSelect() ? cell.getTabIndex() : undefined}
       onMouseDown={cell.getCanSelect() ? cell.getSelectionStartHandler() : undefined}
       onMouseEnter={cell.getCanSelect() ? cell.getSelectionExtendHandler() : undefined}
-      className={`border-b border-[var(--border)] px-3 py-2 align-middle text-sm text-[var(--foreground)] ${groupedClass} ${cell.getCanSelect() ? "cursor-cell focus:outline-none" : ""} ${cell.getIsFocused() ? "ring-2 ring-inset ring-[var(--ring)]" : ""}`}
+      className={`border-b border-[var(--border)] px-3 py-2 align-middle text-sm text-[var(--foreground)] ${backgroundClass} ${groupedClass} ${cell.getCanSelect() ? "cursor-cell focus:outline-none" : ""} ${cell.getIsFocused() ? "ring-2 ring-inset ring-[var(--ring)]" : ""}`}
     >
       {cell.getIsGrouped() ? (
         <button type="button" className="min-h-11 text-left" onClick={cell.row.getToggleExpandedHandler()}>
