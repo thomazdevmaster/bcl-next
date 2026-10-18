@@ -37,6 +37,8 @@
   --card: var(--color-white);
   --card-secondary: #eef3f7;
   --card-foreground: var(--color-ink);
+  --table-header-bg: #dce8f4;
+  --table-header-fg: var(--color-ink);
   --primary: var(--color-brand);
   --primary-foreground: var(--color-ink);
   --secondary: #e8eef3;
@@ -84,6 +86,8 @@
   --card: #0f2233;
   --card-secondary: #163044;
   --card-foreground: #e8f1f6;
+  --table-header-bg: #102b40;
+  --table-header-fg: #e8f1f6;
   --primary: var(--color-brand);
   --primary-foreground: #07131e;
   --secondary: #163044;
