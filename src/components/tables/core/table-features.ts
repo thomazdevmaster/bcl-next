@@ -27,7 +27,7 @@ import { compareItems, rankItem } from "@tanstack/match-sorter-utils";
 import type { RankingInfo } from "@tanstack/match-sorter-utils";
 
 interface ColumnMeta {
-  filterVariant?: "text" | "range" | "select";
+  filterVariant?: "text" | "range" | "date" | "datetime" | "select";
 }
 
 interface FuzzyFilterMeta {

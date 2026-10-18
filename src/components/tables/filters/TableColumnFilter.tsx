@@ -19,33 +19,56 @@ export function TableColumnFilter<TData extends RowData>({
 
   const variant = column.columnDef.meta?.filterVariant;
   const filterValue = column.getFilterValue();
-  const minMax = variant === "range" ? column.getFacetedMinMaxValues() : undefined;
-  const facetedValues = variant === "range" ? undefined : column.getFacetedUniqueValues();
+  const isRange = variant === "range" || variant === "date" || variant === "datetime";
+  const isTemporal = variant === "date" || variant === "datetime";
+  const minMax = isRange ? column.getFacetedMinMaxValues() : undefined;
+  const facetedValues = isRange ? undefined : column.getFacetedUniqueValues();
   const uniqueValues = facetedValues ? Array.from(facetedValues.keys()).sort().slice(0, 500) : [];
   const inputClass =
     "mt-2 min-h-11 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-2 text-sm font-normal text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]";
 
-  if (variant === "range") {
+  if (isRange) {
     const range = filterValue as [number | undefined, number | undefined] | undefined;
+    const inputType = variant === "date" ? "date" : variant === "datetime" ? "datetime-local" : "number";
+    const setBound = (bound: "min" | "max", rawValue: string | number) => {
+      const parsed = rawValue === ""
+        ? undefined
+        : isTemporal
+          ? parseTemporalFilterValue(String(rawValue), variant, bound)
+          : Number(rawValue);
+      column.setFilterValue((old: [number | undefined, number | undefined] | undefined) =>
+        bound === "min" ? [parsed, old?.[1]] : [old?.[0], parsed],
+      );
+    };
+    const boundValue = (bound: "min" | "max") => {
+      const value = bound === "min" ? range?.[0] : range?.[1];
+      return isTemporal && value !== undefined ? formatTemporalFilterValue(value, variant) : value ?? "";
+    };
+    const boundMin = minMax?.[0] === undefined || !isTemporal
+      ? minMax?.[0]
+      : formatTemporalFilterValue(minMax[0], variant);
+    const boundMax = minMax?.[1] === undefined || !isTemporal
+      ? minMax?.[1]
+      : formatTemporalFilterValue(minMax[1], variant);
     return (
       <div className="mt-2 flex gap-1">
         <TableDebouncedInput
           aria-label={`Mínimo: ${columnLabel}`}
-          type="number"
-          min={minMax?.[0]}
-          max={minMax?.[1]}
-          value={range?.[0] ?? ""}
-          onChange={(value) => column.setFilterValue((old: [number | undefined, number | undefined] | undefined) => [value === "" ? undefined : Number(value), old?.[1]])}
+          type={inputType}
+          min={boundMin}
+          max={boundMax}
+          value={boundValue("min")}
+          onChange={(value) => setBound("min", value)}
           placeholder="Mín."
           className={inputClass}
         />
         <TableDebouncedInput
           aria-label={`Máximo: ${columnLabel}`}
-          type="number"
-          min={minMax?.[0]}
-          max={minMax?.[1]}
-          value={range?.[1] ?? ""}
-          onChange={(value) => column.setFilterValue((old: [number | undefined, number | undefined] | undefined) => [old?.[0], value === "" ? undefined : Number(value)])}
+          type={inputType}
+          min={boundMin}
+          max={boundMax}
+          value={boundValue("max")}
+          onChange={(value) => setBound("max", value)}
           placeholder="Máx."
           className={inputClass}
         />
@@ -89,4 +112,30 @@ export function TableColumnFilter<TData extends RowData>({
       />
     </>
   );
+}
+
+function parseTemporalFilterValue(
+  value: string,
+  variant: "date" | "datetime",
+  bound: "min" | "max",
+): number {
+  const date = variant === "date"
+    ? (() => {
+        const [year, month, day] = value.split("-").map(Number);
+        return new Date(year, month - 1, day);
+      })()
+    : new Date(value);
+  if (variant === "date" && bound === "max") date.setHours(23, 59, 59, 999);
+  return date.getTime();
+}
+
+function formatTemporalFilterValue(value: number, variant: "date" | "datetime"): string {
+  const date = new Date(value);
+  const year = String(date.getFullYear()).padStart(4, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  if (variant === "date") return `${year}-${month}-${day}`;
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }

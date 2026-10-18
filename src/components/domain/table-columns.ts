@@ -35,9 +35,11 @@ export function createDomainTableColumns(
   });
 }
 
-function getFilterVariant(column: CrudColumn, resource: CrudResource): 'text' | 'range' | 'select' {
+function getFilterVariant(column: CrudColumn, resource: CrudResource): 'text' | 'range' | 'date' | 'datetime' | 'select' {
   if (resource === 'songs' && (column.path === 'genre' || column.path === 'key')) return 'select';
-  if (column.format === 'count' || column.format === 'currency' || column.format === 'date' || column.format === 'datetime') {
+  if (column.format === 'date') return 'date';
+  if (column.format === 'datetime') return 'datetime';
+  if (column.format === 'count' || column.format === 'currency') {
     return 'range';
   }
   if (column.format === 'boolean' || column.format === 'roles' || column.format === 'status') {
