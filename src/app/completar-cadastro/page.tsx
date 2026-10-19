@@ -7,15 +7,8 @@ import { UserAvatar } from '@/components/auth/UserAvatar';
 import { MusicLoader } from '@/components/MusicLoader';
 import { apiFetch } from '@/lib/api';
 import type { SessionUser } from '@/contexts/AuthContext';
+import { formatPhoneNumber } from '@/lib/formatPhone';
 import { userFacingError } from '@/lib/userMessages';
-
-function formatPhoneNumber(value: string): string {
-  const digits = value.replace(/\D/g, '').slice(0, 11);
-  if (digits.length <= 2) return digits ? `(${digits}` : '';
-  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
-  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-}
 
 export default function CompletarCadastroPage() {
   const auth = useAuth();

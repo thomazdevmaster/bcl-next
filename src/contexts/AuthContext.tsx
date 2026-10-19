@@ -15,6 +15,12 @@ import { findDemoUser } from '@/core/auth/demoUsers';
 import { ApiError, apiFetch } from '@/lib/api';
 import { sealPassword } from '@/lib/passwordCipher';
 import { failureMessage } from '@/lib/userMessages';
+import {
+  filterPermissionsForActiveRoles,
+  loadStoredActiveRoles,
+  normalizeActiveRoles,
+  persistActiveRoles,
+} from '@/core/auth/activeRoles';
 import { PUBLIC_ROLES, type AccessRoles } from '@/core/auth/roles';
 import type { AppUser } from '@/domains/users/types';
 
@@ -27,9 +33,15 @@ type AuthContextValue = {
   user: SessionUser | null;
   isHydrated: boolean;
   isLoggedIn: boolean;
+  /** Papéis efetivos na sessão (menu e permissões). */
   roles: AccessRoles;
+  /** Todos os papéis da conta. */
+  accountRoles: AccessRoles;
+  /** Subconjunto escolhido pelo usuário quando há mais de um papel. */
+  activeRoles: AccessRoles;
   permissions: readonly string[] | null;
   displayName: string | null;
+  setActiveRoles: (roles: AccessRoles) => void;
   /** `identifier` aceita nome de usuário ou e-mail. */
   login: (identifier: string, password: string, keepLoggedIn: boolean) => Promise<SessionUser>;
   /** `credential` é o ID token do Google Identity Services. Só com a API Spring. */
@@ -94,6 +106,7 @@ type LoginPayload = {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [activeRoles, setActiveRolesState] = useState<AccessRoles>(PUBLIC_ROLES);
   const [isHydrated, setIsHydrated] = useState(false);
 
   useLayoutEffect(() => {
@@ -140,8 +153,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     setAccessToken(null, false);
     setUser(null);
+    setActiveRolesState(PUBLIC_ROLES);
     persist(null, false);
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setActiveRolesState(PUBLIC_ROLES);
+      return;
+    }
+    setActiveRolesState(loadStoredActiveRoles(user.id, user.roles));
+  }, [user]);
+
+  const setActiveRoles = useCallback(
+    (next: AccessRoles) => {
+      if (!user) return;
+      const normalized = normalizeActiveRoles(next, user.roles);
+      setActiveRolesState(normalized);
+      persistActiveRoles(user.id, normalized);
+    },
+    [user],
+  );
 
   useEffect(() => {
     if (!isHydrated || !usesRemoteApi() || !getAccessToken()) return;
@@ -177,20 +209,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => {
       const hydratedUser = isHydrated ? user : null;
+      const accountRoles = hydratedUser?.roles ?? PUBLIC_ROLES;
+      const effectiveRoles = hydratedUser ? activeRoles : PUBLIC_ROLES;
+      const permissions = hydratedUser
+        ? filterPermissionsForActiveRoles(hydratedUser.permissions, effectiveRoles)
+        : null;
       return {
         user: hydratedUser,
         isHydrated,
         isLoggedIn: hydratedUser !== null,
-        roles: hydratedUser?.roles ?? PUBLIC_ROLES,
-        permissions: hydratedUser?.permissions ?? null,
+        roles: effectiveRoles,
+        accountRoles,
+        activeRoles: effectiveRoles,
+        permissions,
         displayName: hydratedUser ? hydratedUser.name.split(' ')[0] : null,
         login,
         loginWithGoogle,
         logout,
         updateProfile,
+        setActiveRoles,
       };
     },
-    [isHydrated, user, login, loginWithGoogle, logout, updateProfile],
+    [isHydrated, user, activeRoles, login, loginWithGoogle, logout, updateProfile, setActiveRoles],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

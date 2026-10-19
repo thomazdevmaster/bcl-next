@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { DOMAINS } from '@/domains/catalog';
 
 export default function GestaoPage() {
-  const { roles, permissions, displayName } = useAuth();
+  const { roles, permissions, displayName, accountRoles } = useAuth();
   const nav = getManagementNav(roles, permissions).filter((item) => item.href !== '/gestao');
 
   return (
@@ -17,8 +17,16 @@ export default function GestaoPage() {
         <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Painel</p>
         <h1 className="mt-2 text-3xl font-semibold">Olá, {displayName}</h1>
         <p className="mt-2 text-[var(--muted)]">
-          Você está autenticado como <strong>{roleLabels(roles)}</strong>. Os módulos abaixo respeitam a união das
-          permissões dos seus perfis.
+          Você está usando o sistema como <strong>{roleLabels(roles)}</strong>. Os módulos abaixo seguem os perfis
+          ativos nesta sessão
+          {accountRoles.length > 1 ? (
+            <>
+              {' '}
+              (altere em <Link href="/profile">Meu perfil</Link>).
+            </>
+          ) : (
+            '.'
+          )}
         </p>
       </header>
 

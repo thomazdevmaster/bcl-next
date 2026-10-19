@@ -15,6 +15,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [sidenavCollapsed, setSidenavCollapsed] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [desktopUserMenuOpen, setDesktopUserMenuOpen] = useState(false);
   const pathname = usePathname() ?? '/';
   const router = useRouter();
   const auth = useAuth();
@@ -69,13 +70,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (userMenuOpen && !(event.target as Element).closest('.user-menu')) {
+      const target = event.target as Element;
+      if (userMenuOpen && !target.closest('.user-menu')) {
         setUserMenuOpen(false);
+      }
+      if (desktopUserMenuOpen && !target.closest('.desktop-user-menu')) {
+        setDesktopUserMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [userMenuOpen]);
+  }, [userMenuOpen, desktopUserMenuOpen]);
+
+  useEffect(() => {
+    if (sidenavCollapsed) setDesktopUserMenuOpen(false);
+  }, [sidenavCollapsed]);
 
   const contentMargin = desktop ? (sidenavCollapsed ? 56 : 280) : 0;
   const pageTitle = titleForPath(pathname);
@@ -137,20 +146,110 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <NavLink key={`public-${item.href}`} {...item} />
           ))}
         </nav>
-        {desktop && auth.user && (
-          <Link
-            href="/profile"
-            className={`mx-2 mb-2 flex min-h-11 items-center gap-3 rounded-lg px-2 py-2 no-underline hover:bg-white/10 hover:no-underline ${
-              sidenavCollapsed ? 'justify-center' : ''
-            }`}
-            title="Meu perfil"
-          >
-            <UserAvatar url={auth.user.pictureUrl} name={auth.user.name} className="h-10 w-10 shrink-0 text-[40px] leading-none" />
-            {!sidenavCollapsed && (
-              <span className="min-w-0 truncate text-sm text-[var(--sidebar-fg)]">{auth.displayName ?? auth.user.name}</span>
-            )}
-          </Link>
-        )}
+        {desktop && auth.user ? (
+          <div className="desktop-user-menu relative mx-2 mb-2 border-t border-[var(--sidebar-border)] pt-2">
+            <button
+              type="button"
+              className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-white/10 ${
+                sidenavCollapsed ? 'justify-center' : ''
+              }`}
+              aria-expanded={desktopUserMenuOpen}
+              aria-controls="desktop-user-submenu"
+              onClick={() => setDesktopUserMenuOpen((open) => !open)}
+            >
+              <UserAvatar url={auth.user.pictureUrl} name={auth.user.name} className="h-10 w-10 shrink-0 text-[40px] leading-none" />
+              {!sidenavCollapsed ? (
+                <>
+                  <span className="min-w-0 flex-1 truncate text-sm text-[var(--sidebar-fg)]">
+                    {auth.displayName ?? auth.user.name}
+                  </span>
+                  <span className="material-icons text-xl text-[var(--sidebar-fg)]" aria-hidden>
+                    {desktopUserMenuOpen ? 'expand_less' : 'expand_more'}
+                  </span>
+                </>
+              ) : (
+                <span className="sr-only">Conta</span>
+              )}
+            </button>
+            {desktopUserMenuOpen && !sidenavCollapsed ? (
+              <div id="desktop-user-submenu" className="mb-1 space-y-0.5 pl-3" role="menu">
+                <Link
+                  href="/profile"
+                  role="menuitem"
+                  className="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm text-[var(--sidebar-fg)] no-underline hover:bg-white/10 hover:no-underline"
+                  onClick={() => setDesktopUserMenuOpen(false)}
+                >
+                  <span className="material-icons text-xl" aria-hidden>
+                    person
+                  </span>
+                  Perfil
+                </Link>
+                <Link
+                  href="/settings"
+                  role="menuitem"
+                  className="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm text-[var(--sidebar-fg)] no-underline hover:bg-white/10 hover:no-underline"
+                  onClick={() => setDesktopUserMenuOpen(false)}
+                >
+                  <span className="material-icons text-xl" aria-hidden>
+                    settings
+                  </span>
+                  Configurações
+                </Link>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm text-[var(--sidebar-fg)] hover:bg-white/10"
+                  onClick={() => {
+                    setDesktopUserMenuOpen(false);
+                    void auth.logout();
+                    router.push('/');
+                  }}
+                >
+                  <span className="material-icons text-xl" aria-hidden>
+                    logout
+                  </span>
+                  Sair
+                </button>
+              </div>
+            ) : null}
+            {desktopUserMenuOpen && sidenavCollapsed ? (
+              <div
+                id="desktop-user-submenu"
+                className="absolute bottom-0 left-[calc(100%+0.5rem)] z-[110] min-w-48 rounded-lg border border-[var(--border)] bg-[var(--card)] py-1 shadow-lg"
+                role="menu"
+              >
+                <Link
+                  href="/profile"
+                  role="menuitem"
+                  className="flex min-h-11 items-center gap-3 px-4 text-sm text-[var(--foreground)] no-underline hover:bg-[var(--accent)] hover:no-underline"
+                  onClick={() => setDesktopUserMenuOpen(false)}
+                >
+                  Perfil
+                </Link>
+                <Link
+                  href="/settings"
+                  role="menuitem"
+                  className="flex min-h-11 items-center gap-3 px-4 text-sm text-[var(--foreground)] no-underline hover:bg-[var(--accent)] hover:no-underline"
+                  onClick={() => setDesktopUserMenuOpen(false)}
+                >
+                  Configurações
+                </Link>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex min-h-11 w-full items-center gap-3 px-4 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
+                  onClick={() => {
+                    setDesktopUserMenuOpen(false);
+                    void auth.logout();
+                    router.push('/');
+                  }}
+                >
+                  Sair
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {desktop && (
           <div className="flex-shrink-0 px-2 py-3 border-t border-[var(--sidebar-border)] flex items-center justify-between">
             <button
@@ -247,25 +346,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               ))}
             </nav>
           </aside>
-        )}
-
-        {desktop && (
-          <header className="sticky top-0 z-40 flex h-14 items-center justify-end gap-3 border-b border-[var(--border)] bg-[var(--card)] px-6 ml-[var(--content-margin)]">
-            <UserAvatar url={auth.user?.pictureUrl} name={auth.user?.name} className="h-9 w-9 text-[28px] leading-none" />
-            <p className="text-sm text-[var(--muted)]">Olá, {auth.displayName}</p>
-            <Link href="/profile" className="text-sm no-underline">Perfil</Link>
-            <Link href="/settings" className="text-sm no-underline">Configurações</Link>
-            <button
-              type="button"
-              className="text-sm"
-              onClick={() => {
-                void auth.logout();
-                router.push('/');
-              }}
-            >
-              Sair
-            </button>
-          </header>
         )}
 
         <main
