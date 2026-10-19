@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MusicLoader } from '@/components/MusicLoader';
+import { TableView } from '@/components/tables/core/TableView';
+import type { TableColumnDef } from '@/components/tables/core/table-features';
 import type { Song } from '@/domains/songs/types';
 import { apiFetch } from '@/lib/api';
 import { failureMessage } from '@/lib/userMessages';
@@ -50,8 +52,6 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
   const [preparingId, setPreparingId] = useState<string | null>(null);
   const [openingScore, setOpeningScore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [expandedSongIds, setExpandedSongIds] = useState<Record<string, boolean>>({});
   const [setup, setSetup] = useState<SetupState | null>(null);
   const [playedNames, setPlayedNames] = useState<string[]>([]);
   const [profileReady, setProfileReady] = useState(!personId);
@@ -81,38 +81,62 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
     };
   }, [personId]);
 
-  useEffect(() => {
-    let active = true;
-    apiFetch<Song[]>('/songs')
-      .then((items) => {
-        if (active) {
-          setSongs(
-            items.filter((song) =>
-              song.scores?.some((score) => Boolean(score.url)),
-            ),
-          );
-        }
-      })
-      .catch((caught: unknown) => {
-        if (active) setError(failureMessage(caught, 'Não foi possível carregar as músicas para estudo.'));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
+  const fetchSongs = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const items = await apiFetch<Song[]>('/songs');
+      setSongs(
+        items.filter((song) =>
+          song.scores?.some((score) => Boolean(score.url)),
+        ),
+      );
+    } catch (caught: unknown) {
+      setError(
+        failureMessage(
+          caught,
+          'Não foi possível carregar as músicas para estudo.',
+        ),
+      );
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const visibleSongs = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase('pt-BR');
-    if (!query) return songs;
-    return songs.filter((song) =>
-      [song.title, song.composer, song.arranger, song.genre].some((value) =>
-        String(value ?? '').toLocaleLowerCase('pt-BR').includes(query),
-      ),
-    );
-  }, [search, songs]);
+  useEffect(() => {
+    void fetchSongs();
+  }, [fetchSongs]);
+
+  const columns = useMemo<TableColumnDef<Song>[]>(
+    () => [
+      { accessorKey: 'title', header: 'Música', minSize: 180 },
+      {
+        accessorKey: 'composer',
+        header: 'Compositor',
+        minSize: 160,
+        cell: ({ getValue }) => getValue<string>() || '—',
+      },
+      {
+        accessorKey: 'arranger',
+        header: 'Arranjador',
+        minSize: 150,
+        cell: ({ getValue }) => getValue<string | undefined>() || '—',
+      },
+      {
+        accessorKey: 'genre',
+        header: 'Gênero',
+        minSize: 120,
+        cell: ({ getValue }) => getValue<string | undefined>() || '—',
+      },
+      {
+        id: 'scores',
+        accessorFn: (song) => song.scores.length,
+        header: 'Partituras',
+        minSize: 110,
+      },
+    ],
+    [],
+  );
 
   const openSetup = async (song: Song) => {
     const score = song.scores.find((item) => Boolean(item.url));
@@ -213,137 +237,37 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
   return (
     <>
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)]">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] p-4">
+        <div className="border-b border-[var(--border)] p-4">
           <div>
             <h2 className="text-lg font-semibold">Músicas disponíveis</h2>
             <p className="text-sm text-[var(--muted)]">
               Somente músicas que possuem partitura.
             </p>
           </div>
-          <label className="relative w-full sm:w-80">
-            <span className="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">
-              search
-            </span>
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar música..."
-              className="w-full pl-10"
-            />
-          </label>
         </div>
 
-        {error && (
-          <p className="border-b border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </p>
-        )}
-
-        <ul className="hidden flex-col gap-3 p-3 max-[959px]:flex">
-          {visibleSongs.map((song) => {
-            const songId = String(song.id);
-            const open = Boolean(expandedSongIds[songId]);
-            const details = [
-              ['Compositor', song.composer || '—'],
-              ['Arranjador', song.arranger || '—'],
-              ['Gênero', song.genre || '—'],
-              ['Partituras', String(song.scores.length)],
-            ];
-            return (
-              <li key={songId} className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
-                <div className="flex flex-col gap-3 p-3">
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-[var(--muted)]">Música</p>
-                    <p className="mt-1 break-words text-base font-semibold leading-snug">{song.title}</p>
-                  </div>
-                  <SongStudyActions
-                    song={song}
-                    preparing={preparingId === songId}
-                    onStart={() => void openSetup(song)}
-                  />
-                </div>
-                <button
-                  type="button"
-                  className="flex min-h-11 w-full items-center justify-between gap-3 border-t border-[var(--border)] px-3 text-left text-sm font-medium"
-                  aria-expanded={open}
-                  onClick={() => setExpandedSongIds((current) => ({ ...current, [songId]: !current[songId] }))}
-                >
-                  {open ? 'Recolher' : 'Ver mais'}
-                  <span className="material-icons" aria-hidden>
-                    {open ? 'expand_less' : 'expand_more'}
-                  </span>
-                </button>
-                {open ? (
-                  <dl className="border-t border-[var(--border)] px-3 py-1">
-                    {details.map(([label, value]) => (
-                      <div key={label} className="flex items-start justify-between gap-4 border-b border-[var(--border)] py-3 last:border-b-0">
-                        <dt className="text-xs font-medium text-[var(--muted)]">{label}</dt>
-                        <dd className="text-right text-sm">{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                ) : null}
-              </li>
-            );
-          })}
-          {!loading && visibleSongs.length === 0 ? (
-            <li className="px-2 py-6 text-center text-sm text-[var(--muted)]">
-              Nenhuma música com partitura foi encontrada.
-            </li>
-          ) : null}
-          {loading ? (
-            <li>
-              <MusicLoader label="Carregando músicas…" />
-            </li>
-          ) : null}
-        </ul>
-
-        <div className="overflow-x-auto max-[959px]:hidden">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-[var(--card-secondary)] text-[var(--muted)]">
-              <tr>
-                <th className="px-4 py-3 font-medium">Música</th>
-                <th className="px-4 py-3 font-medium">Compositor</th>
-                <th className="px-4 py-3 font-medium">Arranjador</th>
-                <th className="px-4 py-3 font-medium">Gênero</th>
-                <th className="px-4 py-3 font-medium">Partituras</th>
-                <th className="px-4 py-3 text-right font-medium">Ação</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleSongs.map((song) => (
-                <tr key={String(song.id)} className="border-t border-[var(--border)]">
-                  <td className="px-4 py-3 font-medium">{song.title}</td>
-                  <td className="px-4 py-3">{song.composer || '—'}</td>
-                  <td className="px-4 py-3">{song.arranger || '—'}</td>
-                  <td className="px-4 py-3">{song.genre || '—'}</td>
-                  <td className="px-4 py-3">{song.scores.length}</td>
-                  <td className="px-4 py-3 text-right">
-                    <SongStudyActions
-                      song={song}
-                      preparing={preparingId === String(song.id)}
-                      onStart={() => void openSetup(song)}
-                    />
-                  </td>
-                </tr>
-              ))}
-              {!loading && visibleSongs.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-[var(--muted)]">
-                    Nenhuma música com partitura foi encontrada.
-                  </td>
-                </tr>
-              )}
-              {loading && (
-                <tr>
-                    <td colSpan={6} className="px-4 py-4">
-                    <MusicLoader label="Carregando músicas…" />
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="p-4">
+          <TableView
+            tableId="study-songs"
+            data={songs}
+            columns={columns}
+            getRowId={(song) => String(song.id)}
+            loading={loading}
+            error={error}
+            onRefresh={() => void fetchSongs()}
+            globalFilterLabel="Buscar músicas por título, compositor ou gênero"
+            emptyMessage="Nenhuma música com partitura foi encontrada."
+            noResultsMessage="Nenhuma música corresponde à busca."
+            getRowLabel={(song) => song.title}
+            toolbarLabels={{ section: 'Controles das músicas para estudo' }}
+            renderRowActions={(song) => (
+              <SongStudyActions
+                song={song}
+                preparing={preparingId === String(song.id)}
+                onStart={() => void openSetup(song)}
+              />
+            )}
+          />
         </div>
       </section>
 
