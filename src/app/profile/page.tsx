@@ -8,11 +8,13 @@ import {
   type ChangeEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { ActiveRolesSelector } from '@/components/auth/ActiveRolesSelector';
 import { UserAvatar } from '@/components/auth/UserAvatar';
 import { MusicLoader } from '@/components/MusicLoader';
 import { EntityDialog } from '@/components/shared/EntityDialog';
+import { IconSelect, type IconSelectOption } from '@/components/shared/IconSelect';
 import { usesRemoteApi } from '@/core/auth/accessToken';
 import { useAuth, type SessionUser } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -31,6 +33,12 @@ type ProfileForm = {
 
 type ProfileTab = 'profile' | 'security' | 'account';
 type ProfileFieldErrors = Partial<Record<'name' | 'email' | 'phone', string>>;
+
+const profileSections: IconSelectOption<ProfileTab>[] = [
+  { value: 'profile', label: 'Perfil', icon: 'person' },
+  { value: 'security', label: 'Segurança', icon: 'lock' },
+  { value: 'account', label: 'Conta', icon: 'manage_accounts' },
+];
 
 const tabButtonClass =
   'inline-flex min-h-11 min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-xl px-1 text-xs font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] sm:flex-none sm:gap-2 sm:px-4 sm:text-sm';
@@ -254,9 +262,8 @@ export default function ProfilePage() {
     form.address.trim() !== originalForm.address.trim() ||
     form.pictureUrl.trim() !== originalForm.pictureUrl.trim();
   const forcedPasswordChange = Boolean(auth.user.mustChangePassword);
-
   return (
-    <main className="mx-auto min-h-[70vh] w-full max-w-6xl px-1 py-6 sm:py-8">
+    <main className="mx-auto min-h-[70vh] w-full max-w-6xl p-1">
       <header className="mb-6 sm:mb-8">
         <h1 className="text-2xl font-bold tracking-[-0.02em] sm:text-3xl">Seu perfil</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-base">
@@ -265,8 +272,15 @@ export default function ProfilePage() {
       </header>
 
       <section className="min-w-0 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-soft)]">
-        <div className="flex min-h-14 w-full items-center gap-2 border-b border-[var(--border)] bg-[var(--card-secondary)] px-2 py-2 sm:px-4">
-          <div role="tablist" aria-label="Configurações da conta" className="flex min-w-0 flex-1 items-center gap-1">
+        <div className="flex min-h-14 w-full items-center gap-2 border-b border-[var(--border)] bg-[var(--card-secondary)] p-3 sm:px-4">
+          <IconSelect
+            label="Seções do perfil"
+            options={profileSections}
+            value={activeTab}
+            onChange={setActiveTab}
+            className="relative min-w-0 flex-1 md:hidden"
+          />
+          <div role="tablist" aria-label="Configurações da conta" className="hidden min-w-0 flex-1 items-center gap-1 md:flex">
             <button
               ref={profileTabRef}
               type="button"
@@ -320,25 +334,35 @@ export default function ProfilePage() {
               setLogoutError(null);
               setLogoutDialogOpen(true);
             }}
-            className="btn-danger ml-auto inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 px-2 text-sm sm:gap-2 sm:px-4"
+            className="btn-danger ml-auto inline-flex min-h-11 shrink-0 items-center justify-center px-4 text-sm"
           >
-            <span className="material-icons text-lg" aria-hidden="true">logout</span>
-            <span className="sm:hidden">Sair</span>
-            <span className="hidden sm:inline">Sair da conta</span>
+            Sair
           </button>
         </div>
 
         {activeTab === 'profile' ? (
           <div role="tabpanel" id="profile-panel" aria-labelledby="profile-tab" className="min-w-0">
-            <div className="flex min-w-0 flex-col gap-5 bg-[var(--card-secondary)] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-8">
-              <div className="flex min-w-0 items-center gap-4 sm:gap-5">
-                <div className="group relative size-24 shrink-0 overflow-hidden rounded-full bg-[var(--accent)]">
-                  <UserAvatar
-                    url={displayedPhoto}
-                    name={form.name || auth.user.name}
-                    className="size-full rounded-full object-cover"
-                  />
-                  <div className="absolute inset-x-0 bottom-1 flex justify-center gap-1 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 motion-reduce:transition-none">
+            <div className="grid min-w-0 gap-4 bg-[var(--card-secondary)] p-4 sm:p-6 md:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] md:items-stretch">
+              <div className="flex min-w-0 items-center gap-5 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 sm:gap-6 sm:p-6">
+                <div className="group relative size-28 shrink-0 overflow-hidden rounded-full bg-[var(--accent)]">
+                  {displayedPhoto ? (
+                    <UserAvatar
+                      url={displayedPhoto}
+                      name={form.name || auth.user.name}
+                      className="size-full rounded-full object-cover"
+                    />
+                  ) : (
+                    <Image
+                      src="/imgs/avatar-default.svg"
+                      alt=""
+                      width={112}
+                      height={112}
+                      sizes="112px"
+                      unoptimized
+                      className="rounded-full object-cover"
+                    />
+                  )}
+                  <div className="absolute inset-0 flex items-center justify-center gap-1 bg-black/25 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 motion-reduce:transition-none">
                     <label className="inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-full bg-[var(--card)] text-[var(--foreground)] shadow-sm focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--ring)]">
                       <span className="material-icons text-lg" aria-hidden="true">photo_camera</span>
                       <span className="sr-only">Alterar foto</span>
@@ -363,7 +387,7 @@ export default function ProfilePage() {
                     ) : null}
                   </div>
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <h2 className="break-words text-xl font-bold">{form.name || 'Seu perfil'}</h2>
                   <p className="mt-1 break-all text-sm text-[var(--muted)]">
                     {form.email || 'E-mail não informado'}
@@ -373,9 +397,6 @@ export default function ProfilePage() {
                   </p>
                 </div>
               </div>
-            </div>
-
-            <div className="flex flex-col gap-5 p-4 sm:p-7">
               <section className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 sm:p-6">
                 <h3 className="text-lg font-bold">Acesso ao sistema</h3>
                 <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
@@ -392,7 +413,9 @@ export default function ProfilePage() {
                   />
                 </div>
               </section>
+            </div>
 
+            <div className="p-4 sm:p-7">
               <form
                 noValidate
                 className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 sm:p-6"
