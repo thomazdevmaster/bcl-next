@@ -1,4 +1,25 @@
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
+
+/** Regras de gravação existem na instância, mas não no tipo publicado do OSMD. */
+type OsmdEngravingRules = {
+  PageFormat: { width: number };
+  PageLeftMargin: number;
+  PageRightMargin: number;
+  SystemLeftMargin: number;
+  SystemRightMargin: number;
+  RenderXMeasuresPerLineAkaSystem: number;
+  FixedMeasureWidth: boolean;
+  FixedMeasureWidthFixedValue: number;
+  VoiceSpacingMultiplierVexflow: number;
+  NewSystemAtXMLNewSystemAttribute: boolean;
+  NewSystemAtXMLNewPageAttribute: boolean;
+  NewPageAtXMLNewPageAttribute: boolean;
+  StretchLastSystemLine: boolean;
+};
+
+function engravingRules(osmd: OpenSheetMusicDisplay): OsmdEngravingRules {
+  return (osmd as unknown as { EngravingRules: OsmdEngravingRules }).EngravingRules;
+}
 import { Player, VerovioConverter } from '@music-i18n/musicxml-player';
 import { failureMessage } from '@/lib/userMessages';
 import { rewriteDevApiUrl } from '@/config/environment';
@@ -288,7 +309,7 @@ export class StudySession {
     }
     if (!changed || !this.osmd) return;
     if (isMobile) this.applyMobileLayout();
-    else this.osmd.EngravingRules.RenderXMeasuresPerLineAkaSystem = 0;
+    else engravingRules(this.osmd).RenderXMeasuresPerLineAkaSystem = 0;
     void this.osmd.render();
   }
 
@@ -741,7 +762,7 @@ export class StudySession {
     if (!this.osmd || !isMobileView()) return;
     const container = this.options.getScoreContainer() ?? this.options.getOsmdContainer();
     const available = Math.max(280, container?.clientWidth ?? window.innerWidth);
-    const rules = this.osmd.EngravingRules;
+    const rules = engravingRules(this.osmd);
     const zoom = 1;
     const measures = this.currentMobileMeasures();
     const pageWidth = available / (10 * zoom);
@@ -805,7 +826,7 @@ export class StudySession {
     const current = this.osmd.Zoom > 0 ? this.osmd.Zoom : 1;
     const next = current * (available / rendered);
     if (next < 0.85) {
-      const rules = this.osmd.EngravingRules;
+      const rules = engravingRules(this.osmd);
       rules.PageFormat.width = Math.max(28, rules.PageFormat.width * (next / 0.85));
       (this.osmd as { Zoom: number }).Zoom = 0.85;
     } else {

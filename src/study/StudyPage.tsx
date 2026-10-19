@@ -20,7 +20,7 @@ export default function StudyPage() {
   const apiUrl = getApiUrl();
   const { user } = useAuth();
   const params = useParams<{ slug?: string[] }>();
-  const focusSongId = params.slug?.[0] ?? null;
+  const focusSongId = params?.slug?.[0] ?? null;
 
   const [snack, setSnack] = useState<string | null>(null);
   const { session, state, scoreContainerRef, osmdContainerRef } = useStudySession(
