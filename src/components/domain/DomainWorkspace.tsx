@@ -402,7 +402,7 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
           </article>
         </div>
 
-        <article className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
+        <article className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
           <div className="p-4">
             <TableView
               tableId={resource}

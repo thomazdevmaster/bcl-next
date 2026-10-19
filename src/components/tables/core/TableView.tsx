@@ -19,6 +19,7 @@ import { useTableColumnDnd } from "../columns/useTableColumnDnd";
 import { TablePagination } from "../pagination/TablePagination";
 import { TableActionButton } from "../toolbar/TableActionButton";
 import { TableCheckbox } from "../toolbar/TableCheckbox";
+import { TableMobileCards } from "./TableMobileCards";
 import { TableToolbar } from "../toolbar/TableToolbar";
 import type { TableToolbarLabels } from "../toolbar/TableToolbar";
 import { TableResetConfirmationDialog } from "../dialogs/TableResetConfirmationDialog";
@@ -561,11 +562,18 @@ export function TableView<TData extends RowData>({
         )}
         {!loading && !error && noData && <p className="rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] p-3 text-sm text-[var(--muted)]">{emptyMessage}</p>}
 
+        <TableMobileCards
+          table={table}
+          rows={[...topRows, ...centerRows, ...bottomRows]}
+          noResults={!loading && !error && !noData && table.getRowModel().rows.length === 0}
+          noResultsMessage={noResultsMessage}
+        />
+
         <div
           ref={tableRef}
           tabIndex={cellSelectionEnabled ? 0 : undefined}
           aria-label={cellSelectionEnabled ? "Tabela; use as setas para navegar pelas células" : "Tabela de dados"}
-          className="max-w-full overflow-auto rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-soft)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+          className="max-w-full overflow-auto rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-soft)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] max-[959px]:hidden"
         >
           <table style={{ ...columnSizeVars, width: totalColumnSize } as CSSProperties} className="border-separate border-spacing-0 text-left">
             {/* Only headers participate in this drag context. TableCell uses the same column ids for display. */}

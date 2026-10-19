@@ -41,31 +41,33 @@ export function TablePagination({
   totalRowCount,
 }: TablePaginationProps) {
   return (
-    <nav aria-label="Paginação da tabela" className="flex flex-wrap items-center gap-2">
-      <TableActionButton onClick={onFirstPage} disabled={!canGoToPreviousPage} ariaLabel="Primeira página">
-        <span className={`material-icons text-base ${tableIconMotion}`} aria-hidden="true">
-          first_page
+    <nav aria-label="Paginação da tabela" className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div className="flex shrink-0 items-center gap-2">
+        <TableActionButton onClick={onFirstPage} disabled={!canGoToPreviousPage} ariaLabel="Primeira página">
+          <span className={`material-icons text-base ${tableIconMotion}`} aria-hidden="true">
+            first_page
+          </span>
+        </TableActionButton>
+        <TableActionButton onClick={onPreviousPage} disabled={!canGoToPreviousPage} ariaLabel="Página anterior">
+          <span className={`material-icons text-base ${tableIconMotion}`} aria-hidden="true">
+            chevron_left
+          </span>
+        </TableActionButton>
+        <TableActionButton onClick={onNextPage} disabled={!canGoToNextPage} ariaLabel="Próxima página">
+          <span className={`material-icons text-base ${tableIconMotion}`} aria-hidden="true">
+            chevron_right
+          </span>
+        </TableActionButton>
+        <TableActionButton onClick={onLastPage} disabled={!canGoToLastPage} ariaLabel="Última página">
+          <span className={`material-icons text-base ${tableIconMotion}`} aria-hidden="true">
+            last_page
+          </span>
+        </TableActionButton>
+        <span className="whitespace-nowrap text-sm">
+          Página {currentPage} de {pageCount}
         </span>
-      </TableActionButton>
-      <TableActionButton onClick={onPreviousPage} disabled={!canGoToPreviousPage} ariaLabel="Página anterior">
-        <span className={`material-icons text-base ${tableIconMotion}`} aria-hidden="true">
-          chevron_left
-        </span>
-      </TableActionButton>
-      <TableActionButton onClick={onNextPage} disabled={!canGoToNextPage} ariaLabel="Próxima página">
-        <span className={`material-icons text-base ${tableIconMotion}`} aria-hidden="true">
-          chevron_right
-        </span>
-      </TableActionButton>
-      <TableActionButton onClick={onLastPage} disabled={!canGoToLastPage} ariaLabel="Última página">
-        <span className={`material-icons text-base ${tableIconMotion}`} aria-hidden="true">
-          last_page
-        </span>
-      </TableActionButton>
-      <span className="px-2 text-sm">
-        Página {currentPage} de {pageCount}
-      </span>
-      <label className="flex min-h-11 items-center gap-2 text-sm">
+      </div>
+      <label className="flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap text-sm">
         Ir para página
         <input
           type="number"
@@ -76,7 +78,7 @@ export function TablePagination({
           className={`min-h-11 w-20 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-2 text-[var(--foreground)] ${tableControlMotion}`}
         />
       </label>
-      <label className="flex min-h-11 items-center gap-2 text-sm">
+      <label className="flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap text-sm">
         Linhas
         <select
           value={pageSize}
@@ -90,7 +92,7 @@ export function TablePagination({
           ))}
         </select>
       </label>
-      <span className="text-sm text-[var(--muted)]">
+      <span className="whitespace-nowrap text-sm text-[var(--muted)]">
         {rowsOnPage} nesta página · {filteredRowCount} filtradas · {totalRowCount} no total
       </span>
     </nav>

@@ -51,6 +51,7 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
   const [openingScore, setOpeningScore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [expandedSongIds, setExpandedSongIds] = useState<Record<string, boolean>>({});
   const [setup, setSetup] = useState<SetupState | null>(null);
   const [playedNames, setPlayedNames] = useState<string[]>([]);
   const [profileReady, setProfileReady] = useState(!personId);
@@ -239,7 +240,66 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
           </p>
         )}
 
-        <div className="overflow-x-auto">
+        <ul className="hidden flex-col gap-3 p-3 max-[959px]:flex">
+          {visibleSongs.map((song) => {
+            const songId = String(song.id);
+            const open = Boolean(expandedSongIds[songId]);
+            const details = [
+              ['Compositor', song.composer || '—'],
+              ['Arranjador', song.arranger || '—'],
+              ['Gênero', song.genre || '—'],
+              ['Partituras', String(song.scores.length)],
+            ];
+            return (
+              <li key={songId} className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
+                <div className="flex flex-col gap-3 p-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-[var(--muted)]">Música</p>
+                    <p className="mt-1 break-words text-base font-semibold leading-snug">{song.title}</p>
+                  </div>
+                  <SongStudyActions
+                    song={song}
+                    preparing={preparingId === songId}
+                    onStart={() => void openSetup(song)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="flex min-h-11 w-full items-center justify-between gap-3 border-t border-[var(--border)] px-3 text-left text-sm font-medium"
+                  aria-expanded={open}
+                  onClick={() => setExpandedSongIds((current) => ({ ...current, [songId]: !current[songId] }))}
+                >
+                  {open ? 'Recolher' : 'Ver mais'}
+                  <span className="material-icons" aria-hidden>
+                    {open ? 'expand_less' : 'expand_more'}
+                  </span>
+                </button>
+                {open ? (
+                  <dl className="border-t border-[var(--border)] px-3 py-1">
+                    {details.map(([label, value]) => (
+                      <div key={label} className="flex items-start justify-between gap-4 border-b border-[var(--border)] py-3 last:border-b-0">
+                        <dt className="text-xs font-medium text-[var(--muted)]">{label}</dt>
+                        <dd className="text-right text-sm">{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : null}
+              </li>
+            );
+          })}
+          {!loading && visibleSongs.length === 0 ? (
+            <li className="px-2 py-6 text-center text-sm text-[var(--muted)]">
+              Nenhuma música com partitura foi encontrada.
+            </li>
+          ) : null}
+          {loading ? (
+            <li>
+              <MusicLoader label="Carregando músicas…" />
+            </li>
+          ) : null}
+        </ul>
+
+        <div className="overflow-x-auto max-[959px]:hidden">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-[var(--card-secondary)] text-[var(--muted)]">
               <tr>
@@ -260,31 +320,11 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
                   <td className="px-4 py-3">{song.genre || '—'}</td>
                   <td className="px-4 py-3">{song.scores.length}</td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex flex-wrap justify-end gap-2">
-                    {youtubeWatchUrl(song.videoUrl ?? '') ? (
-                      <a
-                        href={youtubeWatchUrl(song.videoUrl ?? '') ?? undefined}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn-ghost inline-flex min-h-11 items-center gap-1.5"
-                      >
-                        <span className="material-icons text-base" aria-hidden>smart_display</span>
-                        Vídeo
-                      </a>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="btn-primary min-h-11"
-                      disabled={preparingId === String(song.id)}
-                      onClick={() => void openSetup(song)}
-                    >
-                      {preparingId === String(song.id) ? (
-                        <MusicLoader compact label="Preparando…" />
-                      ) : (
-                        'Iniciar estudo'
-                      )}
-                    </button>
-                    </div>
+                    <SongStudyActions
+                      song={song}
+                      preparing={preparingId === String(song.id)}
+                      onStart={() => void openSetup(song)}
+                    />
                   </td>
                 </tr>
               ))}
@@ -444,6 +484,41 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
         </div>
       )}
     </>
+  );
+}
+
+function SongStudyActions({
+  song,
+  preparing,
+  onStart,
+}: {
+  song: Song;
+  preparing: boolean;
+  onStart: () => void;
+}) {
+  const watchUrl = youtubeWatchUrl(song.videoUrl ?? '');
+  return (
+    <div className="flex shrink-0 flex-wrap justify-end gap-2">
+      {watchUrl ? (
+        <a
+          href={watchUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="btn-ghost inline-flex min-h-11 items-center gap-1.5"
+        >
+          <span className="material-icons text-base" aria-hidden>smart_display</span>
+          Vídeo
+        </a>
+      ) : null}
+      <button
+        type="button"
+        className="btn-primary min-h-11"
+        disabled={preparing}
+        onClick={onStart}
+      >
+        {preparing ? <MusicLoader compact label="Preparando…" /> : 'Iniciar estudo'}
+      </button>
+    </div>
   );
 }
 
