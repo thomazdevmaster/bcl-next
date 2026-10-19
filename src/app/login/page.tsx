@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, FormProvider, useForm } from "react-hook-form";
 import { useAuth } from "@/contexts/AuthContext";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { MusicLoader } from "@/components/MusicLoader";
 import { FormStageActions } from "@/components/forms/FormStageActions";
 import { FormStageBlock } from "@/components/forms/FormStageBlock";
 import { FormStageField } from "@/components/forms/FormStageField";
@@ -152,6 +153,7 @@ export default function LoginPage() {
             fullWidth
             submitLabel="Entrar"
             pendingLabel="Entrando…"
+            pendingContent={<MusicLoader compact label="Entrando…" />}
           />
 
           <div className="flex flex-wrap justify-between gap-3 text-sm">

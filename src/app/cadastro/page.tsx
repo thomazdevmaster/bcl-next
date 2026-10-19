@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { FormProvider, useForm } from "react-hook-form";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { UserAvatar } from "@/components/auth/UserAvatar";
+import { MusicLoader } from "@/components/MusicLoader";
 import { FormStageBlock } from "@/components/forms/FormStageBlock";
 import { FormStageField, type FormStageFieldProps } from "@/components/forms/FormStageField";
 import { postLoginRoute } from "@/core/auth/postLoginRoute";
@@ -343,7 +344,7 @@ export default function CadastroPage() {
                     disabled={busy}
                     className="btn-primary inline-flex min-h-12 w-full items-center justify-center rounded-xl px-5 text-sm font-semibold transition-[transform,box-shadow] duration-150 ease-out hover:-translate-y-px active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100 sm:w-auto"
                   >
-                    {form.formState.isSubmitting ? "Enviando…" : "Enviar cadastro"}
+                    {busy ? <MusicLoader compact label="Enviando…" /> : "Enviar cadastro"}
                   </button>
                 </div>
                 <div className="flex justify-center">

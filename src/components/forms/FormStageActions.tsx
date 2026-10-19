@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 type Props = {
   active: number;
   total: number;
@@ -8,6 +10,7 @@ type Props = {
   backLabel?: string;
   submitLabel?: string;
   pendingLabel?: string;
+  pendingContent?: ReactNode;
   desktop?: boolean;
   centered?: boolean;
   fullWidth?: boolean;
@@ -26,6 +29,7 @@ export function FormStageActions({
   backLabel = "Voltar",
   submitLabel = "Enviar",
   pendingLabel = "Enviando…",
+  pendingContent,
   desktop = false,
   centered = false,
   fullWidth = false,
@@ -58,7 +62,7 @@ export function FormStageActions({
           disabled={busy}
           className={`btn-primary inline-flex min-h-12 ${buttonWidthClass} items-center justify-center rounded-xl px-5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${buttonMotion}`}
         >
-          {busy ? pendingLabel : submitLabel}
+          {busy ? pendingContent ?? pendingLabel : submitLabel}
         </button>
       )}
     </div>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormProvider, useForm } from "react-hook-form";
 import { FormStageActions } from "@/components/forms/FormStageActions";
+import { MusicLoader } from "@/components/MusicLoader";
 import { FormStageBlock } from "@/components/forms/FormStageBlock";
 import { FormStageField } from "@/components/forms/FormStageField";
 import { FormView } from "@/components/forms/core/FormView";
@@ -93,6 +94,7 @@ export default function EsqueciSenhaPage() {
             centered
             submitLabel="Pedir nova senha"
             pendingLabel="Enviando…"
+            pendingContent={<MusicLoader compact label="Enviando…" />}
           />
           <div className="flex justify-center">
             <Link href="/login" className="inline-flex min-h-11 items-center justify-center text-sm">
