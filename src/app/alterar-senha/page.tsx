@@ -48,7 +48,7 @@ export default function AlterarSenhaPage() {
         body: JSON.stringify({ currentPassword: sealedCurrent, newPassword: sealedNext }),
       });
       auth.updateProfile({ mustChangePassword: updated.mustChangePassword ?? false });
-      router.replace('/gestao');
+      router.replace('/');
     } catch (caught) {
       setError(userFacingError(caught));
     } finally {

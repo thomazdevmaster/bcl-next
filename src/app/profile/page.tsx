@@ -145,7 +145,7 @@ export default function ProfilePage() {
             activeRoles={auth.activeRoles}
             onChange={(roles) => {
               auth.setActiveRoles(roles);
-              router.push('/gestao');
+              router.push('/');
             }}
           />
         </div>

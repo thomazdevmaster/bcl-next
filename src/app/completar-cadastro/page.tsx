@@ -25,7 +25,7 @@ export default function CompletarCadastroPage() {
       return;
     }
     if (!auth.user?.needsProfileCompletion) {
-      router.replace('/gestao');
+      router.replace('/');
       return;
     }
     setUsername(auth.user.username ?? '');
@@ -54,7 +54,7 @@ export default function CompletarCadastroPage() {
         }),
       });
       auth.updateProfile(updated);
-      router.replace('/gestao');
+      router.replace('/');
     } catch (caught) {
       setError(userFacingError(caught));
     } finally {

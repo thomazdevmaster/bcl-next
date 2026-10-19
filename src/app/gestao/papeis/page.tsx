@@ -49,7 +49,7 @@ export default function PapeisPage() {
   const selected = roleList.find((role) => role.id === selectedId) ?? null;
 
   useEffect(() => {
-    if (isLoggedIn && !admin) router.replace('/gestao');
+    if (isLoggedIn && !admin) router.replace('/');
   }, [admin, isLoggedIn, router]);
 
   useEffect(() => {

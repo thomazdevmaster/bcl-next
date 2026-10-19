@@ -23,7 +23,7 @@ export function DomainGuard({ resource, action = 'read', requireLogin = false, c
   useEffect(() => {
     if (!isHydrated) return;
     if (!allowed) {
-      router.replace(isLoggedIn ? '/gestao' : '/login');
+      router.replace(isLoggedIn ? '/' : '/login');
     }
   }, [allowed, isHydrated, isLoggedIn, router]);
 

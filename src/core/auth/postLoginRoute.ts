@@ -4,5 +4,5 @@ import type { AppUser } from '@/domains/users/types';
 export function postLoginRoute(user: AppUser): string {
   if (user.mustChangePassword) return '/alterar-senha';
   if (user.needsProfileCompletion) return '/completar-cadastro';
-  return '/gestao';
+  return '/';
 }
