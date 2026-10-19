@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { StudyInstrumentPanel } from '@/components/StudyInstrumentPanel';
 import { StudyPlayerPanel } from '@/components/StudyPlayerPanel';
 import { youtubeWatchUrl } from '@/domains/songs/youtube';
 import type { StudySession, StudyViewSnapshot } from '@/study/studySession';
 import { MobileScoreZoom } from '@/study/MobileScoreZoom';
+
+/** Reserva espaço para a barra fixa de controles (rolagem da partitura). */
+export const STUDY_MOBILE_FOOTER_HEIGHT = 'calc(3.25rem + env(safe-area-inset-bottom, 0px))';
 
 export function StudyMobileSheet({
   session,
@@ -21,8 +24,6 @@ export function StudyMobileSheet({
   const [open, setOpen] = useState(false);
   const [playerOpen, setPlayerOpen] = useState(false);
   const [instrumentsOpen, setInstrumentsOpen] = useState(false);
-  const startY = useRef<number | null>(null);
-  const dragged = useRef(false);
   const watchUrl = youtubeWatchUrl(videoUrl ?? '');
 
   useEffect(() => {
@@ -34,28 +35,13 @@ export function StudyMobileSheet({
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  const onPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
-    event.currentTarget.setPointerCapture(event.pointerId);
-    startY.current = event.clientY;
-    dragged.current = false;
-  };
-
-  const onPointerUp = (event: PointerEvent<HTMLButtonElement>) => {
-    if (startY.current == null) return;
-    const delta = event.clientY - startY.current;
-    startY.current = null;
-    if (delta < -28) {
-      dragged.current = true;
-      setOpen(true);
-    } else if (delta > 28) {
-      dragged.current = true;
-      setOpen(false);
-    }
-  };
-
   return (
     <>
-      <div className="h-[6.25rem] shrink-0 pointer-events-none" aria-hidden />
+      <div
+        className="shrink-0 pointer-events-none"
+        style={{ height: STUDY_MOBILE_FOOTER_HEIGHT }}
+        aria-hidden
+      />
       {open ? (
         <button
           type="button"
@@ -65,34 +51,14 @@ export function StudyMobileSheet({
         />
       ) : null}
       <div
-        className="fixed bottom-0 left-0 right-0 z-[1005] flex max-h-[100dvh] flex-col rounded-t-2xl border-t border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-soft)]"
+        className={`fixed bottom-0 left-0 right-0 z-[1005] flex flex-col border-t border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-soft)] ${open ? 'max-h-[min(85dvh,32rem)] rounded-t-2xl' : ''}`}
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         role={open ? 'dialog' : undefined}
         aria-modal={open ? true : undefined}
         aria-label={open ? 'Menu do estudo' : undefined}
       >
-        <button
-          type="button"
-          className="flex h-11 w-full touch-none items-center justify-center text-[var(--muted)]"
-          aria-expanded={open}
-          aria-label={open ? 'Fechar menu' : 'Abrir menu'}
-          onPointerDown={onPointerDown}
-          onPointerUp={onPointerUp}
-          onClick={() => {
-            if (dragged.current) {
-              dragged.current = false;
-              return;
-            }
-            setOpen((current) => !current);
-          }}
-        >
-          <span className="material-icons text-xl leading-none" aria-hidden>
-            {open ? 'keyboard_arrow_down' : 'keyboard_arrow_up'}
-          </span>
-        </button>
-
         {open ? (
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3 pt-2">
             <button
               type="button"
               className="btn-outline-primary mb-3 inline-flex min-h-11 w-full items-center justify-center gap-2"
@@ -185,54 +151,63 @@ export function StudyMobileSheet({
                 onClose={() => setInstrumentsOpen(false)}
               />
             </SheetSection>
+
+            {watchUrl ? (
+              <a
+                href={watchUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-primary mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2"
+              >
+                <span className="material-icons text-lg" aria-hidden>
+                  smart_display
+                </span>
+                YouTube
+              </a>
+            ) : null}
+
+            {!state.instruments.selectionMatchesApplied ? (
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  className="btn-primary min-h-11 flex-1 text-sm disabled:cursor-not-allowed"
+                  onClick={() => {
+                    session.applySelectedInstruments();
+                    setOpen(false);
+                  }}
+                  disabled={state.loading || !state.xmlLoaded}
+                >
+                  Gerar com selecionados
+                </button>
+                <button
+                  type="button"
+                  className="btn-outline-primary min-h-11 shrink-0 text-sm disabled:cursor-not-allowed"
+                  onClick={() => session.cancelInstrumentSelection()}
+                  disabled={state.loading}
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
-        {open && !state.instruments.selectionMatchesApplied ? (
-          <div className="flex gap-2 border-t border-[var(--border)] px-4 py-2">
-            <button
-              type="button"
-              className="btn-primary min-h-11 flex-1 text-sm disabled:cursor-not-allowed"
-              onClick={() => {
-                session.applySelectedInstruments();
-                setOpen(false);
-              }}
-              disabled={state.loading || !state.xmlLoaded}
-            >
-              Gerar com selecionados
-            </button>
-            <button
-              type="button"
-              className="btn-outline-primary min-h-11 shrink-0 text-sm disabled:cursor-not-allowed"
-              onClick={() => session.cancelInstrumentSelection()}
-              disabled={state.loading}
-            >
-              Cancelar
-            </button>
-          </div>
-        ) : null}
-
-        {open && watchUrl ? (
-          <div className="px-4 pb-2">
-            <a
-              href={watchUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="btn-primary inline-flex min-h-11 w-full items-center justify-center gap-2"
-            >
-              <span className="material-icons text-lg" aria-hidden>
-                smart_display
-              </span>
-              YouTube
-            </a>
-          </div>
-        ) : null}
-
-        <div className="flex items-center justify-center gap-2 px-3 py-1.5">
+        <div className="flex h-[3.25rem] shrink-0 items-center justify-center gap-1 px-2">
+          <button
+            type="button"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]"
+            onClick={() => setOpen((current) => !current)}
+            aria-expanded={open}
+            aria-label={open ? 'Fechar opções' : 'Mais opções'}
+          >
+            <span className="material-icons text-xl" aria-hidden>
+              {open ? 'close' : 'tune'}
+            </span>
+          </button>
           <MobileScoreZoom session={session} state={state} />
           <button
             type="button"
-            className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border-0 bg-[var(--primary)] text-[var(--primary-foreground)] shadow-[var(--shadow-soft)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-[var(--primary)] text-[var(--primary-foreground)] shadow-[var(--shadow-soft)] disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => void session.play()}
             disabled={state.loading || !state.xmlLoaded}
             aria-label="Play"
@@ -241,7 +216,7 @@ export function StudyMobileSheet({
           </button>
           <button
             type="button"
-            className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
             onClick={() => session.pause()}
             disabled={state.loading || !state.xmlLoaded}
             aria-label="Pausar"
@@ -250,7 +225,7 @@ export function StudyMobileSheet({
           </button>
           <button
             type="button"
-            className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
             onClick={() => session.stop()}
             disabled={state.loading || !state.xmlLoaded}
             aria-label="Parar"

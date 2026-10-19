@@ -31,6 +31,12 @@ import {
   readPlayerTimemap,
 } from './studyTimemap';
 import {
+  buildStudyScoreHeader,
+  enrichStudyMusicXml,
+  type StudyScoreHeader,
+  type StudySongMetadataInput,
+} from './enrichStudyMusicXml';
+import {
   extractTempoInfoFromXml,
   extractInstrumentsFromXml,
   filterXmlByPartIds,
@@ -50,6 +56,7 @@ export type StudyViewSnapshot = {
   xmlLoaded: boolean;
   scoreError: string | null;
   currentScoreName: string;
+  scoreHeader: StudyScoreHeader | null;
   fullscreenScore: boolean;
   isMobile: boolean;
   /** Compassos por linha no celular. No desktop fica 0. */
@@ -108,6 +115,8 @@ export type StudyInstrumentSelection = {
   catalog?: InstrumentInfo[];
   /** Partitura inteira, baixada em segundo plano para trocar de naipe depois. */
   fullScoreUrl?: string;
+  /** Dados cadastrados da música (título, compositor, etc.). */
+  songMetadata?: StudySongMetadataInput;
 };
 
 function sameIdSet(left: string[], right: string[]) {
@@ -124,7 +133,7 @@ function isMobileView() {
 const MOBILE_MEASURES_MIN = 1;
 const MOBILE_MEASURES_MAX = 5;
 
-/** No celular, cada linha fica entre 2 e 5 compassos, conforme a largura. */
+/** No celular, cada linha fica entre 2 e 5 compassos por padrão (zoom manual até 5). */
 function measuresPerMobileLine(width: number): number {
   if (width < 390) return 2;
   if (width < 460) return 3;
@@ -181,6 +190,8 @@ export class StudySession {
   private xmlLoaded = false;
   private scoreError: string | null = null;
   private currentScoreName = 'Nenhuma selecionada';
+  private scoreHeader: StudyScoreHeader | null = null;
+  private lastSongMetadata: StudySongMetadataInput | null = null;
   private fullscreenScore = false;
   private isMobile = isMobileView();
   /** Null usa a quantidade automática da largura. Zoom do usuário grava o valor. */
@@ -252,6 +263,7 @@ export class StudySession {
       xmlLoaded: this.xmlLoaded,
       scoreError: this.scoreError,
       currentScoreName: this.currentScoreName,
+      scoreHeader: this.scoreHeader,
       fullscreenScore: this.fullscreenScore,
       isMobile: this.isMobile,
       mobileMeasuresPerLine: this.isMobile ? this.currentMobileMeasures() : 0,
@@ -342,7 +354,7 @@ export class StudySession {
 
   /**
    * Zoom do celular: aproximar reduz compassos por linha (notas maiores);
-   * afastar aumenta a quantidade, entre 1 e 5.
+   * afastar aumenta a quantidade, entre 1 e 5 (só mobile).
    */
   zoomMobile(direction: 'in' | 'out') {
     if (!isMobileView() || !this.osmd || !this.xmlLoaded || this.mobileLayoutRendering) return;
@@ -372,14 +384,24 @@ export class StudySession {
     if (isMobileView()) this.fullscreenScore = true;
     this.emit();
     this.currentScoreId = scoreId;
-    this.currentScoreName = displayName;
-    this.sourceXml = xml;
+    const songMeta: StudySongMetadataInput = {
+      title: selection.songMetadata?.title?.trim() || displayName,
+      composer: selection.songMetadata?.composer,
+      arranger: selection.songMetadata?.arranger,
+      key: selection.songMetadata?.key,
+    };
+    this.lastSongMetadata = songMeta;
+    const header = buildStudyScoreHeader(xml, songMeta);
+    const enrichedXml = enrichStudyMusicXml(xml, header);
+    this.scoreHeader = header;
+    this.currentScoreName = header.title;
+    this.sourceXml = enrichedXml;
     this.mobileMeasuresOverride = null;
     this.lastRenderedSelectionKey = null;
     this.destroyPlayer();
     this.clearOsmdContainer();
 
-    const tempoInfo = extractTempoInfoFromXml(xml);
+    const tempoInfo = extractTempoInfoFromXml(enrichedXml);
     this.baseBpm = tempoInfo?.bpm ?? 100;
     this.timeSignature = tempoInfo?.timeSignature ?? '4/4';
     this.beatsPerMeasure = tempoInfo?.beatsPerMeasure ?? 4;
@@ -388,7 +410,7 @@ export class StudySession {
     this.updateBpmRange();
     if (this.metronomeEnabled) this.restartMetronome();
 
-    this.initializeInstrumentsFromXml(scoreId, xml, selection);
+    this.initializeInstrumentsFromXml(scoreId, enrichedXml, selection);
     this.instrumentCardCollapsed = true;
     this.emit();
 
@@ -417,6 +439,8 @@ export class StudySession {
     this.midiLoading = false;
     this.resetInstruments();
     this.currentScoreName = 'Nenhuma selecionada';
+    this.scoreHeader = null;
+    this.lastSongMetadata = null;
     this.currentScoreId = 'local';
     this.emit();
   }
@@ -451,7 +475,14 @@ export class StudySession {
       if (!response.ok || token !== this.loadToken) return;
       const xml = await response.text();
       if (token !== this.loadToken || !xml.includes('<')) return;
-      this.sourceXml = xml;
+      if (this.lastSongMetadata) {
+        const header = buildStudyScoreHeader(xml, this.lastSongMetadata);
+        this.scoreHeader = header;
+        this.currentScoreName = header.title;
+        this.sourceXml = enrichStudyMusicXml(xml, header);
+      } else {
+        this.sourceXml = xml;
+      }
       const instruments = extractInstrumentsFromXml(xml);
       if (instruments.length > this.availableInstruments.length) {
         this.availableInstruments = instruments;
@@ -891,6 +922,7 @@ export class StudySession {
         this.osmdPlaybackRenderer = new OsmdPlaybackRenderer(
           () => this.osmd,
           () => this.options.getScoreContainer(),
+          () => this.isMobile && this.isPlaying,
         );
       }
       const renderer = this.osmdPlaybackRenderer;
@@ -1026,11 +1058,15 @@ export class StudySession {
     const proto = (window as unknown as { Element?: { prototype: { scrollIntoView: Element['scrollIntoView'] } } }).Element?.prototype;
     if (!proto?.scrollIntoView) return;
     const original = proto.scrollIntoView;
+    const shouldFollowScoreScroll = () => this.isMobile && this.isPlaying;
     proto.scrollIntoView = function (this: Element, arg?: boolean | ScrollIntoViewOptions) {
       try {
         const el = this as HTMLElement;
         const container = el?.closest?.('.score-container') as HTMLElement | null;
         const containerHeight = container?.clientHeight;
+        if (container && !shouldFollowScoreScroll()) {
+          return;
+        }
         if (!container || !containerHeight || !container.getBoundingClientRect || !el.getBoundingClientRect) {
           return original.call(this, arg as boolean | ScrollIntoViewOptions);
         }
@@ -1258,11 +1294,11 @@ export class StudySession {
       const beat = this.lastCursorBeat >= 0 ? this.lastCursorBeat : 0;
       const moveTo = this.getMoveToFromMeasureBeat(measure, beat);
       const pl = this.player as { moveTo?: (a: number, b: number, c: number) => void; play?: () => void };
+      this.isPlaying = true;
       if (moveTo && pl.moveTo) {
         pl.moveTo(moveTo.measureIndex, moveTo.measureStartMs, moveTo.measureOffsetMs);
       }
       pl.play?.();
-      this.isPlaying = true;
       this.startLoopMonitor();
       this.startCursorSync();
       this.syncPlaybackCursor();

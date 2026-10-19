@@ -412,6 +412,20 @@
   body.study-mobile-fullscreen-active .score-container {
     padding-left: 0;
     padding-right: 0;
+    flex: 1 1 0%;
+    min-height: 0;
+    max-height: 100%;
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+    overscroll-behavior: contain;
+  }
+
+  body.study-mobile-fullscreen-active .score-view-shell {
+    flex: 1 1 0%;
+    min-height: 0;
+    max-height: calc(100dvh - 3.25rem - env(safe-area-inset-bottom, 0px));
   }
 
   body.study-mobile-fullscreen-active .study-osmd-host svg {

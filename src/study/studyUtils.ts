@@ -34,22 +34,27 @@ export const extractTempoInfoFromXml = (xml: string): TempoInfo | null => {
   let beatsPerMeasure: number | null = null;
   let beatUnit: number | null = null;
 
-  const firstMeasure = doc.querySelector('part measure');
-  const scope = firstMeasure ?? doc;
-
-  const soundTempo = scope.querySelector('sound[tempo]')?.getAttribute('tempo');
+  const soundTempo = doc.querySelector('sound[tempo]')?.getAttribute('tempo');
   if (soundTempo) {
     const parsed = Number(soundTempo);
     if (!Number.isNaN(parsed) && parsed > 0) bpm = parsed;
   }
   if (bpm == null) {
-    const perMinute = scope.querySelector('metronome per-minute')?.textContent?.trim();
+    const perMinute = doc.querySelector('metronome per-minute')?.textContent?.trim();
     if (perMinute) {
       const parsed = Number(perMinute);
       if (!Number.isNaN(parsed) && parsed > 0) bpm = parsed;
     }
   }
-  const timeEl = scope.querySelector('time');
+  if (bpm == null) {
+    const words = doc.querySelector('direction-type words');
+    const tempoMatch = words?.textContent?.match(/(?:♩|=)\s*(\d{2,3})/);
+    if (tempoMatch?.[1]) {
+      const parsed = Number(tempoMatch[1]);
+      if (!Number.isNaN(parsed) && parsed > 0) bpm = parsed;
+    }
+  }
+  const timeEl = doc.querySelector('part measure attributes time') ?? doc.querySelector('attributes time');
   if (timeEl) {
     const beats = timeEl.querySelector('beats')?.textContent?.trim();
     const beatType = timeEl.querySelector('beat-type')?.textContent?.trim();

@@ -15,6 +15,7 @@ import {
 import { youtubeEmbedUrl, youtubeWatchUrl } from '@/domains/songs/youtube';
 import { StudyMobileSheet } from '@/components/study/StudyMobileSheet';
 import { MobileScoreZoom } from '@/study/MobileScoreZoom';
+import { StudyScoreHeaderView } from '@/study/StudyScoreHeader';
 
 export default function StudyPage() {
   const apiUrl = getApiUrl();
@@ -89,7 +90,8 @@ export default function StudyPage() {
       }
     };
     const onMove = (event: TouchEvent) => {
-      if (event.touches.length !== 2 || applied || startDistance <= 0) return;
+      if (event.touches.length !== 2) return;
+      if (applied || startDistance <= 0) return;
       const ratio = distance(event.touches) / startDistance;
       if (ratio > 1.15) {
         applied = true;
@@ -146,6 +148,12 @@ export default function StudyPage() {
       midiInstrumentIds,
       catalog: instruments,
       fullScoreUrl,
+      songMetadata: {
+        title: song.title,
+        composer: song.composer,
+        arranger: song.arranger,
+        key: song.key,
+      },
     });
   };
 
@@ -238,7 +246,9 @@ export default function StudyPage() {
         />
       ) : null}
 
-      <div className={`relative flex min-h-0 flex-1 gap-4 ${state.fullscreenScore && state.isMobile ? 'study-mobile-fullscreen flex-col' : 'flex-col lg:flex-row lg:items-start'}`}>
+      <div
+        className={`relative flex min-h-0 flex-1 gap-4 ${state.fullscreenScore && state.isMobile ? 'study-mobile-fullscreen min-h-0 flex-col' : 'flex-col lg:flex-row lg:items-start'}`}
+      >
         {mobileInstruments && instrumentsOpen ? (
           <aside className="fixed bottom-0 left-0 top-0 z-[1100] flex w-[90vw] max-w-80 translate-x-0 flex-col border-r border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-soft)]" role="dialog" aria-label="Menu de instrumentos">
             <StudyInstrumentPanel
@@ -327,7 +337,7 @@ export default function StudyPage() {
           </>
         ) : null}
 
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
         {!(state.fullscreenScore && state.isMobile) && showScoreBlock ? (
           <div className="min-h-0 w-full">
             <div className="flex flex-col gap-5 min-w-0">
@@ -385,12 +395,18 @@ export default function StudyPage() {
               </div>
             ) : null}
             <div className={`flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3 ${state.fullscreenScore && state.isMobile ? 'hidden' : ''}`}>
-              <div className="flex flex-wrap items-center gap-1.5 md:gap-2.5">
-                <span className="material-icons text-2xl text-[var(--primary)]" aria-hidden>
+              <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2 md:gap-2.5">
+                <span className="material-icons shrink-0 text-2xl text-[var(--primary)]" aria-hidden>
                   menu_book
                 </span>
-                <span className="font-medium">Partitura</span>
-                <span className="font-medium text-[var(--muted)]">{state.currentScoreName}</span>
+                {state.scoreHeader ? (
+                  <StudyScoreHeaderView header={state.scoreHeader} />
+                ) : (
+                  <>
+                    <span className="font-medium">Partitura</span>
+                    <span className="font-medium text-[var(--muted)]">{state.currentScoreName}</span>
+                  </>
+                )}
                 {state.playbackPosition ? (
                   <span className="whitespace-nowrap rounded-full bg-[var(--accent)] px-2 py-1 text-xs font-medium text-[var(--foreground)]" aria-live="polite">
                     Compasso {state.playbackPosition.measure}, tempo {state.playbackPosition.beat}
@@ -449,17 +465,23 @@ export default function StudyPage() {
               </div>
             </div>
 
-            <div className="flex-1 min-h-0 flex flex-col">
+            <div className="flex min-h-0 flex-1 flex-col">
               <div
-                className={`score-container relative min-h-0 flex-1 overflow-auto ${state.fullscreenScore && state.isMobile ? 'max-h-none px-0 py-2' : 'max-h-[70vh] min-h-52 px-4 py-4'}`}
+                className={`score-container relative min-h-0 flex-1 overflow-auto overscroll-contain ${state.fullscreenScore && state.isMobile ? 'h-0 max-h-full touch-pan-x touch-pan-y px-0 py-0' : 'max-h-[70vh] min-h-52 touch-pan-x touch-pan-y px-4 py-4'}`}
                 ref={scoreContainerRef}
               >
+                {state.fullscreenScore && state.isMobile && state.scoreHeader ? (
+                  <StudyScoreHeaderView header={state.scoreHeader} compact sheetSurface />
+                ) : null}
                 {state.scoreLoading ? (
                   <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--score-page)]">
                     <MusicLoader label="Carregando partitura…" />
                   </div>
                 ) : null}
-                <div ref={osmdContainerRef} className="relative min-h-52 study-osmd-host" />
+                <div
+                  ref={osmdContainerRef}
+                  className={`relative min-h-52 study-osmd-host ${state.fullscreenScore && state.isMobile ? 'px-0 py-2' : ''}`}
+                />
               </div>
             </div>
           </section>

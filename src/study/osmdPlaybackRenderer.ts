@@ -30,6 +30,8 @@ export class OsmdPlaybackRenderer implements ISheetRenderer {
   constructor(
     private getOsmd: () => OpenSheetMusicDisplay | null,
     private getScoreContainer: () => HTMLElement | null,
+    /** Só rola a partitura automaticamente no mobile enquanto toca. */
+    private shouldAutoScroll: () => boolean = () => false,
   ) {}
 
   destroy() {
@@ -161,6 +163,7 @@ export class OsmdPlaybackRenderer implements ISheetRenderer {
   }
 
   private scrollLineIntoView(line: HTMLElement) {
+    if (!this.shouldAutoScroll()) return;
     const now = Date.now();
     if (now - this.lastScrollAt < this.scrollThrottleMs) return;
     this.lastScrollAt = now;
