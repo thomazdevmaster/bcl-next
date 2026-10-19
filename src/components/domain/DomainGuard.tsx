@@ -10,13 +10,15 @@ import { getDomain } from '@/domains/catalog';
 interface DomainGuardProps {
   resource: Resource;
   action?: Action;
+  /** Qualquer pessoa autenticada, sem depender do papel. */
+  requireLogin?: boolean;
   children: React.ReactNode;
 }
 
-export function DomainGuard({ resource, action = 'read', children }: DomainGuardProps) {
+export function DomainGuard({ resource, action = 'read', requireLogin = false, children }: DomainGuardProps) {
   const { roles, permissions, isHydrated, isLoggedIn } = useAuth();
   const router = useRouter();
-  const allowed = can(roles, resource, action, permissions);
+  const allowed = requireLogin ? isLoggedIn : can(roles, resource, action, permissions);
 
   useEffect(() => {
     if (!isHydrated) return;

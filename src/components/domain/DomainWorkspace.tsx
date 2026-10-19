@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 import { sealPassword } from '@/lib/passwordCipher';
 import { failureMessage, userFacingError } from '@/lib/userMessages';
@@ -135,20 +136,20 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
     };
   }, [needsPeople]);
 
-  // Instrumentos do patrimônio para o perfil de músico.
+  // Catálogo de instrumentos (trompete, sax alto) para músico e patrimônio.
   useEffect(() => {
     if (!needsInstruments) return;
     let active = true;
-    apiFetch<Array<{ id: string | number; name?: string; code?: string; category?: string }>>('/patrimony')
+    apiFetch<Array<{ id: string | number; name?: string; tuning?: string; status?: string }>>('/instruments')
       .then((data) => {
         if (!active) return;
         setChoices((current) => ({
           ...current,
           instruments: data
-            .filter((item) => item.category === 'instrument')
+            .filter((item) => item.status !== 'inactive')
             .map((item) => ({
               value: String(item.id),
-              label: [item.code, item.name].filter(Boolean).join(' · ') || String(item.id),
+              label: [item.name, item.tuning].filter(Boolean).join(' · ') || String(item.id),
             })),
         }));
       })
@@ -221,6 +222,28 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
 
   const renderRowActions = useCallback((row: Record<string, unknown>) => (
     <div className="flex justify-end gap-1">
+      {resource === 'songs' ? (
+        songHasScore(row) ? (
+          <Link
+            href={`/study/${row.id}`}
+            title="Estudar"
+            aria-label="Estudar"
+            className={`group inline-flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-brand-strong)] hover:bg-[var(--color-brand-soft)] ${buttonMotion}`}
+          >
+            <span className={`material-icons text-lg ${iconMotion}`} aria-hidden="true">school</span>
+          </Link>
+        ) : (
+          <button
+            type="button"
+            disabled
+            title="Sem partitura"
+            aria-label="Estudar"
+            className="inline-flex h-11 w-11 cursor-not-allowed items-center justify-center rounded-full text-[var(--muted)] opacity-40"
+          >
+            <span className="material-icons text-lg" aria-hidden="true">school</span>
+          </button>
+        )
+      ) : null}
       <ActionButton icon="visibility" label="Visualizar" onClick={() => openItem(row, 'view')} />
       {canUpdate && (
         <ActionButton icon="edit" label="Editar" onClick={() => openItem(row, 'edit')} />
@@ -502,6 +525,14 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
   );
 }
 
+function songHasScore(row: Record<string, unknown>): boolean {
+  return Array.isArray(row.scores) && row.scores.some((score) => {
+    if (!score || typeof score !== 'object') return false;
+    const url = (score as { url?: unknown }).url;
+    return typeof url === 'string' && url.length > 0;
+  });
+}
+
 function ActionButton({
   icon,
   label,
@@ -552,7 +583,8 @@ function uniqueFieldsForResource(resource: CrudResource): string[] {
   if (resource === 'users') return ['username'];
   if (resource === 'people') return ['email', 'document.number'];
   if (resource === 'media') return ['slug'];
-  if (resource === 'patrimony' || resource === 'instruments') return ['code'];
+  if (resource === 'patrimony') return ['code'];
+  if (resource === 'instruments') return ['name'];
   return [];
 }
 
@@ -578,6 +610,16 @@ function formatCell(
   personChoices: PersonChoice[] | null,
 ): string {
   const value = getValue(row, column.path);
+  if (column.path === 'hasScore') return songHasScore(row) ? 'Sim' : 'Não';
+  if (column.path === 'updatedBy') return value == null || value === '' ? 'system' : String(value);
+  if (column.path === 'visibility') {
+    if (value === 'public') return 'Pública';
+    const who = [
+      row.visibleToStudents ? 'alunos' : '',
+      row.visibleToMusicians ? 'músicos' : '',
+    ].filter(Boolean);
+    return who.length > 0 ? `Privada · ${who.join(' e ')}` : 'Privada';
+  }
   if (column.format === 'status') {
     const labels: Record<string, string> = {
       active: 'Ativo',
@@ -591,6 +633,8 @@ function formatCell(
       done: 'Realizada',
       cancelled: 'Cancelada',
       published: 'Publicado',
+      public: 'Pública',
+      private: 'Privada',
     };
     return labels[String(value)] ?? String(value ?? '—');
   }

@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import Link from 'next/link';
+import { MusicLoader } from '@/components/MusicLoader';
 import { apiFetch } from '@/lib/api';
 import { userFacingError } from '@/lib/userMessages';
 
@@ -63,7 +64,7 @@ export default function EsqueciSenhaPage() {
             </label>
             {error && <p className="text-sm text-[var(--destructive)]">{error}</p>}
             <button type="submit" className="btn-primary min-h-11" disabled={saving}>
-              {saving ? 'Enviando…' : 'Pedir nova senha'}
+              {saving ? <MusicLoader compact label="Enviando…" /> : 'Pedir nova senha'}
             </button>
             <Link href="/login" className="min-h-11 inline-flex items-center text-sm">
               Voltar ao login

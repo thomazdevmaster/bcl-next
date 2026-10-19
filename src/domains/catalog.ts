@@ -52,7 +52,7 @@ export const DOMAINS: DomainDefinition[] = [
   {
     id: 'songs',
     label: 'Músicas',
-    description: 'Repertório e partituras em MusicXML.',
+    description: 'Repertório e partituras. Música pública vale para quem está logado; a privada depende do papel.',
     path: '/gestao/musicas',
     icon: 'library_music',
     apiResource: 'songs',
@@ -70,10 +70,10 @@ export const DOMAINS: DomainDefinition[] = [
   {
     id: 'instruments',
     label: 'Instrumentos',
-    description: 'Patrimônio com atributos musicais (família, afinação, série).',
+    description: 'Catálogo do que se toca: nome, família, afinação e tessitura. A peça física fica no patrimônio.',
     path: '/gestao/instrumentos',
     icon: 'music_note',
-    apiResource: 'patrimony',
+    apiResource: 'instruments',
     navGroup: 'management',
   },
   {

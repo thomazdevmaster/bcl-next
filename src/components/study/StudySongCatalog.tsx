@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { MusicLoader } from '@/components/MusicLoader';
 import type { Song } from '@/domains/songs/types';
 import { apiFetch } from '@/lib/api';
 import { failureMessage } from '@/lib/userMessages';
@@ -8,16 +9,31 @@ import {
   extractInstrumentsFromXml,
   type InstrumentInfo,
 } from '@/study/studyUtils';
+import {
+  defaultPartIds,
+  fetchFilteredXml,
+  fetchSongParts,
+  partToInstrument,
+  readStoredSelection,
+} from '@/study/songParts';
+import type { Person } from '@/domains/people/types';
+import { youtubeWatchUrl } from '@/domains/songs/youtube';
+import { rewriteDevApiUrl } from '@/config/environment';
 
 export interface StudyStartOptions {
   song: Song;
   xml: string;
   scoreInstrumentIds: string[];
   midiInstrumentIds: string[];
+  instruments?: InstrumentInfo[];
+  fullScoreUrl?: string;
 }
 
 interface StudySongCatalogProps {
   onStart: (options: StudyStartOptions) => void;
+  ownerId?: string | null;
+  personId?: string | null;
+  initialSongId?: string | null;
 }
 
 interface SetupState {
@@ -28,13 +44,41 @@ interface SetupState {
   midiInstrumentIds: string[];
 }
 
-export function StudySongCatalog({ onStart }: StudySongCatalogProps) {
+export function StudySongCatalog({ onStart, ownerId = null, personId = null, initialSongId = null }: StudySongCatalogProps) {
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [preparingId, setPreparingId] = useState<string | null>(null);
+  const [openingScore, setOpeningScore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [setup, setSetup] = useState<SetupState | null>(null);
+  const [playedNames, setPlayedNames] = useState<string[]>([]);
+  const [profileReady, setProfileReady] = useState(!personId);
+  const openedSong = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!personId) {
+      setProfileReady(true);
+      return;
+    }
+    let active = true;
+    setProfileReady(false);
+    apiFetch<Person>(`/people/${encodeURIComponent(personId)}`)
+      .then((person) => {
+        if (!active) return;
+        const name = person.musician?.playedInstrument?.name?.trim() ?? '';
+        setPlayedNames(name ? [name] : []);
+      })
+      .catch(() => {
+        if (active) setPlayedNames([]);
+      })
+      .finally(() => {
+        if (active) setProfileReady(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [personId]);
 
   useEffect(() => {
     let active = true;
@@ -75,16 +119,38 @@ export function StudySongCatalog({ onStart }: StudySongCatalogProps) {
     setPreparingId(String(song.id));
     setError(null);
     try {
-      const response = await fetch(score.url);
+      const songId = String(song.id);
+      let instruments: InstrumentInfo[] = [];
+      try {
+        const parts = await fetchSongParts(songId);
+        instruments = parts.map(partToInstrument);
+        const stored = readStoredSelection(ownerId, songId);
+        const defaults = defaultPartIds(parts, playedNames);
+        const available = new Set(instruments.map((item) => item.id));
+        const keep = (ids: string[]) => ids.filter((id) => available.has(id));
+        const scoreIds = keep(stored.score);
+        const midiIds = keep(stored.midi);
+        setSetup({
+          song,
+          xml: '',
+          instruments,
+          scoreInstrumentIds: scoreIdsForViewport(scoreIds.length > 0 ? scoreIds : defaults),
+          midiInstrumentIds: midiIds.length > 0 ? midiIds : defaults,
+        });
+        return;
+      } catch {
+        /* partitura antiga ou API sem naipes: lê o XML inteiro */
+      }
+      const response = await fetch(rewriteDevApiUrl(score.url));
       if (!response.ok) throw new Error('score_fetch_failed');
       const xml = await response.text();
-      const instruments = extractInstrumentsFromXml(xml);
+      instruments = extractInstrumentsFromXml(xml);
       const allIds = instruments.map((instrument) => instrument.id);
       setSetup({
         song,
         xml,
         instruments,
-        scoreInstrumentIds: allIds,
+        scoreInstrumentIds: scoreIdsForViewport(allIds),
         midiInstrumentIds: allIds,
       });
     } catch (caught) {
@@ -94,6 +160,17 @@ export function StudySongCatalog({ onStart }: StudySongCatalogProps) {
     }
   };
 
+  useEffect(() => {
+    if (!initialSongId || loading || !profileReady || openedSong.current === initialSongId) return;
+    openedSong.current = initialSongId;
+    const song = songs.find((item) => String(item.id) === initialSongId);
+    if (!song) {
+      setError('Essa música não está disponível para o seu perfil.');
+      return;
+    }
+    void openSetup(song);
+  }, [initialSongId, loading, openSetup, profileReady, songs]);
+
   const toggleInstrument = (
     field: 'scoreInstrumentIds' | 'midiInstrumentIds',
     instrumentId: string,
@@ -101,6 +178,10 @@ export function StudySongCatalog({ onStart }: StudySongCatalogProps) {
   ) => {
     setSetup((current) => {
       if (!current) return current;
+      if (field === 'scoreInstrumentIds' && mobileStudyViewport()) {
+        if (!checked) return current;
+        return { ...current, scoreInstrumentIds: [instrumentId] };
+      }
       const selected = new Set(current[field]);
       if (checked) selected.add(instrumentId);
       else selected.delete(instrumentId);
@@ -112,16 +193,14 @@ export function StudySongCatalog({ onStart }: StudySongCatalogProps) {
     field: 'scoreInstrumentIds' | 'midiInstrumentIds',
     checked: boolean,
   ) => {
-    setSetup((current) =>
-      current
-        ? {
-            ...current,
-            [field]: checked
-              ? current.instruments.map((instrument) => instrument.id)
-              : [],
-          }
-        : current,
-    );
+    setSetup((current) => {
+      if (!current) return current;
+      if (field === 'scoreInstrumentIds' && mobileStudyViewport()) return current;
+      return {
+        ...current,
+        [field]: checked ? current.instruments.map((instrument) => instrument.id) : [],
+      };
+    });
   };
 
   const canContinue =
@@ -181,16 +260,31 @@ export function StudySongCatalog({ onStart }: StudySongCatalogProps) {
                   <td className="px-4 py-3">{song.genre || '—'}</td>
                   <td className="px-4 py-3">{song.scores.length}</td>
                   <td className="px-4 py-3 text-right">
+                    <div className="flex flex-wrap justify-end gap-2">
+                    {youtubeWatchUrl(song.videoUrl ?? '') ? (
+                      <a
+                        href={youtubeWatchUrl(song.videoUrl ?? '') ?? undefined}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-ghost inline-flex min-h-11 items-center gap-1.5"
+                      >
+                        <span className="material-icons text-base" aria-hidden>smart_display</span>
+                        Vídeo
+                      </a>
+                    ) : null}
                     <button
                       type="button"
-                      className="btn-primary"
+                      className="btn-primary min-h-11"
                       disabled={preparingId === String(song.id)}
                       onClick={() => void openSetup(song)}
                     >
-                      {preparingId === String(song.id)
-                        ? 'Preparando…'
-                        : 'Iniciar estudo'}
+                      {preparingId === String(song.id) ? (
+                        <MusicLoader compact label="Preparando…" />
+                      ) : (
+                        'Iniciar estudo'
+                      )}
                     </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -203,8 +297,8 @@ export function StudySongCatalog({ onStart }: StudySongCatalogProps) {
               )}
               {loading && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-[var(--muted)]">
-                    Carregando músicas…
+                    <td colSpan={6} className="px-4 py-4">
+                    <MusicLoader label="Carregando músicas…" />
                   </td>
                 </tr>
               )}
@@ -212,6 +306,12 @@ export function StudySongCatalog({ onStart }: StudySongCatalogProps) {
           </table>
         </div>
       </section>
+
+      {openingScore ? (
+        <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-[var(--background)]">
+          <MusicLoader label="Carregando partitura…" />
+        </div>
+      ) : null}
 
       {setup && (
         <div
@@ -244,9 +344,14 @@ export function StudySongCatalog({ onStart }: StudySongCatalogProps) {
               <div className="grid gap-6 p-6 md:grid-cols-2">
                 <InstrumentSelection
                   title="Mostrar na partitura"
-                  description="Escolha as pautas que ficarão visíveis."
+                  description={
+                    mobileStudyViewport()
+                      ? 'Escolha a pauta que ficará visível.'
+                      : 'Escolha as pautas que ficarão visíveis.'
+                  }
                   instruments={setup.instruments}
                   selectedIds={setup.scoreInstrumentIds}
+                  single={mobileStudyViewport()}
                   onToggle={(id, checked) =>
                     toggleInstrument('scoreInstrumentIds', id, checked)
                   }
@@ -291,13 +396,47 @@ export function StudySongCatalog({ onStart }: StudySongCatalogProps) {
                 <button
                   type="button"
                   className="btn-primary"
-                  disabled={!canContinue}
+                  disabled={!canContinue || preparingId != null || openingScore}
                   onClick={() => {
-                    onStart(setup);
-                    setSetup(null);
+                    if (!setup || openingScore) return;
+                    setOpeningScore(true);
+                    void (async () => {
+                      setPreparingId(String(setup.song.id));
+                      try {
+                        const union = Array.from(
+                          new Set([...setup.scoreInstrumentIds, ...setup.midiInstrumentIds]),
+                        );
+                        let xml = setup.xml;
+                        if (!xml && union.length > 0) {
+                          xml = await fetchFilteredXml(String(setup.song.id), union);
+                        }
+                        if (!xml) {
+                          const score = setup.song.scores.find((item) => Boolean(item.url));
+                          if (!score) throw new Error('score');
+                          const response = await fetch(rewriteDevApiUrl(score.url));
+                          if (!response.ok) throw new Error('score');
+                          xml = await response.text();
+                        }
+                        const score = setup.song.scores.find((item) => Boolean(item.url));
+                        onStart({
+                          song: setup.song,
+                          xml,
+                          scoreInstrumentIds: setup.scoreInstrumentIds,
+                          midiInstrumentIds: setup.midiInstrumentIds,
+                          instruments: setup.instruments,
+                          fullScoreUrl: score?.url,
+                        });
+                        setSetup(null);
+                      } catch (caught) {
+                        setError(failureMessage(caught, 'Não foi possível abrir a partitura.'));
+                      } finally {
+                        setPreparingId(null);
+                        setOpeningScore(false);
+                      }
+                    })();
                   }}
                 >
-                  Continuar
+                  {openingScore ? <MusicLoader compact label="Carregando partitura…" /> : 'Continuar'}
                 </button>
               </div>
             </footer>
@@ -308,11 +447,21 @@ export function StudySongCatalog({ onStart }: StudySongCatalogProps) {
   );
 }
 
+function mobileStudyViewport() {
+  return typeof window !== 'undefined' && window.matchMedia('(max-width: 600px)').matches;
+}
+
+function scoreIdsForViewport(ids: string[]) {
+  if (!mobileStudyViewport()) return ids;
+  return ids.slice(0, 1);
+}
+
 function InstrumentSelection({
   title,
   description,
   instruments,
   selectedIds,
+  single = false,
   onToggle,
   onToggleAll,
 }: {
@@ -320,6 +469,7 @@ function InstrumentSelection({
   description: string;
   instruments: InstrumentInfo[];
   selectedIds: string[];
+  single?: boolean;
   onToggle: (id: string, checked: boolean) => void;
   onToggleAll: (checked: boolean) => void;
 }) {
@@ -332,28 +482,31 @@ function InstrumentSelection({
     <section className="rounded-xl border border-[var(--border)] p-4">
       <h3 className="font-semibold">{title}</h3>
       <p className="mt-1 text-sm text-[var(--muted)]">{description}</p>
-      <label className="mt-4 flex items-center gap-2 border-b border-[var(--border)] pb-3 font-medium">
-        <input
-          type="checkbox"
-          checked={allSelected}
-          ref={(element) => {
-            if (element) element.indeterminate = someSelected;
-          }}
-          onChange={(event) => onToggleAll(event.target.checked)}
-        />
-        Selecionar todos
-      </label>
+      {single ? null : (
+        <label className="mt-4 flex min-h-11 items-center gap-2 border-b border-[var(--border)] pb-3 font-medium">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            ref={(element) => {
+              if (element) element.indeterminate = someSelected;
+            }}
+            onChange={(event) => onToggleAll(event.target.checked)}
+          />
+          Selecionar todos
+        </label>
+      )}
       <div className="mt-3 flex max-h-72 flex-col gap-2 overflow-y-auto">
         {instruments.map((instrument) => (
           <label
             key={instrument.id}
-            className="flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-[var(--card-secondary)]"
+            className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-[var(--card-secondary)]"
           >
             <input
-              type="checkbox"
+              type={single ? 'radio' : 'checkbox'}
+              name={single ? 'study-setup-score' : undefined}
               checked={selected.has(instrument.id)}
               onChange={(event) =>
-                onToggle(instrument.id, event.target.checked)
+                onToggle(instrument.id, single ? true : event.target.checked)
               }
             />
             <span className="material-icons text-[var(--color-brand)]">

@@ -8,6 +8,7 @@ import { useCreateAtom } from "@tanstack/react-store";
 import { DndContext, closestCenter } from "@dnd-kit/core";
 import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
+import { MusicLoader } from "@/components/MusicLoader";
 import { TableCell } from "../cells/TableCell";
 import { TableAnimatedRow } from "../cells/TableAnimatedRow";
 import { tableButtonMotion, tableIconMotion } from "./tableMotion";
@@ -551,7 +552,7 @@ export function TableView<TData extends RowData>({
           }}
         />
 
-        {loading && <p role="status" className="rounded-xl border border-[var(--border)] bg-[var(--accent)] p-3 text-sm text-[var(--accent-foreground)]">Carregando registros…</p>}
+        {loading && <MusicLoader label="Carregando registros…" className="rounded-xl border border-[var(--border)] bg-[var(--accent)]" />}
         {error && (
           <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--destructive)]/40 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]">
             <span>{error}</span>

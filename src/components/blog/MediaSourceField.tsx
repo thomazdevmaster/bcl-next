@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
+import { MusicLoader } from '@/components/MusicLoader';
 import { uploadMediaFile } from '@/lib/uploadMedia';
 import { userFacingError } from '@/lib/userMessages';
 
@@ -31,7 +32,7 @@ export function MediaSourceField({ label, value, accept, placeholder, onChange, 
       </label>
       <div className="flex flex-wrap items-center gap-3">
         <label className="btn-outline-primary inline-flex min-h-11 cursor-pointer items-center px-4 text-sm">
-          {uploading ? 'Enviando…' : 'Enviar arquivo'}
+          {uploading ? <MusicLoader compact label="Enviando…" /> : 'Enviar arquivo'}
           <input
             type="file"
             accept={accept}

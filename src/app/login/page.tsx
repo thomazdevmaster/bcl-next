@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
+import { MusicLoader } from '@/components/MusicLoader';
 import { postLoginRoute } from '@/core/auth/postLoginRoute';
 import { userFacingError } from '@/lib/userMessages';
 
@@ -104,7 +105,7 @@ export default function LoginPage() {
             </p>
           )}
           <button type="submit" className="btn-primary min-h-11 w-full" disabled={busy}>
-            {busy ? 'Entrando…' : 'Entrar'}
+            {busy ? <MusicLoader compact label="Entrando…" /> : 'Entrar'}
           </button>
           <div className="flex flex-wrap justify-between gap-3 text-sm">
             <Link href="/esqueci-senha" className="min-h-11 inline-flex items-center">

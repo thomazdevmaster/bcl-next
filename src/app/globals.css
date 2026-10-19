@@ -409,6 +409,30 @@
     background-color: var(--score-canvas);
   }
 
+  body.study-mobile-fullscreen-active .score-container {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  body.study-mobile-fullscreen-active .study-osmd-host svg {
+    display: block;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  @media (max-width: 600px) {
+    body.study-mobile-fullscreen-active header,
+    body.study-mobile-fullscreen-active aside,
+    body.study-mobile-fullscreen-active nav {
+      display: none !important;
+    }
+
+    body.study-mobile-fullscreen-active main {
+      padding: 0 !important;
+      overflow: hidden;
+    }
+  }
+
   .score-container .study-osmd-host img[id^="cursorImg"] {
     z-index: 30 !important;
     pointer-events: none;
@@ -750,6 +774,54 @@
     line-height: 1.35;
     padding: 4px 8px;
     background: var(--code-bg);
+  }
+}
+
+@keyframes music-loader-bar {
+  0%,
+  100% {
+    height: 22%;
+  }
+  35% {
+    height: 100%;
+  }
+  55% {
+    height: 48%;
+  }
+  75% {
+    height: 86%;
+  }
+}
+
+@keyframes music-loader-note {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-8deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(8deg);
+  }
+}
+
+.music-loader__bar {
+  height: 22%;
+  animation-name: music-loader-bar;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.music-loader__note {
+  animation: music-loader-note 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .music-loader__bar,
+  .music-loader__note {
+    animation: none;
+  }
+
+  .music-loader__bar {
+    height: 65%;
   }
 }
 

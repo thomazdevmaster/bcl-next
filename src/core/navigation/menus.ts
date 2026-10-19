@@ -17,9 +17,10 @@ export const PUBLIC_NAV: NavItem[] = [
   { href: '/historia', label: 'História', icon: 'auto_stories' },
 ];
 
+const STUDY_NAV: NavItem = { href: '/study', label: 'Estudo', icon: 'school' };
+
 const MANAGEMENT_NAV_SOURCE: Array<NavItem & { resource: Resource; action?: Action }> = [
   { href: '/gestao', label: 'Painel', icon: 'dashboard', resource: 'portal', action: 'read' },
-  { href: '/study', label: 'Estudo', icon: 'school', resource: 'songs', action: 'read' },
   ...DOMAINS.filter((domain) => domain.navGroup === 'management').map((domain) => ({
     href: domain.path,
     label: domain.label,
@@ -33,6 +34,10 @@ export function getManagementNav(roles: AccessRoles, permissions?: readonly stri
   const items = MANAGEMENT_NAV_SOURCE.filter((item) => can(roles, item.resource, item.action ?? 'read', permissions)).map(
     ({ href, label, icon }) => ({ href, label, icon }),
   );
+  if (roles.some((role) => role !== 'public')) {
+    const painel = items.findIndex((item) => item.href === '/gestao');
+    items.splice(painel + 1, 0, STUDY_NAV);
+  }
   if (roles.includes('admin')) {
     const painel = items.findIndex((item) => item.href === '/gestao');
     items.splice(painel + 1, 0, { href: '/gestao/papeis', label: 'Papéis', icon: 'admin_panel_settings' });

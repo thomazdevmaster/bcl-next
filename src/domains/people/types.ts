@@ -41,7 +41,9 @@ export interface MusicianProfile {
   defaultVoice: number;
   ownInstrument: boolean;
   joinedAt?: string;
-  instrumentIds: EntityId[];
+  /** Instrumento do catálogo que a pessoa toca hoje. */
+  playedInstrumentId?: EntityId | null;
+  playedInstrument?: { id: EntityId; name: string; family?: string; tuning?: string | null };
 }
 
 export interface PersonAccount {

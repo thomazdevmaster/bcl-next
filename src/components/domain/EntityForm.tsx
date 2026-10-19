@@ -1,7 +1,10 @@
 "use client";
 
 import { type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import { MusicLoader } from "@/components/MusicLoader";
 import type { CrudField, CrudOption } from "@/domains/crudConfig";
+import { metadataFromMusicXml } from "@/domains/songs/musicXmlMetadata";
+import { youtubeEmbedUrl, youtubeWatchUrl } from "@/domains/songs/youtube";
 
 export interface EntityFormDynamicChoices {
   people: Array<CrudOption & { hasUser: boolean }> | null;
@@ -55,6 +58,12 @@ export function EntityForm({
       return;
     }
     const content = await file.text();
+    const metadata = metadataFromMusicXml(content);
+    if (metadata.title) onChange("title", metadata.title);
+    if (metadata.composer) onChange("composer", metadata.composer);
+    if (metadata.arranger) onChange("arranger", metadata.arranger);
+    if (metadata.genre) onChange("genre", metadata.genre);
+    if (metadata.key) onChange("key", metadata.key);
     const encoded = `data:${file.type || "application/xml"};base64,${btoa(unescape(encodeURIComponent(content)))}`;
     onChange(field.name, encoded);
     onChange("scoreFileName", file.name);
@@ -72,6 +81,8 @@ export function EntityForm({
             const previousSection = visibleFields[index - 1]?.section;
             const heading = hasSections && field.section && field.section !== previousSection ? field.section : null;
             const wide = field.type === "textarea" || field.type === "xml" || field.type === "multiselect";
+            const videoWatch = field.name === "videoUrl" ? youtubeWatchUrl(String(value ?? "")) : null;
+            const videoEmbed = field.name === "videoUrl" ? youtubeEmbedUrl(String(value ?? "")) : null;
 
             return (
               <FieldSlot key={field.name} heading={heading} wide={wide}>
@@ -146,21 +157,49 @@ export function EntityForm({
                     onChange={(event) => onChange(field.name, event.target.value)}
                     className={`rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 ${controlMotion}`}
                   />
+                ) : field.name === "videoUrl" && readOnly ? (
+                  videoWatch && videoEmbed ? (
+                    <div className="flex flex-col items-start gap-2">
+                      <div className="aspect-video w-full max-w-80 overflow-hidden rounded-md bg-black">
+                        <iframe
+                          className="h-full w-full"
+                          src={videoEmbed}
+                          title="Vídeo da música"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                        />
+                      </div>
+                      <a
+                        href={videoWatch}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-[var(--color-brand-strong)]"
+                      >
+                        <span className="material-icons text-lg" aria-hidden>smart_display</span>
+                        Abrir no YouTube
+                      </a>
+                    </div>
+                  ) : (
+                    <p className="rounded-md bg-[var(--card-secondary)] px-3 py-2">Nenhum vídeo</p>
+                  )
                 ) : field.type === "xml" ? (
                   readOnly ? (
                     <p className="rounded-md bg-[var(--card-secondary)] px-3 py-2">
                       {String(values.scoreFileName || "Nenhuma partitura anexada")}
                     </p>
                   ) : (
-                    <div>
-                      <input
-                        type="file"
-                        accept={field.accept}
-                        className={controlMotion}
-                        onChange={(event) => void handleFile(event, field)}
-                      />
+                    <div className="flex flex-col items-start gap-2">
+                      <label className={`btn-primary inline-flex min-h-11 cursor-pointer items-center px-4 ${buttonMotion}`}>
+                        Enviar arquivo
+                        <input
+                          type="file"
+                          accept={field.accept}
+                          className="sr-only"
+                          onChange={(event) => void handleFile(event, field)}
+                        />
+                      </label>
                       {Boolean(values.scoreFileName) && (
-                        <p className="mt-1 text-xs text-[var(--muted)]">Atual: {String(values.scoreFileName)}</p>
+                        <p className="text-xs text-[var(--muted)]">Arquivo: {String(values.scoreFileName)}</p>
                       )}
                     </div>
                   )
@@ -219,7 +258,7 @@ export function EntityForm({
             </button>
           ) : !readOnly ? (
             <button type="submit" className={`btn-primary min-h-11 ${buttonMotion}`} disabled={saving}>
-              {saving ? "Salvando…" : "Salvar"}
+              {saving ? <MusicLoader compact label="Salvando…" /> : "Salvar"}
             </button>
           ) : null}
         </div>

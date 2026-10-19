@@ -1,4 +1,6 @@
 import type { CrudResource } from '@/core/auth/permissions';
+import { youtubeVideoId } from '@/domains/songs/youtube';
+import { INSTRUMENT_FAMILY_OPTIONS, INSTRUMENT_SIGNAL_OPTIONS } from '@/domains/instruments/types';
 import {
   EXPERIENCE_LABEL,
   GUARDIAN_RELATIONSHIP_LABEL,
@@ -30,7 +32,7 @@ export interface CrudOption {
  * Origem dinâmica das opções de um campo, carregada pelo workspace:
  * - `people`: todas as pessoas (sem a própria, quando houver `id`);
  * - `people-without-user`: pessoas que ainda não têm conta;
- * - `instruments`: itens do patrimônio da categoria instrumento.
+ * - `instruments`: catálogo de instrumentos (trompete, sax alto), não a peça do patrimônio.
  */
 export type CrudOptionSource = 'people' | 'people-without-user' | 'instruments';
 
@@ -59,6 +61,9 @@ export interface CrudColumn {
   label: string;
   format?: 'boolean' | 'date' | 'datetime' | 'currency' | 'count' | 'roles' | 'status';
 }
+
+/** Quem criou o registro ou fez a última alteração. */
+const actorColumn: CrudColumn = { path: 'updatedBy', label: 'Alterado por' };
 
 export interface DomainCrudConfig {
   resource: CrudResource;
@@ -225,6 +230,7 @@ const users: DomainCrudConfig = {
     { path: 'email', label: 'E-mail' },
     { path: 'roles', label: 'Perfis', format: 'roles' },
     { path: 'isActive', label: 'Ativo', format: 'boolean' },
+    actorColumn,
   ],
   itemLabel: (item) => String(item.name ?? item.username ?? 'Usuário'),
   toForm: (item) => ({
@@ -277,7 +283,7 @@ const people: DomainCrudConfig = {
     'musician.defaultVoice': '1',
     'musician.ownInstrument': false,
     'musician.joinedAt': '',
-    'musician.instrumentIds': [],
+    'musician.playedInstrumentId': '',
     createUser: false,
     username: '',
   },
@@ -444,13 +450,15 @@ const people: DomainCrudConfig = {
       showWhen: (values) => Boolean(values.isMusician),
     },
     {
-      name: 'musician.instrumentIds',
-      label: 'Instrumentos da banda que usa',
-      type: 'multiselect',
+      name: 'musician.playedInstrumentId',
+      label: 'Instrumento que toca',
+      type: 'select',
+      required: true,
       optionsSource: 'instruments',
       section: 'Músico',
       showWhen: (values) => Boolean(values.isMusician),
-      helpText: 'Itens do patrimônio. Deixe vazio se usa só instrumento próprio.',
+      helpText: 'Do catálogo de instrumentos, não do patrimônio.',
+      validate: (value, values) => requiredProfile(value, values, 'isMusician'),
     },
     {
       name: 'createUser',
@@ -479,6 +487,7 @@ const people: DomainCrudConfig = {
     { path: 'isMusician', label: 'Músico', format: 'boolean' },
     { path: 'user.username', label: 'Usuário' },
     { path: 'status', label: 'Status', format: 'status' },
+    actorColumn,
   ],
   itemLabel: (item) => `${String(item.firstName ?? '')} ${String(item.lastName ?? '')}`.trim(),
   toForm: (item) => {
@@ -492,9 +501,8 @@ const people: DomainCrudConfig = {
     flat['student.level'] = String(flat['student.level'] ?? '1');
     flat['musician.defaultVoice'] = String(flat['musician.defaultVoice'] ?? '1');
     flat['musician.experience'] = flat['musician.experience'] ?? 'less_than_1';
-    flat['musician.instrumentIds'] = Array.isArray(flat['musician.instrumentIds'])
-      ? (flat['musician.instrumentIds'] as unknown[]).map(String)
-      : [];
+    flat['musician.playedInstrumentId'] =
+      flat['musician.playedInstrumentId'] == null ? '' : String(flat['musician.playedInstrumentId']);
     flat.createUser = false;
     flat.username = '';
     return flat;
@@ -523,7 +531,10 @@ const people: DomainCrudConfig = {
       const musician = payload.musician as Record<string, unknown>;
       musician.defaultVoice = Number(musician.defaultVoice ?? 1);
       musician.ownInstrument = Boolean(musician.ownInstrument);
-      musician.instrumentIds = toIdList(musician.instrumentIds);
+      musician.playedInstrumentId = toId(musician.playedInstrumentId);
+      delete musician.playedInstrument;
+      delete musician.instrumentIds;
+      delete musician.instruments;
       if (!musician.joinedAt) delete musician.joinedAt;
     }
     if (!values.createUser) {
@@ -548,22 +559,65 @@ const songs: DomainCrudConfig = {
     scoreFileName: '',
     scoreMimeType: '',
     status: 'active',
+    visibility: 'private',
+    visibleToStudents: false,
+    visibleToMusicians: false,
+    videoUrl: '',
   },
   fields: [
-    { name: 'title', label: 'Título', required: true },
-    { name: 'composer', label: 'Compositor', required: true },
-    { name: 'arranger', label: 'Arranjador' },
-    { name: 'genre', label: 'Gênero' },
-    { name: 'key', label: 'Tonalidade', placeholder: 'Ex.: Bb' },
-    { name: 'durationSeconds', label: 'Duração (segundos)', type: 'number' },
     {
       name: 'scoreFile',
       label: 'Partitura MusicXML',
       type: 'xml',
+      section: 'Partitura',
       accept: '.xml,.musicxml,application/xml,text/xml,application/vnd.recordare.musicxml+xml',
-      helpText: 'Arquivos .xml ou .musicxml. Ao editar, deixe vazio para manter a partitura atual.',
+      helpText: 'Envie um .xml ou .musicxml. Título, compositor, arranjo, gênero e tonalidade entram sozinhos quando o arquivo traz esses dados. Ao editar, deixe vazio para manter a partitura atual.',
     },
-    commonStatus,
+    {
+      name: 'visibility',
+      label: 'Visualização',
+      type: 'select',
+      required: true,
+      section: 'Partitura',
+      options: [
+        { value: 'public', label: 'Pública — quem está logado' },
+        { value: 'private', label: 'Privada — escolher alunos e/ou músicos' },
+      ],
+      helpText: 'Pública aparece no estudo para qualquer login. Na privada, marque quem pode ver.',
+    },
+    {
+      name: 'visibleToStudents',
+      label: 'Visível para alunos',
+      type: 'checkbox',
+      section: 'Partitura',
+      showWhen: (values) => values.visibility === 'private',
+    },
+    {
+      name: 'visibleToMusicians',
+      label: 'Visível para músicos',
+      type: 'checkbox',
+      section: 'Partitura',
+      showWhen: (values) => values.visibility === 'private',
+    },
+    { name: 'title', label: 'Título', required: true, section: 'Dados' },
+    { name: 'composer', label: 'Compositor', required: true, section: 'Dados' },
+    { name: 'arranger', label: 'Arranjador', section: 'Dados' },
+    { name: 'genre', label: 'Gênero', section: 'Dados' },
+    { name: 'key', label: 'Tonalidade', placeholder: 'Ex.: Bb', section: 'Dados' },
+    { name: 'durationSeconds', label: 'Duração (segundos)', type: 'number', section: 'Dados' },
+    {
+      name: 'videoUrl',
+      label: 'Vídeo no YouTube',
+      section: 'Dados',
+      placeholder: 'https://www.youtube.com/watch?v=…',
+      helpText: 'Opcional. O vídeo abre no estudo e nos detalhes da música.',
+      validate: (value) => {
+        const text = String(value ?? '').trim();
+        if (!text) return null;
+        return youtubeVideoId(text) ? null : 'Informe um link do YouTube.';
+      },
+    },
+    { ...commonStatus, section: 'Dados' },
   ],
   columns: [
     { path: 'title', label: 'Título' },
@@ -571,8 +625,10 @@ const songs: DomainCrudConfig = {
     { path: 'arranger', label: 'Arranjador' },
     { path: 'genre', label: 'Gênero' },
     { path: 'key', label: 'Tonalidade' },
-    { path: 'scores', label: 'Partituras', format: 'count' },
+    { path: 'visibility', label: 'Visualização', format: 'status' },
+    { path: 'hasScore', label: 'Partitura', format: 'boolean' },
     { path: 'status', label: 'Status', format: 'status' },
+    actorColumn,
   ],
   itemLabel: (item) => String(item.title ?? 'Música'),
   toForm: (item) => {
@@ -584,6 +640,10 @@ const songs: DomainCrudConfig = {
       scoreFile: '',
       scoreFileName: score?.fileName ?? '',
       scoreMimeType: score?.mimeType ?? '',
+      visibility: item.visibility === 'public' ? 'public' : 'private',
+      visibleToStudents: Boolean(item.visibleToStudents),
+      visibleToMusicians: Boolean(item.visibleToMusicians),
+      videoUrl: item.videoUrl ?? '',
     };
   },
   toPayload: (values, current) => {
@@ -670,6 +730,30 @@ const patrimony: DomainCrudConfig = {
       helpText: 'Quem está com o item. Opcional.',
     },
     { name: 'notes', label: 'Observações', type: 'textarea' },
+    {
+      name: 'instrument.instrumentId',
+      label: 'Instrumento',
+      type: 'select',
+      required: true,
+      optionsSource: 'instruments',
+      helpText: 'Qual instrumento do catálogo esta peça é.',
+      showWhen: (values) => values.category === 'instrument',
+    },
+    {
+      name: 'instrument.serialNumber',
+      label: 'Número de série',
+      showWhen: (values) => values.category === 'instrument',
+    },
+    {
+      name: 'instrument.manufacturer',
+      label: 'Fabricante',
+      showWhen: (values) => values.category === 'instrument',
+    },
+    {
+      name: 'instrument.model',
+      label: 'Modelo',
+      showWhen: (values) => values.category === 'instrument',
+    },
   ],
   columns: [
     { path: 'code', label: 'Código' },
@@ -678,100 +762,92 @@ const patrimony: DomainCrudConfig = {
     { path: 'status', label: 'Estado', format: 'status' },
     { path: 'location', label: 'Localização' },
     { path: 'acquisitionValue', label: 'Valor', format: 'currency' },
+    actorColumn,
   ],
   itemLabel: (item) => String(item.name ?? item.code ?? 'Patrimônio'),
   toForm: (item) => ({
-    ...item,
+    ...flattenEntity(item),
     assignedPersonId: item.assignedPersonId == null ? '' : String(item.assignedPersonId),
+    'instrument.instrumentId':
+      item.instrument && typeof item.instrument === 'object' && item.instrument !== null
+        ? String((item.instrument as { instrumentId?: unknown }).instrumentId ?? '')
+        : '',
   }),
-  toPayload: (values, current) =>
-    withAudit(
-      {
-        ...values,
-        acquisitionValue: values.acquisitionValue ? Number(values.acquisitionValue) : undefined,
-        assignedPersonId: toId(values.assignedPersonId),
-      },
-      current,
-    ),
+  toPayload: (values, current) => {
+    const payload = unflattenEntity(values);
+    payload.acquisitionValue = values.acquisitionValue ? Number(values.acquisitionValue) : undefined;
+    payload.assignedPersonId = toId(values.assignedPersonId);
+    if (payload.category !== 'instrument') {
+      delete payload.instrument;
+    } else if (payload.instrument && typeof payload.instrument === 'object') {
+      const instrument = payload.instrument as Record<string, unknown>;
+      instrument.instrumentId = toId(instrument.instrumentId);
+    }
+    return withAudit(payload, current);
+  },
 };
 
 const instruments: DomainCrudConfig = {
   resource: 'instruments',
   singular: 'instrumento',
   defaults: {
-    code: '',
     name: '',
-    acquisitionDate: '',
-    acquisitionValue: '',
-    status: 'available',
-    location: '',
-    assignedPersonId: '',
-    'instrument.family': 'woodwind',
-    'instrument.pitch': '',
-    'instrument.serialNumber': '',
-    'instrument.manufacturer': '',
-    'instrument.model': '',
+    family: 'brass',
+    subclass: '',
+    tuning: '',
+    signalType: 'acoustic',
+    tessitura: '',
+    tags: '',
+    status: 'active',
   },
   fields: [
-    { name: 'code', label: 'Código patrimonial', required: true },
-    { name: 'name', label: 'Nome', required: true },
+    { name: 'name', label: 'Nome', required: true, placeholder: 'Ex.: Saxofone Alto' },
     {
-      name: 'instrument.family',
+      name: 'family',
       label: 'Família',
       type: 'select',
       required: true,
-      options: [
-        { value: 'woodwind', label: 'Madeiras' },
-        { value: 'brass', label: 'Metais' },
-        { value: 'percussion', label: 'Percussão' },
-        { value: 'string', label: 'Cordas' },
-        { value: 'keyboard', label: 'Teclas' },
-      ],
+      options: INSTRUMENT_FAMILY_OPTIONS,
     },
-    { name: 'instrument.pitch', label: 'Afinação', placeholder: 'Ex.: Bb' },
-    { name: 'instrument.manufacturer', label: 'Fabricante' },
-    { name: 'instrument.model', label: 'Modelo' },
-    { name: 'instrument.serialNumber', label: 'Número de série' },
-    { name: 'acquisitionDate', label: 'Data de aquisição', type: 'date', required: true },
-    { name: 'acquisitionValue', label: 'Valor de aquisição', type: 'number' },
+    { name: 'subclass', label: 'Subclasse', placeholder: 'Ex.: Madeiras, Palheta' },
+    { name: 'tuning', label: 'Afinação', placeholder: 'Ex.: Bb, Eb, F, C' },
     {
-      name: 'status',
-      label: 'Estado',
+      name: 'signalType',
+      label: 'Tipo de sinal',
       type: 'select',
       required: true,
-      options: patrimony.fields.find((field) => field.name === 'status')?.options,
+      options: INSTRUMENT_SIGNAL_OPTIONS,
     },
-    { name: 'location', label: 'Localização' },
+    { name: 'tessitura', label: 'Tessitura', placeholder: 'Ex.: Alto, Soprano, Tenor' },
     {
-      name: 'assignedPersonId',
-      label: 'Músico responsável',
-      type: 'select',
-      optionsSource: 'people',
-      helpText: 'Quem está com o instrumento. Opcional.',
+      name: 'tags',
+      label: 'Tags',
+      placeholder: 'Jazz, Banda, Palheta',
+      helpText: 'Separadas por vírgula.',
     },
+    commonStatus,
   ],
   columns: [
-    { path: 'code', label: 'Código' },
     { path: 'name', label: 'Instrumento' },
-    { path: 'instrument.family', label: 'Família' },
-    { path: 'instrument.pitch', label: 'Afinação' },
-    { path: 'instrument.manufacturer', label: 'Fabricante' },
-    { path: 'status', label: 'Estado', format: 'status' },
+    { path: 'familyLabel', label: 'Família' },
+    { path: 'subclass', label: 'Subclasse' },
+    { path: 'tuning', label: 'Afinação' },
+    { path: 'tessitura', label: 'Tessitura' },
+    { path: 'signalLabel', label: 'Sinal' },
+    { path: 'status', label: 'Status', format: 'status' },
+    actorColumn,
   ],
-  itemLabel: (item) => String(item.name ?? item.code ?? 'Instrumento'),
-  filter: (item) => item.category === 'instrument',
+  itemLabel: (item) => String(item.name ?? 'Instrumento'),
   toForm: (item) => ({
-    ...flattenEntity(item),
-    assignedPersonId: item.assignedPersonId == null ? '' : String(item.assignedPersonId),
+    ...item,
+    tags: Array.isArray(item.tags) ? (item.tags as unknown[]).join(', ') : (item.tags ?? ''),
   }),
   toPayload: (values, current) => {
-    const payload = unflattenEntity(values);
-    payload.category = 'instrument';
-    payload.acquisitionValue = values.acquisitionValue
-      ? Number(values.acquisitionValue)
-      : undefined;
-    payload.assignedPersonId = toId(values.assignedPersonId);
-    return withAudit(payload, current);
+    const tags = String(values.tags ?? '')
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+    return withAudit({ ...values, tags }, current);
   },
 };
 
@@ -822,6 +898,7 @@ const presentations: DomainCrudConfig = {
     { path: 'isPublic', label: 'Pública', format: 'boolean' },
     { path: 'status', label: 'Status', format: 'status' },
     { path: 'repertoireIds', label: 'Repertório', format: 'count' },
+    actorColumn,
   ],
   itemLabel: (item) => String(item.title ?? 'Apresentação'),
   toForm: (item) => ({
@@ -915,6 +992,7 @@ const media: DomainCrudConfig = {
     { path: 'status', label: 'Status', format: 'status' },
     { path: 'publishedAt', label: 'Publicação', format: 'datetime' },
     { path: 'slug', label: 'Slug' },
+    actorColumn,
   ],
   itemLabel: (item) => String(item.title ?? 'Mídia'),
   toForm: (item) => ({ ...item, publishedAt: toLocalDateTime(item.publishedAt) }),

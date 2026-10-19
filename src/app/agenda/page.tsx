@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { MusicLoader } from '@/components/MusicLoader';
 import { PortalPageHeader } from '@/components/public/PortalPageHeader';
 import { PresentationEventCard } from '@/components/public/PresentationEventCard';
 import { apiFetch } from '@/lib/api';
@@ -44,13 +45,7 @@ export default function AgendaPage() {
 
       {error ? <p className="mt-8 text-[var(--destructive)]">{error}</p> : null}
 
-      {loading ? (
-        <div className="mt-10 space-y-4">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-40 animate-pulse rounded-2xl bg-[var(--card-secondary)]" aria-hidden />
-          ))}
-        </div>
-      ) : null}
+      {loading ? <MusicLoader label="Carregando agenda…" className="mt-10" /> : null}
 
       {!loading && !error ? (
         <>

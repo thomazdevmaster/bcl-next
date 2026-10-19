@@ -1,6 +1,7 @@
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
 import { Player, VerovioConverter } from '@music-i18n/musicxml-player';
 import { failureMessage } from '@/lib/userMessages';
+import { rewriteDevApiUrl } from '@/config/environment';
 import { OsmdPlaybackRenderer } from './osmdPlaybackRenderer';
 import { StudyPlayerController } from './studyPlayerController';
 import {
@@ -14,6 +15,7 @@ import {
   filterXmlByPartIds,
   type InstrumentInfo,
 } from './studyUtils';
+import { fetchFilteredXml, fetchPartMidi, selectionStorageKey } from './songParts';
 
 /**
  * O WASM do Verovio embarcado no musicxml-player traz 652 dos 1043 glifos que
@@ -29,6 +31,10 @@ export type StudyViewSnapshot = {
   currentScoreName: string;
   fullscreenScore: boolean;
   isMobile: boolean;
+  /** Compassos por linha no celular. No desktop fica 0. */
+  mobileMeasuresPerLine: number;
+  canZoomMobileIn: boolean;
+  canZoomMobileOut: boolean;
   playbackPosition: { measure: number; beat: number; timeSignature: string } | null;
   /** Reservado; o cursor visual é o nativo do OSMD. */
   playbackCursorX: number | null;
@@ -77,6 +83,10 @@ export type StudySessionOptions = {
 export type StudyInstrumentSelection = {
   scoreInstrumentIds?: string[];
   midiInstrumentIds?: string[];
+  /** Lista completa de naipes, mesmo quando o XML inicial veio recortado. */
+  catalog?: InstrumentInfo[];
+  /** Partitura inteira, baixada em segundo plano para trocar de naipe depois. */
+  fullScoreUrl?: string;
 };
 
 function sameIdSet(left: string[], right: string[]) {
@@ -90,11 +100,23 @@ function isMobileView() {
   return window.matchMedia('(max-width: 600px)').matches;
 }
 
+const MOBILE_MEASURES_MIN = 1;
+const MOBILE_MEASURES_MAX = 5;
+
+/** No celular, cada linha fica entre 2 e 5 compassos, conforme a largura. */
+function measuresPerMobileLine(width: number): number {
+  if (width < 390) return 2;
+  if (width < 460) return 3;
+  if (width < 540) return 4;
+  return 5;
+}
+
 export class StudySession {
   private listeners = new Set<() => void>();
   private snapshot: StudyViewSnapshot;
 
   private options: StudySessionOptions;
+  private ownerId: string | null = null;
   private loadToken = 0;
   private sourceXml: string | null = null;
   private currentScoreId = 'local';
@@ -140,6 +162,9 @@ export class StudySession {
   private currentScoreName = 'Nenhuma selecionada';
   private fullscreenScore = false;
   private isMobile = isMobileView();
+  /** Null usa a quantidade automática da largura. Zoom do usuário grava o valor. */
+  private mobileMeasuresOverride: number | null = null;
+  private mobileLayoutRendering = false;
   private playbackPosition: StudyViewSnapshot['playbackPosition'] = null;
   private playbackCursorX: number | null = null;
   private loading = false;
@@ -208,6 +233,9 @@ export class StudySession {
       currentScoreName: this.currentScoreName,
       fullscreenScore: this.fullscreenScore,
       isMobile: this.isMobile,
+      mobileMeasuresPerLine: this.isMobile ? this.currentMobileMeasures() : 0,
+      canZoomMobileIn: this.isMobile && this.currentMobileMeasures() > MOBILE_MEASURES_MIN && !this.mobileLayoutRendering,
+      canZoomMobileOut: this.isMobile && this.currentMobileMeasures() < MOBILE_MEASURES_MAX && !this.mobileLayoutRendering,
       playbackPosition: this.playbackPosition,
       playbackCursorX: this.playbackCursorX,
       loading: this.loading,
@@ -247,18 +275,29 @@ export class StudySession {
   updateMobile(isMobile: boolean) {
     const changed = this.isMobile !== isMobile;
     this.isMobile = isMobile;
-    this.emit();
-    if (changed && this.osmd && isMobile) {
-      this.fitScoreToViewport();
-      void this.osmd.render();
+    if (isMobile && this.xmlLoaded) this.fullscreenScore = true;
+    const trimmedScore = isMobile && this.selectedInstrumentIds.length > 1;
+    if (trimmedScore) {
+      this.selectedInstrumentIds = [this.selectedInstrumentIds[0]];
+      this.lastAppliedInstrumentIds = [...this.selectedInstrumentIds];
     }
+    this.emit();
+    if (trimmedScore && this.sourceXml) {
+      void this.applyInstrumentSelection(this.currentScoreId, this.loadToken);
+      return;
+    }
+    if (!changed || !this.osmd) return;
+    if (isMobile) this.applyMobileLayout();
+    else this.osmd.EngravingRules.RenderXMeasuresPerLineAkaSystem = 0;
+    void this.osmd.render();
   }
 
   setFullscreenScore(v: boolean) {
     this.fullscreenScore = v;
     this.emit();
     requestAnimationFrame(() => {
-      this.fitScoreToViewport();
+      if (isMobileView()) this.applyMobileLayout();
+      else this.fitScoreToViewport();
       const p = this.osmd?.render?.();
       const afterRender = () => {
         this.osmdPlaybackRenderer?.onResize();
@@ -272,8 +311,25 @@ export class StudySession {
     });
   }
 
+  setOwnerId(ownerId: string | null) {
+    this.ownerId = ownerId;
+  }
+
   toggleFullscreenScore() {
     this.setFullscreenScore(!this.fullscreenScore);
+  }
+
+  /**
+   * Zoom do celular: aproximar reduz compassos por linha (notas maiores);
+   * afastar aumenta a quantidade, entre 1 e 5.
+   */
+  zoomMobile(direction: 'in' | 'out') {
+    if (!isMobileView() || !this.osmd || !this.xmlLoaded || this.mobileLayoutRendering) return;
+    const current = this.currentMobileMeasures();
+    const next = direction === 'in' ? current - 1 : current + 1;
+    if (next < MOBILE_MEASURES_MIN || next > MOBILE_MEASURES_MAX) return;
+    this.mobileMeasuresOverride = next;
+    void this.rerenderMobileLayout();
   }
 
   togglePlayerExpanded() {
@@ -289,9 +345,15 @@ export class StudySession {
   ) {
     const token = ++this.loadToken;
     this.scoreError = null;
+    this.xmlLoaded = false;
+    this.scoreLoading = true;
+    this.loading = true;
+    if (isMobileView()) this.fullscreenScore = true;
+    this.emit();
     this.currentScoreId = scoreId;
     this.currentScoreName = displayName;
     this.sourceXml = xml;
+    this.mobileMeasuresOverride = null;
     this.lastRenderedSelectionKey = null;
     this.destroyPlayer();
     this.clearOsmdContainer();
@@ -309,6 +371,9 @@ export class StudySession {
     this.instrumentCardCollapsed = true;
     this.emit();
 
+    if (selection.fullScoreUrl) {
+      void this.adoptFullScore(selection.fullScoreUrl, token);
+    }
     await this.applyInstrumentSelection(scoreId, token);
   }
 
@@ -324,6 +389,7 @@ export class StudySession {
     this.scoreLoading = false;
     this.scoreError = null;
     this.fullscreenScore = false;
+    this.mobileMeasuresOverride = null;
     this.playbackPosition = null;
     this.playbackCursorX = null;
     this.midiLoaded = false;
@@ -355,7 +421,24 @@ export class StudySession {
   }
 
   private storageKey(id: string) {
-    return `study_instruments_${id}`;
+    return selectionStorageKey(this.ownerId, id);
+  }
+
+  private async adoptFullScore(url: string, token: number) {
+    try {
+      const response = await fetch(rewriteDevApiUrl(url));
+      if (!response.ok || token !== this.loadToken) return;
+      const xml = await response.text();
+      if (token !== this.loadToken || !xml.includes('<')) return;
+      this.sourceXml = xml;
+      const instruments = extractInstrumentsFromXml(xml);
+      if (instruments.length > this.availableInstruments.length) {
+        this.availableInstruments = instruments;
+        this.emit();
+      }
+    } catch {
+      /* a partitura recortada continua utilizável */
+    }
   }
 
   private readStoredSelection(id: string): { score: string[]; midi: string[] } {
@@ -397,7 +480,10 @@ export class StudySession {
     xml: string,
     selection: StudyInstrumentSelection,
   ) {
-    const instruments = extractInstrumentsFromXml(xml);
+    const instruments =
+      selection.catalog && selection.catalog.length > 0
+        ? selection.catalog
+        : extractInstrumentsFromXml(xml);
     this.availableInstruments = instruments;
     const availableIds = new Set(this.availableInstruments.map((i) => i.id));
     const stored = this.readStoredSelection(scoreId);
@@ -410,12 +496,14 @@ export class StudySession {
       availableIds.has(id),
     );
     const allIds = this.availableInstruments.map((i) => i.id);
-    this.selectedInstrumentIds =
+    const scoreIds =
       requestedScoreIds.length > 0
         ? requestedScoreIds
         : storedScore.length > 0
           ? storedScore
           : allIds;
+    this.selectedInstrumentIds =
+      isMobileView() && scoreIds.length > 1 ? [scoreIds[0]] : scoreIds;
     this.selectedMidiInstrumentIds =
       requestedMidiIds.length > 0
         ? requestedMidiIds
@@ -433,6 +521,12 @@ export class StudySession {
   }
 
   toggleInstrument(id: string, checked: boolean) {
+    if (isMobileView()) {
+      if (!checked) return;
+      this.selectedInstrumentIds = [id];
+      this.emit();
+      return;
+    }
     const selected = new Set(this.selectedInstrumentIds);
     if (checked) selected.add(id);
     else selected.delete(id);
@@ -441,7 +535,7 @@ export class StudySession {
   }
 
   selectAllInstruments() {
-    if (this.availableInstruments.length === 0) return;
+    if (isMobileView() || this.availableInstruments.length === 0) return;
     this.selectedInstrumentIds = this.availableInstruments.map((i) => i.id);
     this.emit();
   }
@@ -525,6 +619,20 @@ export class StudySession {
     try {
       const available = this.availableInstruments;
       const selectedIds = this.selectedInstrumentIds;
+      if (/^\d+$/.test(id) && this.sourceXml) {
+        const present = new Set(extractInstrumentsFromXml(this.sourceXml).map((item) => item.id));
+        const needed = Array.from(new Set([...selectedIds, ...this.selectedMidiInstrumentIds]));
+        if (needed.some((partId) => !present.has(partId))) {
+          try {
+            const xml = await fetchFilteredXml(id, needed);
+            if (token !== this.loadToken) return;
+            this.sourceXml = xml;
+          } catch {
+            /* segue com o XML que já está carregado */
+          }
+        }
+      }
+      if (!this.sourceXml || token !== this.loadToken) return;
       const midiSelectedIds = this.selectedMidiInstrumentIds;
       const selectionKey = `${[...selectedIds].sort().join('|')}::midi:${[
         ...midiSelectedIds,
@@ -543,6 +651,7 @@ export class StudySession {
         available.length > 0 &&
         midiSelectedIds.length > 0 &&
         midiSelectedIds.length < available.length;
+      const serverMidi = this.prefetchServerMidi(id, midiSelectedIds);
       const scoreXml = shouldFilter
         ? filterXmlByPartIds(this.sourceXml, selectedIds)
         : this.sourceXml;
@@ -552,6 +661,7 @@ export class StudySession {
       await this.renderScoreWithOsmd(scoreXml, token);
       if (token !== this.loadToken) return;
       await this.initVerovioPlayerInHiddenContainer(midiXml, id, token);
+      await serverMidi;
       if (token !== this.loadToken) return;
       this.lastRenderedSelectionKey = selectionKey;
       this.lastAppliedInstrumentIds = [...selectedIds];
@@ -593,13 +703,7 @@ export class StudySession {
       }
       this.clearOsmdInner(mount);
       const mobile = isMobileView();
-      if (mobile) {
-        this.isMobile = true;
-        this.fullscreenScore = true;
-        this.emit();
-        await this.waitNextFrame();
-        await this.waitNextFrame();
-      }
+      if (mobile) this.isMobile = true;
       this.osmd = new OpenSheetMusicDisplay(mount, {
         drawingParameters: 'default',
         autoResize: !mobile,
@@ -608,7 +712,8 @@ export class StudySession {
         cursorsOptions: [{ type: 1, color: '#dc2626', alpha: 0.95, follow: false }],
       });
       await this.osmd.load(xml);
-      this.fitScoreToViewport();
+      if (mobile) this.applyMobileLayout();
+      else this.fitScoreToViewport();
       await this.osmd.render();
       await this.shrinkPageToContainer();
       this.osmd.enableOrDisableCursors?.(true);
@@ -617,7 +722,6 @@ export class StudySession {
       if (token === this.loadToken) {
         this.xmlLoaded = true;
         this.scoreLoading = false;
-        if (isMobileView()) this.fullscreenScore = true;
       }
     } catch (err) {
       console.error('Falha ao renderizar a partitura com o OSMD:', err);
@@ -629,17 +733,64 @@ export class StudySession {
     this.emit();
   }
 
-  /** No celular, a página A4 é reduzida para a largura da tela. */
-  private fitScoreToViewport() {
+  /**
+   * No celular a pauta precisa ocupar a largura da tela com zoom legível.
+   * Encolher a página A4 inteira deixa os compassos pequenos demais.
+   */
+  private applyMobileLayout() {
     if (!this.osmd || !isMobileView()) return;
     const container = this.options.getScoreContainer() ?? this.options.getOsmdContainer();
-    const available = Math.max(240, (container?.clientWidth ?? window.innerWidth) - 8);
-    const pageWidth =
-      (this.osmd as { EngravingRules?: { PageFormat?: { width?: number } } }).EngravingRules
-        ?.PageFormat?.width ?? 210;
-    if (pageWidth <= 0) return;
-    const zoom = available / (pageWidth * 10);
-    (this.osmd as { Zoom: number }).Zoom = Math.max(0.15, Math.min(0.9, zoom));
+    const available = Math.max(280, container?.clientWidth ?? window.innerWidth);
+    const rules = this.osmd.EngravingRules;
+    const zoom = 1;
+    const measures = this.currentMobileMeasures();
+    const pageWidth = available / (10 * zoom);
+    rules.PageFormat.width = pageWidth;
+    rules.PageLeftMargin = 0.3;
+    rules.PageRightMargin = 0.3;
+    rules.SystemLeftMargin = 0;
+    rules.SystemRightMargin = 0;
+    rules.RenderXMeasuresPerLineAkaSystem = measures;
+    rules.FixedMeasureWidth = true;
+    const innerWidth = Math.max(8, pageWidth - rules.PageLeftMargin - rules.PageRightMargin);
+    rules.FixedMeasureWidthFixedValue = Math.max(8, (innerWidth * 0.98) / measures);
+    rules.VoiceSpacingMultiplierVexflow = 0.55;
+    rules.NewSystemAtXMLNewSystemAttribute = false;
+    rules.NewSystemAtXMLNewPageAttribute = false;
+    rules.NewPageAtXMLNewPageAttribute = false;
+    rules.StretchLastSystemLine = true;
+    (this.osmd as { Zoom: number }).Zoom = zoom;
+  }
+
+  private currentMobileMeasures(): number {
+    if (this.mobileMeasuresOverride != null) {
+      return Math.min(MOBILE_MEASURES_MAX, Math.max(MOBILE_MEASURES_MIN, this.mobileMeasuresOverride));
+    }
+    const container = this.options.getScoreContainer() ?? this.options.getOsmdContainer();
+    const available = Math.max(280, container?.clientWidth ?? (typeof window !== 'undefined' ? window.innerWidth : 360));
+    return measuresPerMobileLine(available);
+  }
+
+  private async rerenderMobileLayout() {
+    if (!this.osmd || this.mobileLayoutRendering) return;
+    this.mobileLayoutRendering = true;
+    this.emit();
+    try {
+      this.applyMobileLayout();
+      await this.osmd.render();
+      this.osmdPlaybackRenderer?.onResize();
+      if (this.isPlaying) this.syncPlaybackCursor();
+    } catch (err) {
+      console.error('Falha ao aplicar o zoom da partitura:', err);
+    } finally {
+      this.mobileLayoutRendering = false;
+      this.emit();
+    }
+  }
+
+  /** No celular, a página A4 é reduzida para a largura da tela. */
+  private fitScoreToViewport() {
+    this.applyMobileLayout();
   }
 
   private async shrinkPageToContainer() {
@@ -650,9 +801,16 @@ export class StudySession {
     if (!container || !svg) return;
     const available = Math.max(240, container.clientWidth - 8);
     const rendered = svg.getBoundingClientRect().width;
-    if (rendered <= available + 16 || rendered <= 0) return;
+    if (rendered <= available + 8 || rendered <= 0) return;
     const current = this.osmd.Zoom > 0 ? this.osmd.Zoom : 1;
-    (this.osmd as { Zoom: number }).Zoom = Math.max(0.12, current * (available / rendered));
+    const next = current * (available / rendered);
+    if (next < 0.85) {
+      const rules = this.osmd.EngravingRules;
+      rules.PageFormat.width = Math.max(28, rules.PageFormat.width * (next / 0.85));
+      (this.osmd as { Zoom: number }).Zoom = 0.85;
+    } else {
+      (this.osmd as { Zoom: number }).Zoom = next;
+    }
     await this.osmd.render();
   }
 
@@ -1167,28 +1325,32 @@ export class StudySession {
         return null;
       }
     }
-    const cached = this.midiCache.get(this.currentScoreId);
+    const key = this.midiCacheKey(this.currentScoreId, this.selectedMidiInstrumentIds);
+    const cached = this.midiCache.get(key);
     if (cached) return cached;
     const midi = await this.tryGetMidi(this.currentScoreId);
-    if (midi) this.midiCache.set(this.currentScoreId, midi);
+    if (midi) this.midiCache.set(key, midi);
     return midi;
   }
 
+  private midiCacheKey(id: string, partIds: string[]) {
+    return `${id}::${[...partIds].sort().join('|')}`;
+  }
+
+  private prefetchServerMidi(id: string, partIds: string[]) {
+    if (!/^\d+$/.test(id) || partIds.length === 0) return Promise.resolve();
+    const key = this.midiCacheKey(id, partIds);
+    if (this.midiCache.has(key)) return Promise.resolve();
+    return fetchPartMidi(id, partIds)
+      .then((midi) => {
+        if (midi) this.midiCache.set(key, midi);
+      })
+      .catch(() => undefined);
+  }
+
   private async tryGetMidi(id: string): Promise<ArrayBuffer | null> {
-    const base = this.options.getApiUrl();
-    try {
-      const r = await fetch(`${base}/scores/${encodeURIComponent(id)}/midi`);
-      if (r.ok) return await r.arrayBuffer();
-    } catch {
-      /* continue */
-    }
-    try {
-      const r = await fetch(`${base}/scores/${encodeURIComponent(id)}/midi?generate=true`);
-      if (r.ok) return await r.arrayBuffer();
-    } catch {
-      /* ignore */
-    }
-    return null;
+    if (!/^\d+$/.test(id)) return null;
+    return fetchPartMidi(id, this.selectedMidiInstrumentIds);
   }
 
   private scheduleMidiPrefetch() {

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { PostBlocks } from '@/components/blog/PostBlocks';
+import { MusicLoader } from '@/components/MusicLoader';
 import { readBlocks } from '@/domains/media/blocks';
 import { apiFetch } from '@/lib/api';
 import { formatPublishedDate, mediaKindLabel } from '@/lib/publicPortal';
@@ -30,7 +31,7 @@ export default function BlogPostPage() {
   if (post === undefined) {
     return (
       <div className={postShellClass}>
-        <p className="text-[var(--muted)]">Carregando…</p>
+        <MusicLoader />
       </div>
     );
   }

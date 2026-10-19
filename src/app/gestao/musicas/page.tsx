@@ -6,7 +6,7 @@ export default function MusicasPage() {
   return (
     <DomainWorkspace
       resource="songs"
-      entityFields={['title', 'composer', 'arranger', 'key', 'scores', 'status']}
+      entityFields={['title', 'composer', 'arranger', 'key', 'visibility', 'hasScore', 'status']}
     />
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { MusicLoader } from '@/components/MusicLoader';
 import { apiFetch } from '@/lib/api';
 import { failureMessage } from '@/lib/userMessages';
 import {
@@ -88,7 +89,7 @@ export function HomepageEditor() {
   };
 
   if (loading || !draft) {
-    return <p className="text-[var(--muted)]">Carregando editor…</p>;
+    return <MusicLoader label="Carregando editor…" />;
   }
 
   return (
@@ -153,7 +154,7 @@ export function HomepageEditor() {
             Ver home
           </Link>
           <button type="button" className="btn-primary min-h-11 px-5" disabled={saving} onClick={() => void save()}>
-            {saving ? 'Salvando…' : 'Publicar'}
+            {saving ? <MusicLoader compact label="Salvando…" /> : 'Publicar'}
           </button>
         </div>
       </div>

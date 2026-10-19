@@ -6,7 +6,7 @@ export default function InstrumentosPage() {
   return (
     <DomainWorkspace
       resource="instruments"
-      entityFields={['code', 'name', 'family', 'status', 'location', 'assignedPersonId']}
+      entityFields={['name', 'family', 'subclass', 'tuning', 'tessitura', 'signalType', 'status']}
     />
   );
 }

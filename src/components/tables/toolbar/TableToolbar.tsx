@@ -1,6 +1,7 @@
 "use client";
 
 import type { ChangeEventHandler, ReactNode } from "react";
+import { MusicLoader } from "@/components/MusicLoader";
 import { TableCheckbox } from "./TableCheckbox";
 import { TableDebouncedInput } from "../inputs/TableDebouncedInput";
 import { TableActionButton } from "./TableActionButton";
@@ -90,7 +91,7 @@ export function TableToolbar({
           />
         )}
         <TableActionButton onClick={onRefresh} disabled={isLoading}>
-          {isLoading ? (labels?.refreshing ?? "Carregando…") : (labels?.refresh ?? "Atualizar dados")}
+          {isLoading ? <MusicLoader compact label={labels?.refreshing ?? "Carregando…"} /> : (labels?.refresh ?? "Atualizar dados")}
         </TableActionButton>
         <TableActionButton onClick={onReset}>{labels?.reset ?? "Redefinir tabela"}</TableActionButton>
       </div>

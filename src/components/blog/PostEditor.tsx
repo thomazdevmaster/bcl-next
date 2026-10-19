@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { MediaSourceField } from '@/components/blog/MediaSourceField';
+import { MusicLoader } from '@/components/MusicLoader';
 import { PostBlocks } from '@/components/blog/PostBlocks';
 import { RichTextEditor } from '@/components/blog/RichTextEditor';
 import {
@@ -135,7 +136,7 @@ export function PostEditor({ postId }: PostEditorProps) {
   };
 
   if (loading || !post) {
-    return <p className="text-[var(--muted)]">{error ?? 'Carregando post…'}</p>;
+    return error ? <p className="text-[var(--destructive)]">{error}</p> : <MusicLoader label="Carregando post…" />;
   }
 
   return (
@@ -277,7 +278,7 @@ export function PostEditor({ postId }: PostEditorProps) {
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border)] bg-[var(--card)] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div className="mx-auto flex max-w-3xl justify-end">
           <button type="button" className="btn-primary min-h-11 px-5" disabled={saving} onClick={() => void save()}>
-            {saving ? 'Salvando…' : postId ? 'Salvar post' : 'Criar post'}
+            {saving ? <MusicLoader compact label="Salvando…" /> : postId ? 'Salvar post' : 'Criar post'}
           </button>
         </div>
       </div>
@@ -491,7 +492,7 @@ function AlbumFields({
         </button>
       </div>
       <label className="btn-outline-primary inline-flex min-h-11 cursor-pointer items-center px-4 text-sm">
-        {uploading ? 'Enviando…' : 'Enviar várias fotos'}
+        {uploading ? <MusicLoader compact label="Enviando…" /> : 'Enviar várias fotos'}
         <input
           type="file"
           accept="image/*"

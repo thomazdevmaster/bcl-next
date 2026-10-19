@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserAvatar } from '@/components/auth/UserAvatar';
+import { MusicLoader } from '@/components/MusicLoader';
 import { apiFetch } from '@/lib/api';
 import type { SessionUser } from '@/contexts/AuthContext';
 import { userFacingError } from '@/lib/userMessages';
@@ -118,7 +119,7 @@ export default function CompletarCadastroPage() {
             </p>
           ) : null}
           <button type="submit" className="btn-primary min-h-11 w-full" disabled={saving}>
-            {saving ? 'Salvando…' : 'Continuar para o painel'}
+            {saving ? <MusicLoader compact label="Salvando…" /> : 'Continuar para o painel'}
           </button>
         </form>
       </div>

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { hasRole } from '@/core/auth/roles';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api';
+import { MusicLoader } from '@/components/MusicLoader';
 import { userFacingError } from '@/lib/userMessages';
 
 type CatalogAction = { action: string; label: string };
@@ -18,6 +19,7 @@ type RoleRecord = {
   description: string | null;
   systemRole: boolean;
   locked: boolean;
+  updatedBy?: string;
   permissions: string[];
   users: RoleMember[];
 };
@@ -198,7 +200,7 @@ export default function PapeisPage() {
       {error && <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>}
 
       {loading ? (
-        <p className="text-[var(--muted)]">Carregando papéis…</p>
+        <MusicLoader label="Carregando papéis…" />
       ) : (
         <div className="grid gap-6 lg:grid-cols-[16rem_1fr]">
           <ul className="space-y-2">
@@ -215,7 +217,7 @@ export default function PapeisPage() {
                 >
                   <span className="block font-semibold">{role.name}</span>
                   <span className="text-xs text-[var(--muted)]">
-                    {role.code} · {role.users.length} usuário{role.users.length === 1 ? '' : 's'}
+                    {role.code} · {role.users.length} usuário{role.users.length === 1 ? '' : 's'} · alterado por {role.updatedBy || 'system'}
                   </span>
                 </button>
               </li>
@@ -326,7 +328,7 @@ export default function PapeisPage() {
 
               <div className="flex flex-wrap gap-3">
                 <button type="submit" className="btn-primary min-h-11" disabled={saving}>
-                  {saving ? 'Salvando…' : 'Salvar papel'}
+                  {saving ? <MusicLoader compact label="Salvando…" /> : 'Salvar papel'}
                 </button>
                 {selected && !selected.locked && (
                   <button type="button" className="btn-danger min-h-11" disabled={saving} onClick={() => void remove()}>

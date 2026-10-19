@@ -12,6 +12,7 @@ import {
 import { parseMediaPost } from '@/domains/media/blocks';
 import type { MediaPost } from '@/domains/media/types';
 import { orderMediaPosts } from '@/lib/publicPortal';
+import { MusicLoader } from '@/components/MusicLoader';
 import { apiFetch } from '@/lib/api';
 import { failureMessage } from '@/lib/userMessages';
 
@@ -91,7 +92,7 @@ export function BlogLayoutEditor() {
     }
   };
 
-  if (loading || !layout) return <p className="text-[var(--muted)]">Carregando organização…</p>;
+  if (loading || !layout) return <MusicLoader label="Carregando organização…" />;
 
   const postsById = new Map(posts.map((post) => [String(post.id), post]));
 
@@ -187,7 +188,7 @@ export function BlogLayoutEditor() {
         <div className="mx-auto flex max-w-3xl justify-end gap-2">
           <Link href="/blog" className="btn-outline-primary inline-flex min-h-11 items-center px-4 text-sm">Ver blog</Link>
           <button type="button" className="btn-primary min-h-11 px-5" disabled={saving} onClick={() => void save()}>
-            {saving ? 'Salvando…' : 'Publicar'}
+            {saving ? <MusicLoader compact label="Salvando…" /> : 'Publicar'}
           </button>
         </div>
       </div>

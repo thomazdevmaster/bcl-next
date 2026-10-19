@@ -15,5 +15,9 @@ export interface Song extends Auditable {
   key?: string;
   durationSeconds?: number;
   scores: SongScore[];
+  visibility: 'public' | 'private';
+  visibleToStudents?: boolean;
+  visibleToMusicians?: boolean;
+  videoUrl?: string;
   status: RecordStatus;
 }

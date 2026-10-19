@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { MusicLoader } from '@/components/MusicLoader';
 import { BlogPostCard } from '@/components/public/BlogPostCard';
 import { PortalPageHeader } from '@/components/public/PortalPageHeader';
 import { blogSection, defaultBlogPage, parseBlogPage, type BlogPageDocument } from '@/domains/blog/layout';
@@ -93,13 +94,7 @@ export default function BlogPage() {
       ) : null}
 
       {error ? <p className="mt-8 text-[var(--destructive)]">{error}</p> : null}
-      {loading ? (
-        <div className="mt-10 grid gap-6 md:grid-cols-2">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="h-72 animate-pulse rounded-2xl bg-[var(--card-secondary)]" aria-hidden />
-          ))}
-        </div>
-      ) : null}
+      {loading ? <MusicLoader label="Carregando publicações…" className="mt-10" /> : null}
 
       {!loading && !error && filtered.length === 0 ? (
         <p className="mt-10 text-[var(--muted)]">Nenhuma publicação nesta categoria.</p>

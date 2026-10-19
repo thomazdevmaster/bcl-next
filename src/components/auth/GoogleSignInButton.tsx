@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { getGoogleClientId, loadGoogleIdentity } from '@/lib/googleIdentity';
+import { MusicLoader } from '@/components/MusicLoader';
 import { failureMessage, userFacingError } from '@/lib/userMessages';
 
 type Props = {
@@ -87,8 +88,7 @@ export function GoogleSignInButton({ onCredential, text = 'continue_with', disab
               aria-hidden="true"
               className="absolute inset-0 flex min-h-11 items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--input)] text-sm text-[var(--muted)]"
             >
-              <GoogleMark />
-              Carregando Google…
+              <MusicLoader compact label="Carregando Google…" />
             </div>
           )}
         </div>

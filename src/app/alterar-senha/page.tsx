@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { MusicLoader } from '@/components/MusicLoader';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { sealPassword } from '@/lib/passwordCipher';
@@ -114,7 +115,7 @@ export default function AlterarSenhaPage() {
             </p>
           )}
           <button type="submit" className="btn-primary min-h-11" disabled={saving}>
-            {saving ? 'Salvando…' : 'Salvar e continuar'}
+            {saving ? <MusicLoader compact label="Salvando…" /> : 'Salvar e continuar'}
           </button>
         </form>
       </div>

@@ -3,6 +3,7 @@
 import { FormEvent, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { MusicLoader } from '@/components/MusicLoader';
 import { apiFetch } from '@/lib/api';
 import { postLoginRoute } from '@/core/auth/postLoginRoute';
 import { sealPassword } from '@/lib/passwordCipher';
@@ -250,7 +251,7 @@ export default function CadastroPage() {
                 </p>
               )}
               <button type="submit" className="btn-primary min-h-11 w-full lg:col-span-2" disabled={saving}>
-                {saving ? 'Enviando…' : 'Enviar cadastro'}
+                {saving ? <MusicLoader compact label="Enviando…" /> : 'Enviar cadastro'}
               </button>
               <Link href="/login" className="inline-flex min-h-11 items-center justify-center text-sm lg:col-span-2">
                 Já tenho conta

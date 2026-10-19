@@ -7,7 +7,7 @@ const StudyRouteClient = dynamic(() => import('@/study/StudyRouteClient'), { ssr
 
 export default function StudyRoutePage() {
   return (
-    <DomainGuard resource="songs">
+    <DomainGuard resource="songs" requireLogin>
       <StudyRouteClient />
     </DomainGuard>
   );
