@@ -6,11 +6,13 @@ type Props = {
   busy: boolean;
   onBack: () => void;
   onNext: () => void;
+  onSubmit?: () => void;
   continueLabel?: string;
   backLabel?: string;
   submitLabel?: string;
   pendingLabel?: string;
   pendingContent?: ReactNode;
+  submitDisabled?: boolean;
   desktop?: boolean;
   centered?: boolean;
   fullWidth?: boolean;
@@ -25,11 +27,13 @@ export function FormStageActions({
   busy,
   onBack,
   onNext,
+  onSubmit,
   continueLabel = "Continuar",
   backLabel = "Voltar",
   submitLabel = "Enviar",
   pendingLabel = "Enviando…",
   pendingContent,
+  submitDisabled = false,
   desktop = false,
   centered = false,
   fullWidth = false,
@@ -58,8 +62,9 @@ export function FormStageActions({
         </button>
       ) : (
         <button
-          type="submit"
-          disabled={busy}
+          type={onSubmit ? "button" : "submit"}
+          onClick={onSubmit}
+          disabled={busy || submitDisabled}
           className={`btn-primary inline-flex min-h-12 ${buttonWidthClass} items-center justify-center rounded-xl px-5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${buttonMotion}`}
         >
           {busy ? pendingContent ?? pendingLabel : submitLabel}

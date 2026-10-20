@@ -1,4 +1,9 @@
-import type { FocusEventHandler, InputHTMLAttributes, ReactNode, Ref } from "react";
+import type {
+  FocusEventHandler,
+  InputHTMLAttributes,
+  ReactNode,
+  Ref,
+} from "react";
 
 export type StyledSize = "sm" | "md" | "lg" | "xl";
 export type ValidationState = "valid" | "invalid" | "warning" | "info";
@@ -34,4 +39,13 @@ export interface FieldProps {
   minLength?: number;
   max?: string;
   maxLength?: number;
+  renderControl?: (props: {
+    id: string;
+    labelId: string;
+    name?: string;
+    describedBy?: string;
+    invalid: boolean;
+    className: string;
+  }) => ReactNode;
+  labelForControl?: boolean;
 }

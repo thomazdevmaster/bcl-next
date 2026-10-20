@@ -28,9 +28,12 @@ export function FormFieldValidationShell({
   minLength,
   max,
   maxLength,
+  renderControl,
+  labelForControl = true,
 }: FieldProps) {
   const base = React.useId();
   const controlId = `${base}-control`;
+  const labelId = `${base}-label`;
   const descId = description != null && description !== false ? `${base}-desc` : undefined;
   const hasMessage = message != null && message !== false;
   const msgId = hasMessage ? `${base}-msg` : undefined;
@@ -42,7 +45,8 @@ export function FormFieldValidationShell({
       <div>
         <div className="relative mt-2">
           <label
-            htmlFor={controlId}
+            id={labelId}
+            htmlFor={!renderControl || labelForControl ? controlId : undefined}
             data-slot="styled-field-label"
             className={`absolute left-3 top-0 z-10 inline-flex -translate-y-1/2 items-center gap-1.5 whitespace-nowrap bg-[var(--input)] px-1 font-medium leading-4 select-none ${labelText[size]} ${status.tone}`}
           >
@@ -62,7 +66,14 @@ export function FormFieldValidationShell({
               </span>
             ) : null}
           </label>
-          <input
+          {renderControl ? renderControl({
+            id: controlId,
+            labelId,
+            name,
+            describedBy,
+            invalid: state === "invalid",
+            className: `${controlBase} ${controlHeight[size]} ${status.border} ${hasMessage ? "rounded-b-none" : ""}`,
+          }) : <input
             ref={inputRef}
             id={controlId}
             name={name}
@@ -83,7 +94,7 @@ export function FormFieldValidationShell({
             onChange={onValueChange ? (event) => onValueChange(event.target.value) : undefined}
             onBlur={onBlur}
             className={`${controlBase} ${controlHeight[size]} ${status.border} ${hasMessage ? "rounded-b-none" : ""}`}
-          />
+          />}
           {endAdornment ? (
             <div className="absolute right-0 top-1/2 -translate-y-1/2">{endAdornment}</div>
           ) : null}
