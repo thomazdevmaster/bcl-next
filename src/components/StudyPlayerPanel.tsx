@@ -8,6 +8,8 @@ type PlayerSlice = {
   midiLoaded: boolean;
   midiLoading: boolean;
   playerError: string | null;
+  audioReady?: boolean;
+  audioPreparing?: boolean;
   playerExpanded: boolean;
   bpm: number;
   bpmMin: number;
@@ -40,6 +42,27 @@ type Props = {
   onLoopEnd: (v: number | null) => void;
 };
 
+function audioLoaderLabel(state: PlayerSlice): string {
+  if (state.playerLoading || !state.playerReady) return 'Preparando o player…';
+  if (state.midiLoading) return 'Carregando áudio (MIDI)…';
+  return 'Preparando áudio…';
+}
+
+function resolveAudioReady(state: PlayerSlice): boolean {
+  if (state.audioReady != null) return state.audioReady;
+  return (
+    state.playerReady &&
+    state.midiLoaded &&
+    !state.playerLoading &&
+    !state.midiLoading
+  );
+}
+
+function resolveAudioPreparing(state: PlayerSlice): boolean {
+  if (state.audioPreparing != null) return state.audioPreparing;
+  return !resolveAudioReady(state) && !state.playerError;
+}
+
 export function StudyPlayerPanel({
   state,
   mobileControlsOnly = false,
@@ -56,16 +79,18 @@ export function StudyPlayerPanel({
   onLoopStart,
   onLoopEnd,
 }: Props) {
-  const disabledTransport = state.loading || state.playerLoading;
+  const audioReady = resolveAudioReady(state);
+  const audioPreparing = resolveAudioPreparing(state);
+  const disabledTransport = state.loading || !audioReady;
 
   if (settingsOnly) {
     return (
       <div className="flex flex-col gap-3">
-        {!state.playerReady ? (
+        {audioPreparing ? (
           state.playerError ? (
             <p className="text-sm text-[var(--muted)]">{failureMessage(undefined, state.playerError)}</p>
           ) : (
-            <MusicLoader label="Preparando o player…" />
+            <MusicLoader label={audioLoaderLabel(state)} />
           )
         ) : (
           <PlayerSettings
@@ -118,16 +143,22 @@ export function StudyPlayerPanel({
             </span>
             <span>Player</span>
           </div>
-          <div className="hidden md:flex items-center gap-1">
-            <button type="button" className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-transparent ${disabledTransport ? 'cursor-not-allowed opacity-40' : 'hover:bg-[var(--secondary)]'} ${state.playerExpanded ? 'text-[var(--primary)]' : ''}`} onClick={onPlay} disabled={disabledTransport} aria-label="Play">
-              <span className="material-icons">play_arrow</span>
-            </button>
-            <button type="button" className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-transparent ${disabledTransport ? 'cursor-not-allowed opacity-40' : 'hover:bg-[var(--secondary)]'}`} onClick={onPause} disabled={disabledTransport} aria-label="Pausar">
-              <span className="material-icons">pause</span>
-            </button>
-            <button type="button" className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-transparent ${disabledTransport ? 'cursor-not-allowed opacity-40' : 'hover:bg-[var(--secondary)]'}`} onClick={onStop} disabled={disabledTransport} aria-label="Parar">
-              <span className="material-icons">stop</span>
-            </button>
+          <div className="flex min-h-11 min-w-0 flex-1 items-center justify-end gap-1">
+            {audioPreparing && !state.playerError ? (
+              <MusicLoader compact label={audioLoaderLabel(state)} className="py-0" />
+            ) : (
+              <>
+                <button type="button" className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-transparent ${disabledTransport ? 'cursor-not-allowed opacity-40' : 'hover:bg-[var(--secondary)]'} ${state.playerExpanded ? 'text-[var(--primary)]' : ''}`} onClick={onPlay} disabled={disabledTransport} aria-label="Play">
+                  <span className="material-icons">play_arrow</span>
+                </button>
+                <button type="button" className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-transparent ${disabledTransport ? 'cursor-not-allowed opacity-40' : 'hover:bg-[var(--secondary)]'}`} onClick={onPause} disabled={disabledTransport} aria-label="Pausar">
+                  <span className="material-icons">pause</span>
+                </button>
+                <button type="button" className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-transparent ${disabledTransport ? 'cursor-not-allowed opacity-40' : 'hover:bg-[var(--secondary)]'}`} onClick={onStop} disabled={disabledTransport} aria-label="Parar">
+                  <span className="material-icons">stop</span>
+                </button>
+              </>
+            )}
           </div>
           <div className="hidden md:flex items-center gap-2 flex-0 min-w-24 max-w-32">
             <span className="material-icons text-base text-[var(--muted)]" aria-hidden>
@@ -140,7 +171,7 @@ export function StudyPlayerPanel({
               step={0.05}
               value={state.audioVolume}
               onChange={(e) => onAudioVolume(Number(e.target.value))}
-              disabled={state.playerLoading}
+              disabled={!audioReady}
               className="flex-1 min-w-0"
             />
           </div>
@@ -154,30 +185,29 @@ export function StudyPlayerPanel({
       ) : null}
 
       <div className="flex flex-col gap-3 px-3 py-3">
-        {state.playerLoading || !state.midiLoaded ? (
-          <div className="px-3 py-4 text-center">
-            {state.playerLoading || state.midiLoading ? (
-              <MusicLoader
-                compact
-                label={state.playerLoading ? 'Preparando o player…' : 'Carregando áudio (MIDI)…'}
-              />
-            ) : (
-              <p className="text-xs text-[var(--muted)]">Áudio será carregado ao tocar em Play</p>
-            )}
+        {audioPreparing && !state.playerError ? (
+          <div className="px-3 py-2 text-center md:py-4">
+            <MusicLoader compact label={audioLoaderLabel(state)} />
           </div>
         ) : null}
 
         {!mobileControlsOnly ? (
-          <div className="flex items-center gap-2">
-            <button type="button" className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-[var(--primary)] hover:bg-[var(--card-secondary)] ${disabledTransport ? 'cursor-not-allowed opacity-40' : ''}`} onClick={onPlay} disabled={disabledTransport}>
-              <span className="material-icons">play_arrow</span>
-            </button>
-            <button type="button" className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full hover:bg-[var(--card-secondary)] ${disabledTransport ? 'cursor-not-allowed opacity-40' : ''}`} onClick={onPause} disabled={disabledTransport}>
-              <span className="material-icons">pause</span>
-            </button>
-            <button type="button" className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full hover:bg-[var(--card-secondary)] ${disabledTransport ? 'cursor-not-allowed opacity-40' : ''}`} onClick={onStop} disabled={disabledTransport}>
-              <span className="material-icons">stop</span>
-            </button>
+          <div className="flex items-center gap-2 md:hidden">
+            {audioPreparing && !state.playerError ? (
+              <MusicLoader compact label={audioLoaderLabel(state)} className="py-0" />
+            ) : (
+              <>
+                <button type="button" className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-[var(--primary)] hover:bg-[var(--card-secondary)] ${disabledTransport ? 'cursor-not-allowed opacity-40' : ''}`} onClick={onPlay} disabled={disabledTransport}>
+                  <span className="material-icons">play_arrow</span>
+                </button>
+                <button type="button" className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full hover:bg-[var(--card-secondary)] ${disabledTransport ? 'cursor-not-allowed opacity-40' : ''}`} onClick={onPause} disabled={disabledTransport}>
+                  <span className="material-icons">pause</span>
+                </button>
+                <button type="button" className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full hover:bg-[var(--card-secondary)] ${disabledTransport ? 'cursor-not-allowed opacity-40' : ''}`} onClick={onStop} disabled={disabledTransport}>
+                  <span className="material-icons">stop</span>
+                </button>
+              </>
+            )}
           </div>
         ) : null}
 
@@ -239,7 +269,7 @@ function PlayerSettings({
             step={1}
             value={state.bpm}
             onChange={(e) => onTempo(Number(e.target.value))}
-            disabled={state.playerLoading}
+            disabled={disabledTransport}
             aria-label="Andamento"
             className="min-w-0 flex-1"
           />
@@ -257,7 +287,7 @@ function PlayerSettings({
             step={0.05}
             value={state.audioVolume}
             onChange={(e) => onAudioVolume(Number(e.target.value))}
-            disabled={state.playerLoading}
+            disabled={disabledTransport}
             aria-label="Volume"
             className="min-w-0 flex-1"
           />
@@ -288,7 +318,7 @@ function PlayerSettings({
               step={0.05}
               value={state.metronomeVolume}
               onChange={(e) => onMetronomeVolume(Number(e.target.value))}
-              disabled={!state.metronomeEnabled || state.playerLoading}
+              disabled={!state.metronomeEnabled || disabledTransport}
               aria-label="Volume do metrônomo"
               className="min-w-0 flex-1"
             />
@@ -324,7 +354,7 @@ function PlayerSettings({
                 className="text-xs"
               />
             </label>
-            <button type="button" className="btn-primary min-h-11 text-xs disabled:cursor-not-allowed" onClick={onToggleLoop} disabled={state.playerLoading}>
+            <button type="button" className="btn-primary min-h-11 text-xs disabled:cursor-not-allowed" onClick={onToggleLoop} disabled={disabledTransport}>
               {state.loopEnabled ? 'Desativar Loop' : 'Ativar Loop'}
             </button>
           </div>

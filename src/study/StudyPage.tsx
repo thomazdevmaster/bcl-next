@@ -165,6 +165,8 @@ export default function StudyPage() {
       midiLoaded: state.midiLoaded,
       midiLoading: state.midiLoading,
       playerError: state.playerError,
+      audioReady: state.audioReady,
+      audioPreparing: state.audioPreparing,
       playerExpanded: state.playerExpanded,
       bpm: state.bpm,
       bpmMin: state.bpmMin,
@@ -438,18 +440,40 @@ export default function StudyPage() {
                     {state.isMobile ? (
                       <MobileScoreZoom session={session} state={state} />
                     ) : (
-                      <button
-                        type="button"
-                        className="btn-outline-primary inline-flex min-h-11 items-center gap-1.5 text-xs"
-                        onClick={() => session.toggleFullscreenScore()}
-                      >
-                        <span className="material-icons text-base">
-                          {state.fullscreenScore ? 'fullscreen_exit' : 'fullscreen'}
-                        </span>
-                        <span className="hidden md:inline">
-                          {state.fullscreenScore ? 'Sair da tela cheia' : 'Tela cheia'}
-                        </span>
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className={`btn-outline-primary inline-flex min-h-11 items-center gap-1.5 text-xs ${
+                            state.desktopAutoScroll
+                              ? 'border-[var(--primary)] bg-[var(--accent)]/40 text-[var(--foreground)]'
+                              : ''
+                          }`}
+                          onClick={() => session.toggleDesktopAutoScroll()}
+                          aria-pressed={state.desktopAutoScroll}
+                          aria-label={
+                            state.desktopAutoScroll
+                              ? 'Desativar rolagem automática da partitura'
+                              : 'Ativar rolagem automática da partitura'
+                          }
+                        >
+                          <span className="material-icons text-base">vertical_align_center</span>
+                          <span className="hidden md:inline">
+                            {state.desktopAutoScroll ? 'Auto rolagem ligada' : 'Auto rolagem'}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-outline-primary inline-flex min-h-11 items-center gap-1.5 text-xs"
+                          onClick={() => session.toggleFullscreenScore()}
+                        >
+                          <span className="material-icons text-base">
+                            {state.fullscreenScore ? 'fullscreen_exit' : 'fullscreen'}
+                          </span>
+                          <span className="hidden md:inline">
+                            {state.fullscreenScore ? 'Sair da tela cheia' : 'Tela cheia'}
+                          </span>
+                        </button>
+                      </>
                     )}
                   </div>
                 ) : null}

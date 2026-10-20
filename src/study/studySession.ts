@@ -23,10 +23,9 @@ function engravingRules(osmd: OpenSheetMusicDisplay): OsmdEngravingRules {
 import { Player, VerovioConverter } from '@music-i18n/musicxml-player';
 import { fetchAuthedAsset } from '@/lib/api';
 import { failureMessage } from '@/lib/userMessages';
-import { OsmdPlaybackPlayerRendererStub, OsmdPlaybackRenderer } from './osmdPlaybackRenderer';
+import { OsmdPlaybackRenderer } from './osmdPlaybackRenderer';
 import { StudyPlayerController } from './studyPlayerController';
 import {
-  findTimemapIndexAtPosition,
   getPlaybackPositionFromTimemap,
   getPlayerPositionMs,
   readPlayerTimemap,
@@ -74,6 +73,11 @@ export type StudyViewSnapshot = {
   midiLoaded: boolean;
   midiLoading: boolean;
   playerError: string | null;
+  /** Áudio pronto para play (player + MIDI). */
+  audioReady: boolean;
+  /** Preparando áudio após a partitura carregar. */
+  audioPreparing: boolean;
+  desktopAutoScroll: boolean;
   playerExpanded: boolean;
   bpm: number;
   bpmMin: number;
@@ -151,6 +155,15 @@ function mobileLayoutZoom(measuresPerLine: number): number {
   return Math.min(MOBILE_SCALE_MAX, Math.max(MOBILE_SCALE_MIN, raw));
 }
 
+/** Desktop: compassos por linha conforme a largura útil (todos com mesma largura). */
+function measuresPerDesktopLine(width: number): number {
+  if (width < 720) return 3;
+  if (width < 960) return 4;
+  if (width < 1200) return 5;
+  if (width < 1400) return 6;
+  return 8;
+}
+
 export class StudySession {
   private listeners = new Set<() => void>();
   private snapshot: StudyViewSnapshot;
@@ -168,7 +181,6 @@ export class StudySession {
   private midiOnlyMode = false;
   private osmd: OpenSheetMusicDisplay | null = null;
   private osmdPlaybackRenderer: OsmdPlaybackRenderer | null = null;
-  private osmdPlayerRendererStub: OsmdPlaybackPlayerRendererStub | null = null;
   private workletPatched = false;
   private scrollPatched = false;
 
@@ -217,6 +229,7 @@ export class StudySession {
   private midiLoading = false;
   private playerError: string | null = null;
   private playerExpanded = false;
+  private desktopAutoScroll = false;
   private bpm = 100;
   private bpmMin = 40;
   private bpmMax = 200;
@@ -294,6 +307,20 @@ export class StudySession {
       midiLoaded: this.midiLoaded,
       midiLoading: this.midiLoading,
       playerError: this.playerError,
+      audioReady:
+        this.playerReady &&
+        this.midiLoaded &&
+        !this.playerLoading &&
+        !this.midiLoading &&
+        !this.midiOnlyMode,
+      audioPreparing:
+        this.xmlLoaded &&
+        !this.midiOnlyMode &&
+        (!this.playerReady ||
+          this.playerLoading ||
+          this.midiLoading ||
+          !this.midiLoaded),
+      desktopAutoScroll: this.desktopAutoScroll,
       playerExpanded: this.playerExpanded,
       bpm: this.bpm,
       bpmMin: this.bpmMin,
@@ -338,7 +365,7 @@ export class StudySession {
     }
     if (!changed || !this.osmd) return;
     if (isMobile) this.applyMobileLayout();
-    else engravingRules(this.osmd).RenderXMeasuresPerLineAkaSystem = 0;
+    else this.applyDesktopLayout();
     void this.osmd.render();
   }
 
@@ -350,7 +377,8 @@ export class StudySession {
       else this.fitScoreToViewport();
       const p = this.osmd?.render?.();
       const afterRender = () => {
-        this.osmdPlaybackRenderer?.onLayoutChanged();
+        this.osmdPlaybackRenderer?.onResize();
+        this.applyOsmdCursorStyle();
         if (this.isPlaying) this.syncPlaybackCursor();
       };
       if (p && typeof (p as Promise<void>).then === 'function') {
@@ -367,6 +395,12 @@ export class StudySession {
 
   toggleFullscreenScore() {
     this.setFullscreenScore(!this.fullscreenScore);
+  }
+
+  toggleDesktopAutoScroll() {
+    if (this.isMobile) return;
+    this.desktopAutoScroll = !this.desktopAutoScroll;
+    this.emit();
   }
 
   /**
@@ -817,7 +851,6 @@ export class StudySession {
         drawingParameters: 'default',
         autoResize: !mobile,
         followCursor: false,
-        disableCursor: true,
         pageFormat: 'Endless',
         cursorsOptions: [{ type: 1, color: '#dc2626', alpha: 0.95, follow: false }],
       });
@@ -826,7 +859,8 @@ export class StudySession {
       else this.fitScoreToViewport();
       await this.osmd.render();
       await this.shrinkPageToContainer();
-      this.osmd.enableOrDisableCursors?.(false);
+      this.osmd.enableOrDisableCursors?.(true);
+      this.applyOsmdCursorStyle();
       this.osmdPlaybackRenderer?.resetCursor();
       if (token === this.loadToken) {
         this.xmlLoaded = true;
@@ -850,10 +884,24 @@ export class StudySession {
     if (!this.osmd || !isMobileView()) return;
     const container = this.options.getScoreContainer() ?? this.options.getOsmdContainer();
     const available = Math.max(280, container?.clientWidth ?? window.innerWidth);
-    const rules = engravingRules(this.osmd);
     const measures = this.currentMobileMeasures();
-    const zoom = mobileLayoutZoom(measures);
-    const pageWidth = available / (10 * zoom);
+    this.applyFixedMeasureLayout(measures, available, mobileLayoutZoom(measures));
+  }
+
+  /** Desktop: mesma largura por compasso na linha (Endless, largura da área da partitura). */
+  private applyDesktopLayout() {
+    if (!this.osmd || isMobileView()) return;
+    const container = this.options.getScoreContainer() ?? this.options.getOsmdContainer();
+    const available = Math.max(480, container?.clientWidth ?? window.innerWidth);
+    const measures = measuresPerDesktopLine(available);
+    this.applyFixedMeasureLayout(measures, available, 1);
+  }
+
+  private applyFixedMeasureLayout(measuresPerLine: number, availableWidth: number, zoom: number) {
+    if (!this.osmd) return;
+    const rules = engravingRules(this.osmd);
+    const measures = Math.max(1, measuresPerLine);
+    const pageWidth = availableWidth / (10 * zoom);
     rules.PageLeftMargin = 0.3;
     rules.PageRightMargin = 0.3;
     rules.SystemLeftMargin = 0;
@@ -887,8 +935,10 @@ export class StudySession {
     try {
       this.applyMobileLayout();
       await this.osmd.render();
-      await this.fitMobileScoreWidthIfNeeded();
-      this.osmdPlaybackRenderer?.onLayoutChanged();
+      await this.fitScoreWidthIfNeeded();
+      this.osmd.enableOrDisableCursors?.(true);
+      this.applyOsmdCursorStyle();
+      this.osmdPlaybackRenderer?.onResize();
       if (this.isPlaying) this.syncPlaybackCursor();
     } catch (err) {
       console.error('Falha ao aplicar o zoom da partitura:', err);
@@ -898,18 +948,19 @@ export class StudySession {
     }
   }
 
-  /** No celular, a página A4 é reduzida para a largura da tela. */
+  /** Ajusta regras de layout à largura da área da partitura (mobile ou desktop). */
   private fitScoreToViewport() {
-    this.applyMobileLayout();
+    if (isMobileView()) this.applyMobileLayout();
+    else this.applyDesktopLayout();
   }
 
   private async shrinkPageToContainer() {
-    await this.fitMobileScoreWidthIfNeeded();
+    await this.fitScoreWidthIfNeeded();
   }
 
-  /** Só encolhe se a SVG passar da largura útil; respeita o piso de zoom do layout mobile. */
-  private async fitMobileScoreWidthIfNeeded() {
-    if (!this.osmd || !isMobileView()) return;
+  /** Só encolhe se a SVG passar da largura útil. */
+  private async fitScoreWidthIfNeeded() {
+    if (!this.osmd) return;
     const mount = this.options.getOsmdContainer();
     const container = this.options.getScoreContainer() ?? mount;
     const svg = mount?.querySelector('svg');
@@ -918,7 +969,9 @@ export class StudySession {
     const rendered = svg.getBoundingClientRect().width;
     if (rendered <= available + 8 || rendered <= 0) return;
 
-    const floorZoom = mobileLayoutZoom(this.currentMobileMeasures()) * 0.92;
+    const floorZoom = isMobileView()
+      ? mobileLayoutZoom(this.currentMobileMeasures()) * 0.92
+      : 0.55;
     const current = this.osmd.Zoom > 0 ? this.osmd.Zoom : 1;
     let next = current * (available / rendered);
     if (next >= floorZoom) {
@@ -990,11 +1043,12 @@ export class StudySession {
         this.osmdPlaybackRenderer = new OsmdPlaybackRenderer(
           () => this.osmd,
           () => this.options.getScoreContainer(),
-          () => this.isPlaying && (this.isMobile || this.fullscreenScore),
+          () =>
+            this.isPlaying &&
+            (this.isMobile || (this.desktopAutoScroll && !this.isMobile)),
         );
-        this.osmdPlayerRendererStub = new OsmdPlaybackPlayerRendererStub(this.osmdPlaybackRenderer);
       }
-      const renderer = this.osmdPlayerRendererStub ?? this.osmdPlaybackRenderer;
+      const renderer = this.osmdPlaybackRenderer;
       try {
         this.player = await Player.create({
           container: el,
@@ -1259,34 +1313,30 @@ export class StudySession {
     return { measureIndex, measureStartMs, measureOffsetMs };
   }
 
-  /** Rótulo “Compasso X, tempo Y” + linha de reprodução (OsmdPlaybackRenderer). */
+  private applyOsmdCursorStyle() {
+    if (!this.osmd) return;
+    try {
+      this.osmd.cursor.CursorOptions = {
+        ...this.osmd.cursor.CursorOptions,
+        type: 1,
+        color: '#dc2626',
+        alpha: 0.95,
+        follow: false,
+      };
+      const cursorEl = this.osmd.cursor.cursorElement;
+      if (cursorEl) cursorEl.style.zIndex = '30';
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** Rótulo “Compasso X, tempo Y” (a linha visual vem do player → OsmdPlaybackRenderer.moveTo). */
   private syncPlaybackCursor() {
     const posMs = this.getPlayerPositionMs();
     const timemap = readPlayerTimemap(this.player);
     if (posMs == null || !timemap) return;
-    const osmdMeasureCount = this.osmd?.Sheet?.SourceMeasures?.length;
-    const pos = getPlaybackPositionFromTimemap(
-      timemap,
-      posMs,
-      this.beatsPerMeasure,
-      osmdMeasureCount,
-    );
+    const pos = getPlaybackPositionFromTimemap(timemap, posMs, this.beatsPerMeasure);
     if (!pos) return;
-
-    const timemapIndex = findTimemapIndexAtPosition(timemap, posMs);
-    const entry = timemap[timemapIndex];
-    const measureStartMs = entry?.timestamp ?? 0;
-    let durationMs = entry?.duration ?? 0;
-    if (durationMs <= 0 && timemap[timemapIndex + 1]) {
-      durationMs = (timemap[timemapIndex + 1].timestamp ?? 0) - measureStartMs;
-    }
-    const offsetMs = Math.max(0, posMs - measureStartMs);
-    this.osmdPlaybackRenderer?.moveTo(
-      pos.measureIndex,
-      measureStartMs,
-      offsetMs,
-      durationMs > 0 ? durationMs : undefined,
-    );
 
     this.lastCursorMeasure = pos.measure;
     this.lastCursorBeat = pos.beatInMeasure;
@@ -1363,10 +1413,7 @@ export class StudySession {
         position?: number;
       };
       this.isPlaying = true;
-      this.osmdPlaybackRenderer?.beginPlayback();
-      if (measure === 1 && beat === 0) {
-        pl.rewind?.();
-      } else if (moveTo && pl.moveTo) {
+      if (moveTo && pl.moveTo) {
         pl.moveTo(moveTo.measureIndex, moveTo.measureStartMs, moveTo.measureOffsetMs);
       }
       pl.play?.();

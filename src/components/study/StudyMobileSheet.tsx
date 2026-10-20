@@ -5,6 +5,7 @@ import { StudyInstrumentPanel } from '@/components/StudyInstrumentPanel';
 import { StudyPlayerPanel } from '@/components/StudyPlayerPanel';
 import { youtubeWatchUrl } from '@/domains/songs/youtube';
 import type { StudySession, StudyViewSnapshot } from '@/study/studySession';
+import { MusicLoader } from '@/components/MusicLoader';
 import { MobileScoreZoom } from '@/study/MobileScoreZoom';
 
 /** Reserva espaço para a barra fixa de controles (rolagem da partitura). */
@@ -25,6 +26,7 @@ export function StudyMobileSheet({
   const [playerOpen, setPlayerOpen] = useState(false);
   const [instrumentsOpen, setInstrumentsOpen] = useState(false);
   const watchUrl = youtubeWatchUrl(videoUrl ?? '');
+  const transportBlocked = state.loading || !state.xmlLoaded || state.audioPreparing;
 
   useEffect(() => {
     if (!open) return;
@@ -84,6 +86,8 @@ export function StudyMobileSheet({
                   midiLoaded: state.midiLoaded,
                   midiLoading: state.midiLoading,
                   playerError: state.playerError,
+                  audioReady: state.audioReady,
+                  audioPreparing: state.audioPreparing,
                   playerExpanded: true,
                   bpm: state.bpm,
                   bpmMin: state.bpmMin,
@@ -209,16 +213,21 @@ export function StudyMobileSheet({
             type="button"
             className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-[var(--primary)] text-[var(--primary-foreground)] shadow-[var(--shadow-soft)] disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => void session.play()}
-            disabled={state.loading || !state.xmlLoaded}
-            aria-label="Play"
+            disabled={transportBlocked}
+            aria-busy={state.audioPreparing}
+            aria-label={state.audioPreparing ? 'Preparando áudio' : 'Play'}
           >
-            <span className="material-icons text-3xl">play_arrow</span>
+            {state.audioPreparing ? (
+              <MusicLoader compact label="" className="py-0 text-[var(--primary-foreground)]" />
+            ) : (
+              <span className="material-icons text-3xl">play_arrow</span>
+            )}
           </button>
           <button
             type="button"
             className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
             onClick={() => session.pause()}
-            disabled={state.loading || !state.xmlLoaded}
+            disabled={transportBlocked}
             aria-label="Pausar"
           >
             <span className="material-icons">pause</span>
@@ -227,7 +236,7 @@ export function StudyMobileSheet({
             type="button"
             className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
             onClick={() => session.stop()}
-            disabled={state.loading || !state.xmlLoaded}
+            disabled={transportBlocked}
             aria-label="Parar"
           >
             <span className="material-icons">stop</span>

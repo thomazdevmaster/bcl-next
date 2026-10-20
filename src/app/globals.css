@@ -453,6 +453,22 @@
     filter: drop-shadow(0 0 2px rgba(220, 38, 38, 0.85));
   }
 
+  .score-container .study-playback-line {
+    position: absolute;
+    z-index: 40;
+    width: 3px;
+    min-width: 3px;
+    max-width: 3px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 1px;
+    background: #dc2626;
+    box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.35);
+    pointer-events: none;
+    box-sizing: border-box;
+  }
+
   html.portal-intro-pending,
   html.portal-intro-active {
     background: #000;
