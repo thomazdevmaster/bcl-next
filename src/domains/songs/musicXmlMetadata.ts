@@ -94,3 +94,22 @@ function decode(value: string): string {
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+const MUSIC_XML_MIME_TYPES = new Set([
+  'application/xml',
+  'text/xml',
+  'application/vnd.recordare.musicxml+xml',
+]);
+
+/** Extensão ou MIME aceitos no upload de partitura na gestão. */
+export function isMusicXmlUploadFile(file: File): boolean {
+  if (/\.(xml|musicxml)$/i.test(file.name)) return true;
+  const mime = file.type.trim().toLowerCase();
+  return mime.length > 0 && MUSIC_XML_MIME_TYPES.has(mime);
+}
+
+export function looksLikeMusicXml(content: string): boolean {
+  const head = content.trimStart().slice(0, 8192);
+  if (!head.startsWith('<')) return false;
+  return /<(score-partwise|score-timewise)\b/i.test(head);
+}

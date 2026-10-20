@@ -571,7 +571,8 @@ const songs: DomainCrudConfig = {
       type: 'xml',
       section: 'Partitura',
       accept: '.xml,.musicxml,application/xml,text/xml,application/vnd.recordare.musicxml+xml',
-      helpText: 'Envie um .xml ou .musicxml. Título, compositor, arranjo, gênero e tonalidade entram sozinhos quando o arquivo traz esses dados. Ao editar, deixe vazio para manter a partitura atual.',
+      helpText:
+        'Somente MusicXML (.xml ou .musicxml). Outros formatos (por exemplo .enc do Encore) não são aceitos — exporte como MusicXML antes de enviar. Título, compositor, arranjo, gênero e tonalidade entram sozinhos quando o arquivo traz esses dados. Ao editar, deixe vazio para manter a partitura atual.',
     },
     {
       name: 'visibility',

@@ -1,5 +1,5 @@
 import { getAccessToken } from '@/core/auth/accessToken';
-import { getApiUrl } from '../config/environment';
+import { getApiUrl, rewriteDevApiUrl } from '../config/environment';
 import { failureMessage } from './userMessages';
 
 function jsonHeaders(headers?: HeadersInit): Headers {
@@ -17,6 +17,16 @@ export function apiAuthHeaders(headers?: HeadersInit): Headers {
     merged.set('Authorization', `Bearer ${token}`);
   }
   return merged;
+}
+
+/** GET de binários/XML em `/files/...` — a API valida visibilidade da música com o Bearer. */
+export function fetchAuthedAsset(url: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const token = getAccessToken();
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  return fetch(rewriteDevApiUrl(url), { ...init, headers });
 }
 
 /** Erro HTTP da API com o status, para a tela decidir o que fazer (ex.: 404 no login Google). */

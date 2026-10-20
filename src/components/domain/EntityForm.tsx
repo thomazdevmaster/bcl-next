@@ -1,9 +1,13 @@
 "use client";
 
-import { type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import { type ChangeEvent, type FormEvent, type ReactNode, useState } from "react";
 import { MusicLoader } from "@/components/MusicLoader";
 import type { CrudField, CrudOption } from "@/domains/crudConfig";
-import { metadataFromMusicXml } from "@/domains/songs/musicXmlMetadata";
+import {
+  isMusicXmlUploadFile,
+  looksLikeMusicXml,
+  metadataFromMusicXml,
+} from "@/domains/songs/musicXmlMetadata";
 import { youtubeEmbedUrl, youtubeWatchUrl } from "@/domains/songs/youtube";
 
 export interface EntityFormDynamicChoices {
@@ -49,15 +53,42 @@ export function EntityForm({
 }: EntityFormProps) {
   const visibleFields = fields.filter((field) => !field.showWhen || field.showWhen(values));
   const hasSections = visibleFields.some((field) => field.section);
+  const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
+
+  const setFileError = (fieldName: string, message: string) => {
+    setFileErrors((current) => {
+      if (!message) {
+        if (!(fieldName in current)) return current;
+        const next = { ...current };
+        delete next[fieldName];
+        return next;
+      }
+      return { ...current, [fieldName]: message };
+    });
+  };
 
   const handleFile = async (event: ChangeEvent<HTMLInputElement>, field: CrudField) => {
-    const file = event.target.files?.[0];
+    const input = event.target;
+    const file = input.files?.[0];
     if (!file) return;
-    if (!/\.(xml|musicxml)$/i.test(file.name)) {
-      onChange(field.name, "");
+    if (!isMusicXmlUploadFile(file)) {
+      input.value = "";
+      setFileError(
+        field.name,
+        "Formato não aceito. Envie apenas partitura MusicXML (.xml ou .musicxml). Se você usa Encore ou outro programa, exporte como MusicXML antes de anexar.",
+      );
       return;
     }
     const content = await file.text();
+    if (!looksLikeMusicXml(content)) {
+      input.value = "";
+      setFileError(
+        field.name,
+        "O arquivo não parece ser MusicXML válido. Confira se exportou como .xml ou .musicxml e tente novamente.",
+      );
+      return;
+    }
+    setFileError(field.name, "");
     const metadata = metadataFromMusicXml(content);
     if (metadata.title) onChange("title", metadata.title);
     if (metadata.composer) onChange("composer", metadata.composer);
@@ -234,9 +265,9 @@ export function EntityForm({
                 {editing && field.lockOnEdit && (
                   <span className="text-xs text-[var(--muted)]">Definido na criação; não pode ser alterado.</span>
                 )}
-                {errors[field.name] && (
+                {(errors[field.name] || fileErrors[field.name]) && (
                   <span className="text-xs text-red-600" role="alert">
-                    {errors[field.name]}
+                    {errors[field.name] ?? fileErrors[field.name]}
                   </span>
                 )}
               </FieldSlot>

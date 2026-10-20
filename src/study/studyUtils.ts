@@ -103,23 +103,68 @@ export const extractInstrumentsFromXml = (xml: string): InstrumentInfo[] => {
     .filter((part) => part.id);
 };
 
+/**
+ * Colchetes/chaves do MuseScore (`part-group`) são só layout na partitura impressa.
+ * O Verovio (player) monta staffGrp/staffDef a partir deles; após filtrar naipes,
+ * grupos vazios ou aninhados geram "Each staffGrp must contain at least one staffDef".
+ */
+function stripPartListGroups(partList: Element) {
+  partList.querySelectorAll('part-group').forEach((el) => el.remove());
+  partList.querySelectorAll('score-part > group').forEach((el) => el.remove());
+}
+
+function countScoreParts(doc: Document): number {
+  return doc.querySelectorAll('part-list > score-part').length;
+}
+
+function countPartwiseParts(doc: Document): number {
+  const root = doc.documentElement.tagName.toLowerCase();
+  if (!root.includes('partwise')) return 0;
+  return Array.from(doc.documentElement.children).filter(
+    (node) => node.nodeType === Node.ELEMENT_NODE && node.tagName.toLowerCase() === 'part',
+  ).length;
+}
+
+/** Corrige part-list após recorte (também útil em XML vindo da API). */
+export function sanitizeMusicXmlPartList(xml: string): string {
+  const doc = parseXml(xml);
+  if (!doc) return xml;
+  const partList = doc.querySelector('part-list');
+  if (partList) stripPartListGroups(partList);
+  return new XMLSerializer().serializeToString(doc);
+}
+
 export const filterXmlByPartIds = (xml: string, selectedIds: string[]): string => {
+  if (selectedIds.length === 0) return xml;
   const doc = parseXml(xml);
   if (!doc) return xml;
   const selected = new Set(selectedIds);
-  const scoreParts = Array.from(doc.querySelectorAll('part-list > score-part'));
-  scoreParts.forEach((part) => {
+
+  Array.from(doc.querySelectorAll('part-list > score-part')).forEach((part) => {
     const id = part.getAttribute('id') || '';
-    if (id && !selected.has(id)) {
-      part.remove();
-    }
+    if (id && !selected.has(id)) part.remove();
   });
-  const parts = Array.from(doc.querySelectorAll('part'));
-  parts.forEach((part) => {
-    const id = part.getAttribute('id') || '';
-    if (id && !selected.has(id)) {
-      part.remove();
-    }
-  });
-  return new XMLSerializer().serializeToString(doc);
+
+  const partList = doc.querySelector('part-list');
+  if (partList) stripPartListGroups(partList);
+
+  const rootTag = doc.documentElement.tagName.toLowerCase();
+  if (rootTag.includes('partwise')) {
+    Array.from(doc.documentElement.children).forEach((node) => {
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      if (node.tagName.toLowerCase() !== 'part') return;
+      const id = node.getAttribute('id') || '';
+      if (id && !selected.has(id)) node.remove();
+    });
+  } else {
+    Array.from(doc.querySelectorAll('part')).forEach((part) => {
+      const id = part.getAttribute('id') || '';
+      if (id && !selected.has(id)) part.remove();
+    });
+  }
+
+  if (countScoreParts(doc) === 0) return xml;
+  if (rootTag.includes('partwise') && countPartwiseParts(doc) === 0) return xml;
+
+  return sanitizeMusicXmlPartList(new XMLSerializer().serializeToString(doc));
 };

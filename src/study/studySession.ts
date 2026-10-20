@@ -21,8 +21,8 @@ function engravingRules(osmd: OpenSheetMusicDisplay): OsmdEngravingRules {
   return (osmd as unknown as { EngravingRules: OsmdEngravingRules }).EngravingRules;
 }
 import { Player, VerovioConverter } from '@music-i18n/musicxml-player';
+import { fetchAuthedAsset } from '@/lib/api';
 import { failureMessage } from '@/lib/userMessages';
-import { rewriteDevApiUrl } from '@/config/environment';
 import { OsmdPlaybackRenderer } from './osmdPlaybackRenderer';
 import { StudyPlayerController } from './studyPlayerController';
 import {
@@ -40,6 +40,7 @@ import {
   extractTempoInfoFromXml,
   extractInstrumentsFromXml,
   filterXmlByPartIds,
+  sanitizeMusicXmlPartList,
   type InstrumentInfo,
 } from './studyUtils';
 import { fetchFilteredXml, fetchPartMidi, selectionStorageKey } from './songParts';
@@ -471,7 +472,7 @@ export class StudySession {
 
   private async adoptFullScore(url: string, token: number) {
     try {
-      const response = await fetch(rewriteDevApiUrl(url));
+      const response = await fetchAuthedAsset(url);
       if (!response.ok || token !== this.loadToken) return;
       const xml = await response.text();
       if (token !== this.loadToken || !xml.includes('<')) return;
@@ -484,9 +485,28 @@ export class StudySession {
         this.sourceXml = xml;
       }
       const instruments = extractInstrumentsFromXml(xml);
-      if (instruments.length > this.availableInstruments.length) {
-        this.availableInstruments = instruments;
-        this.emit();
+      const hadPartialSource = instruments.length > this.availableInstruments.length;
+      const xmlIds = new Set(instruments.map((item) => item.id));
+      const idsAlign =
+        this.selectedInstrumentIds.every((id) => xmlIds.has(id)) &&
+        this.selectedMidiInstrumentIds.every((id) => xmlIds.has(id));
+      this.availableInstruments = instruments;
+      if (hadPartialSource || !idsAlign) {
+        this.selectedInstrumentIds = this.selectedInstrumentIds.filter((id) => xmlIds.has(id));
+        this.selectedMidiInstrumentIds = this.selectedMidiInstrumentIds.filter((id) =>
+          xmlIds.has(id),
+        );
+        if (this.selectedInstrumentIds.length === 0) {
+          this.selectedInstrumentIds = instruments.map((item) => item.id);
+        }
+        if (this.selectedMidiInstrumentIds.length === 0) {
+          this.selectedMidiInstrumentIds = instruments.map((item) => item.id);
+        }
+      }
+      this.emit();
+      if (token === this.loadToken && this.xmlLoaded) {
+        this.lastRenderedSelectionKey = null;
+        void this.applyInstrumentSelection(this.currentScoreId, token);
       }
     } catch {
       /* a partitura recortada continua utilizável */
@@ -661,6 +681,27 @@ export class StudySession {
     this.emit();
   }
 
+  /** XML filtrado por naipe: recorte local quando o XML completo já está na sessão; senão API. */
+  private async resolveXmlForPartIds(songId: string, partIds: string[]): Promise<string> {
+    const source = this.sourceXml;
+    if (!source || partIds.length === 0) return source ?? '';
+    const sourcePartIds = new Set(extractInstrumentsFromXml(source).map((item) => item.id));
+    if (partIds.every((id) => sourcePartIds.has(id))) {
+      return filterXmlByPartIds(source, partIds);
+    }
+    if (/^\d+$/.test(songId)) {
+      try {
+        const fromApi = await fetchFilteredXml(songId, partIds);
+        if (fromApi.includes('<') && extractInstrumentsFromXml(fromApi).length > 0) {
+          return sanitizeMusicXmlPartList(fromApi);
+        }
+      } catch {
+        /* recorte no cliente */
+      }
+    }
+    return filterXmlByPartIds(source, partIds);
+  }
+
   private async applyInstrumentSelection(id: string, token: number) {
     if (!this.sourceXml || token !== this.loadToken) return;
     this.loading = true;
@@ -705,14 +746,14 @@ export class StudySession {
         midiSelectedIds.length < available.length;
       const serverMidi = this.prefetchServerMidi(id, midiSelectedIds);
       const scoreXml = shouldFilter
-        ? filterXmlByPartIds(this.sourceXml, selectedIds)
+        ? await this.resolveXmlForPartIds(id, selectedIds)
         : this.sourceXml;
       const midiXml = shouldFilterMidi
-        ? filterXmlByPartIds(this.sourceXml, midiSelectedIds)
+        ? await this.resolveXmlForPartIds(id, midiSelectedIds)
         : this.sourceXml;
-      await this.renderScoreWithOsmd(scoreXml, token);
+      await this.renderScoreWithOsmd(sanitizeMusicXmlPartList(scoreXml), token);
       if (token !== this.loadToken) return;
-      await this.initVerovioPlayerInHiddenContainer(midiXml, id, token);
+      await this.initVerovioPlayerInHiddenContainer(sanitizeMusicXmlPartList(midiXml), id, token);
       await serverMidi;
       if (token !== this.loadToken) return;
       this.lastRenderedSelectionKey = selectionKey;

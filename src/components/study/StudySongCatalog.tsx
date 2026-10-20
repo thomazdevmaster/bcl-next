@@ -5,7 +5,7 @@ import { MusicLoader } from '@/components/MusicLoader';
 import { TableView } from '@/components/tables/core/TableView';
 import type { TableColumnDef } from '@/components/tables/core/table-features';
 import type { Song } from '@/domains/songs/types';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, fetchAuthedAsset } from '@/lib/api';
 import { failureMessage } from '@/lib/userMessages';
 import {
   extractInstrumentsFromXml,
@@ -13,14 +13,12 @@ import {
 } from '@/study/studyUtils';
 import {
   defaultPartIds,
-  fetchFilteredXml,
   fetchSongParts,
   partToInstrument,
   readStoredSelection,
 } from '@/study/songParts';
 import type { Person } from '@/domains/people/types';
 import { youtubeWatchUrl } from '@/domains/songs/youtube';
-import { rewriteDevApiUrl } from '@/config/environment';
 
 export interface StudyStartOptions {
   song: Song;
@@ -166,7 +164,7 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
       } catch {
         /* partitura antiga ou API sem naipes: lê o XML inteiro */
       }
-      const response = await fetch(rewriteDevApiUrl(score.url));
+      const response = await fetchAuthedAsset(score.url);
       if (!response.ok) throw new Error('score_fetch_failed');
       const xml = await response.text();
       instruments = extractInstrumentsFromXml(xml);
@@ -367,21 +365,14 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
                     void (async () => {
                       setPreparingId(String(setup.song.id));
                       try {
-                        const union = Array.from(
-                          new Set([...setup.scoreInstrumentIds, ...setup.midiInstrumentIds]),
-                        );
+                        const score = setup.song.scores.find((item) => Boolean(item.url));
+                        if (!score?.url) throw new Error('score');
                         let xml = setup.xml;
-                        if (!xml && union.length > 0) {
-                          xml = await fetchFilteredXml(String(setup.song.id), union);
-                        }
-                        if (!xml) {
-                          const score = setup.song.scores.find((item) => Boolean(item.url));
-                          if (!score) throw new Error('score');
-                          const response = await fetch(rewriteDevApiUrl(score.url));
+                        if (!xml?.includes('<score')) {
+                          const response = await fetchAuthedAsset(score.url);
                           if (!response.ok) throw new Error('score');
                           xml = await response.text();
                         }
-                        const score = setup.song.scores.find((item) => Boolean(item.url));
                         onStart({
                           song: setup.song,
                           xml,
