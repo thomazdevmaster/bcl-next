@@ -18,7 +18,14 @@ export type StudyScoreHeader = {
   timeSignature?: string;
 };
 
-const PLACEHOLDER_TITLE = /^(untitled(\s+score)?|sem\s+t[ií]tulo)?\s*$/i;
+const PLACEHOLDER_TITLE =
+  /^(untitled(\s+score)?|sem\s+t[ií]tulo|partitura\s+sem\s+t[ií]tulo)(\s+score)?\s*$/i;
+
+function isPlaceholderCreator(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  return /^compositor\s*(\/\s*|\s+)arranjador/i.test(trimmed);
+}
 
 function parseXml(xml: string): Document | null {
   if (typeof window === 'undefined') return null;
@@ -205,49 +212,14 @@ function ensureCreator(doc: Document, type: 'composer' | 'arranger', name: strin
     (node) => node.getAttribute('type')?.toLowerCase() === type,
   );
   if (existing) {
-    if (!textContent(existing)) existing.textContent = name;
+    const current = textContent(existing);
+    if (!current || isPlaceholderCreator(current)) existing.textContent = name;
     return;
   }
   const creator = doc.createElement('creator');
   creator.setAttribute('type', type);
   creator.textContent = name;
   identification.insertBefore(creator, identification.firstChild);
-}
-
-function findCredit(doc: Document, type: string): Element | null {
-  const wanted = type.toLowerCase();
-  return (
-    Array.from(doc.documentElement.querySelectorAll('credit')).find(
-      (credit) => textContent(credit.querySelector('credit-type')).toLowerCase() === wanted,
-    ) ?? null
-  );
-}
-
-function upsertCredit(
-  doc: Document,
-  type: string,
-  words: string,
-  layout: { justify?: string; valign?: string } = {},
-) {
-  const root = doc.documentElement;
-  let credit = findCredit(doc, type);
-  if (!credit) {
-    credit = doc.createElement('credit');
-    credit.setAttribute('page', '1');
-    const typeEl = doc.createElement('credit-type');
-    typeEl.textContent = type;
-    const wordsEl = doc.createElement('credit-words');
-    wordsEl.setAttribute('justify', layout.justify ?? 'center');
-    wordsEl.setAttribute('valign', layout.valign ?? 'top');
-    wordsEl.textContent = words;
-    credit.appendChild(typeEl);
-    credit.appendChild(wordsEl);
-    const partList = root.querySelector('part-list');
-    root.insertBefore(credit, partList);
-    return;
-  }
-  const wordsEl = credit.querySelector('credit-words');
-  if (wordsEl) wordsEl.textContent = words;
 }
 
 function replacePlaceholderTitleCredits(doc: Document, title: string) {
@@ -272,69 +244,17 @@ export function enrichStudyMusicXml(xml: string, header: StudyScoreHeader): stri
   ensureWorkTitle(doc, title);
   replacePlaceholderTitleCredits(doc, title);
 
-  const existingTitleCredit = findCredit(doc, 'title');
-  if (!existingTitleCredit) upsertCredit(doc, 'title', title);
-
   if (header.composer) {
     ensureCreator(doc, 'composer', header.composer);
-    const composerCredit = findCredit(doc, 'composer');
-    const composerLine = header.composer.includes('Compositor:')
-      ? header.composer
-      : `Compositor: ${header.composer}`;
-    if (!composerCredit) {
-      upsertCredit(doc, 'composer', composerLine, { justify: 'right', valign: 'bottom' });
-    } else {
-      const wordsEl = composerCredit.querySelector('credit-words');
-      const current = textContent(wordsEl);
-      if (wordsEl && current && !/^compositor/i.test(current)) {
-        wordsEl.textContent = composerLine;
-      } else if (wordsEl && !current) {
-        wordsEl.textContent = composerLine;
-      }
-    }
   }
 
   if (header.arranger) {
     ensureCreator(doc, 'arranger', header.arranger);
-    const arrangerLine = header.arranger.match(/^arranjo/i)
-      ? header.arranger
-      : `Arranjo: ${header.arranger}`;
-    const arrangerCredit = findCredit(doc, 'arranger');
-    if (!arrangerCredit) {
-      upsertCredit(doc, 'arranger', arrangerLine, { justify: 'right', valign: 'bottom' });
-    } else {
-      const wordsEl = arrangerCredit.querySelector('credit-words');
-      const current = textContent(wordsEl);
-      if (wordsEl && current && !/^arranjo/i.test(current)) {
-        wordsEl.textContent = arrangerLine;
-      }
-    }
   }
 
-  const subtitleParts: string[] = [];
-  if (header.bpm != null) subtitleParts.push(`♩ = ${header.bpm}`);
-  if (header.timeSignature) subtitleParts.push(header.timeSignature);
-  if (header.key) subtitleParts.push(`Tom: ${header.key}`);
-  if (header.tuning) subtitleParts.push(`Afinação: ${header.tuning}`);
-  if (subtitleParts.length > 0) {
-    const technicalLine = subtitleParts.join(' · ');
-    const existing = findCredit(doc, 'subtitle');
-    const rights = findCredit(doc, 'rights');
-    const target = existing ?? rights;
-    if (!target) {
-      upsertCredit(doc, 'subtitle', technicalLine, { justify: 'center', valign: 'top' });
-    } else {
-      const wordsEl = target.querySelector('credit-words');
-      const current = textContent(wordsEl);
-      const missingTechnical =
-        (header.bpm != null && !current.includes('♩') && !/\b=\s*\d/.test(current)) ||
-        (header.key && !/tom:/i.test(current)) ||
-        (header.tuning && !/afina/i.test(current));
-      if (wordsEl && missingTechnical) {
-        wordsEl.textContent = current ? `${current} · ${technicalLine}` : technicalLine;
-      }
-    }
-  }
+  // Metadados ficam no cabeçalho da tela de estudo; créditos no XML geram bloco
+  // enorme no mobile e desalinham o cursor de playback (OSMD mede Y a partir do SVG).
+  doc.querySelectorAll('credit').forEach((node) => node.remove());
 
   return new XMLSerializer().serializeToString(doc);
 }

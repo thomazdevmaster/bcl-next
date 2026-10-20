@@ -417,6 +417,7 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
                     setOpeningScore(true);
                     void (async () => {
                       setPreparingId(String(setup.song.id));
+                      let didStart = false;
                       try {
                         const score = setup.song.scores.find((item) => Boolean(item.url));
                         if (!score?.url) throw new Error('score');
@@ -434,12 +435,13 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
                           instruments: setup.instruments,
                           fullScoreUrl: score?.url,
                         });
-                        setSetup(null);
+                        didStart = true;
                       } catch (caught) {
                         setError(failureMessage(caught, 'Não foi possível abrir a partitura.'));
                       } finally {
                         setPreparingId(null);
                         setOpeningScore(false);
+                        if (didStart) setSetup(null);
                       }
                     })();
                   }}

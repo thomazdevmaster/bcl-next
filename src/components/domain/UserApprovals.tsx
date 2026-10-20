@@ -179,8 +179,17 @@ export function UserApprovals() {
       </section>
 
       {issued && (
-        <div className="fixed inset-0 z-[210] flex items-end justify-center bg-black/50 p-4 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="reset-password-title">
-          <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl">
+        <div
+          className="fixed inset-0 z-[210] flex items-end justify-center bg-black/50 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reset-password-title"
+          onClick={() => setIssued(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <h2 id="reset-password-title" className="text-xl font-semibold">Senha nova</h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
               Envie esta senha para <strong>{issued.name}</strong> (usuário <code>{issued.username}</code>). Ela precisa ser trocada no próximo acesso e não aparece de novo.

@@ -754,17 +754,37 @@ export class StudySession {
 
   private async applyInstrumentSelection(id: string, token: number) {
     if (!this.sourceXml || token !== this.loadToken) return;
+
+    const available = this.availableInstruments;
+    const selectedIds = this.selectedInstrumentIds;
+    const midiSelectedIds = this.selectedMidiInstrumentIds;
+    const scoreUnchanged =
+      this.xmlLoaded && sameIdSet(selectedIds, this.lastAppliedInstrumentIds);
+    const midiUnchanged =
+      this.xmlLoaded && sameIdSet(midiSelectedIds, this.lastAppliedMidiInstrumentIds);
+
+    const selectionKey = `${[...selectedIds].sort().join('|')}::midi:${[...midiSelectedIds]
+      .sort()
+      .join('|')}`;
+    if (
+      (scoreUnchanged && midiUnchanged && this.xmlLoaded) ||
+      (selectionKey === this.lastRenderedSelectionKey && this.xmlLoaded)
+    ) {
+      this.loading = false;
+      this.scoreLoading = false;
+      this.emit();
+      return;
+    }
+
     this.loading = true;
-    this.scoreLoading = true;
-    this.destroyPlayer();
+    if (!scoreUnchanged) this.scoreLoading = true;
+    if (!midiUnchanged) this.destroyPlayer();
     this.emit();
 
     try {
-      const available = this.availableInstruments;
-      const selectedIds = this.selectedInstrumentIds;
       if (/^\d+$/.test(id) && this.sourceXml) {
         const present = new Set(extractInstrumentsFromXml(this.sourceXml).map((item) => item.id));
-        const needed = Array.from(new Set([...selectedIds, ...this.selectedMidiInstrumentIds]));
+        const needed = Array.from(new Set([...selectedIds, ...midiSelectedIds]));
         if (needed.some((partId) => !present.has(partId))) {
           try {
             const xml = await fetchFilteredXml(id, needed);
@@ -776,42 +796,38 @@ export class StudySession {
         }
       }
       if (!this.sourceXml || token !== this.loadToken) return;
-      const midiSelectedIds = this.selectedMidiInstrumentIds;
-      const selectionKey = `${[...selectedIds].sort().join('|')}::midi:${[
-        ...midiSelectedIds,
-      ]
-        .sort()
-        .join('|')}`;
-      if (selectionKey === this.lastRenderedSelectionKey && this.xmlLoaded) {
-        this.loading = false;
-        this.scoreLoading = false;
-        this.emit();
-        return;
-      }
+
       const shouldFilter =
         available.length > 0 && selectedIds.length > 0 && selectedIds.length < available.length;
       const shouldFilterMidi =
         available.length > 0 &&
         midiSelectedIds.length > 0 &&
         midiSelectedIds.length < available.length;
-      const serverMidi = this.prefetchServerMidi(id, midiSelectedIds);
-      const scoreXml = shouldFilter
-        ? await this.resolveXmlForPartIds(id, selectedIds)
-        : this.sourceXml;
-      const midiXml = shouldFilterMidi
-        ? await this.resolveXmlForPartIds(id, midiSelectedIds)
-        : this.sourceXml;
-      await this.renderScoreWithOsmd(sanitizeMusicXmlPartList(scoreXml), token);
-      if (token !== this.loadToken) return;
-      await this.initVerovioPlayerInHiddenContainer(sanitizeMusicXmlPartList(midiXml), id, token);
-      await serverMidi;
-      if (token !== this.loadToken) return;
+
+      if (!scoreUnchanged) {
+        const scoreXml = shouldFilter
+          ? await this.resolveXmlForPartIds(id, selectedIds)
+          : this.sourceXml;
+        await this.renderScoreWithOsmd(sanitizeMusicXmlPartList(scoreXml), token);
+        if (token !== this.loadToken) return;
+      }
+
+      if (!midiUnchanged) {
+        const serverMidi = this.prefetchServerMidi(id, midiSelectedIds);
+        const midiXml = shouldFilterMidi
+          ? await this.resolveXmlForPartIds(id, midiSelectedIds)
+          : this.sourceXml;
+        await this.initVerovioPlayerInHiddenContainer(sanitizeMusicXmlPartList(midiXml), id, token);
+        await serverMidi;
+        if (token !== this.loadToken) return;
+        this.scheduleMidiPrefetch();
+        this.scheduleMidiWarmup();
+      }
+
       this.lastRenderedSelectionKey = selectionKey;
       this.lastAppliedInstrumentIds = [...selectedIds];
       this.lastAppliedMidiInstrumentIds = [...midiSelectedIds];
       this.persistSelection(id, selectedIds, midiSelectedIds);
-      this.scheduleMidiPrefetch();
-      this.scheduleMidiWarmup();
     } finally {
       if (token === this.loadToken) {
         this.loading = false;

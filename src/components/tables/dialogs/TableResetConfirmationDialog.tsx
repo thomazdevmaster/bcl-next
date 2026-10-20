@@ -27,8 +27,11 @@ export function TableResetConfirmationDialog({ open, onClose, onConfirm }: Table
         <button
           type="button"
           onClick={() => {
-            onClose();
-            onConfirm();
+            try {
+              onConfirm();
+            } finally {
+              onClose();
+            }
           }}
           className="min-h-11 cursor-pointer rounded-[var(--radius)] bg-[var(--destructive)] px-4 text-sm font-medium text-[var(--destructive-foreground)] hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
         >

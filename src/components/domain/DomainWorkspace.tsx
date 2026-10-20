@@ -260,11 +260,15 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
     </div>
   ), [canDelete, canUpdate, openItem, resource, user?.id]);
 
-  const closeDialog = () => {
-    if (saving) return;
+  const dismissEntityDialog = useCallback(() => {
     setDialogMode(null);
     setSelected(null);
     setFormErrors({});
+  }, []);
+
+  const closeDialog = () => {
+    if (saving) return;
+    dismissEntityDialog();
   };
 
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
@@ -297,6 +301,7 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
 
     setSaving(true);
     setError(null);
+    let didPersist = false;
     try {
       const mapped = config.toPayload
         ? config.toPayload(values, selected ?? undefined)
@@ -344,13 +349,12 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
           password: temporaryPassword,
         });
       }
-      setDialogMode(null);
-      setSelected(null);
-      setFormErrors({});
+      didPersist = true;
     } catch (caught) {
       setError(userFacingError(caught));
     } finally {
       setSaving(false);
+      if (didPersist) dismissEntityDialog();
     }
   };
 
@@ -358,16 +362,18 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
     if (!deleteTarget) return;
     setSaving(true);
     setError(null);
+    let didDelete = false;
     try {
       await apiFetch<void>(`/${domain.apiResource}/${String(deleteTarget.id)}`, {
         method: 'DELETE',
       });
       setItems((current) => current.filter((item) => item.id !== deleteTarget.id));
-      setDeleteTarget(null);
+      didDelete = true;
     } catch (caught) {
       setError(userFacingError(caught));
     } finally {
       setSaving(false);
+      if (didDelete) setDeleteTarget(null);
     }
   };
 
@@ -423,20 +429,23 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
         </article>
       </section>
 
-      {dialogMode && (
-        <EntityDialog
-          open
-          title={
-            dialogMode === 'create'
-              ? `Novo ${config.singular}`
-              : dialogMode === 'edit'
-                ? `Editar ${config.itemLabel(selected ?? {})}`
-                : config.itemLabel(selected ?? {})
-          }
-          size="xl"
-          placement="bottom"
-          onClose={closeDialog}
-        >
+      <EntityDialog
+        open={dialogMode !== null}
+        title={
+          dialogMode === 'create'
+            ? `Novo ${config.singular}`
+            : dialogMode === 'edit'
+              ? `Editar ${config.itemLabel(selected ?? {})}`
+              : dialogMode === 'view'
+                ? config.itemLabel(selected ?? {})
+                : config.singular
+        }
+        size="xl"
+        placement="bottom"
+        closeOnBackdropClick={false}
+        onClose={closeDialog}
+      >
+        {dialogMode ? (
           <EntityForm
             fields={config.fields.filter(
               (field) =>
@@ -464,12 +473,21 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
                 : undefined
             }
           />
-        </EntityDialog>
-      )}
+        ) : null}
+      </EntityDialog>
 
       {deleteTarget && (
-        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50 p-4 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="delete-title">
-          <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl">
+        <div
+          className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-title"
+          onClick={() => setDeleteTarget(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <h2 id="delete-title" className="text-xl font-semibold">Excluir {config.singular}</h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
               Confirma a exclusão de <strong>{config.itemLabel(deleteTarget)}</strong>? Esta ação não pode ser desfeita.
@@ -487,8 +505,17 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
       )}
 
       {issuedPassword && (
-        <div className="fixed inset-0 z-[210] flex items-end justify-center bg-black/50 p-4 sm:items-center" role="dialog" aria-modal="true" aria-labelledby="issued-password-title">
-          <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl">
+        <div
+          className="fixed inset-0 z-[210] flex items-end justify-center bg-black/50 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="issued-password-title"
+          onClick={() => setIssuedPassword(null)}
+        >
+          <div
+            className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <h2 id="issued-password-title" className="text-xl font-semibold">Acesso criado</h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
               Envie o usuário e a senha inicial para <strong>{issuedPassword.name}</strong>. A senha não será mostrada
