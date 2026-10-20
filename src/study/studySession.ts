@@ -23,9 +23,10 @@ function engravingRules(osmd: OpenSheetMusicDisplay): OsmdEngravingRules {
 import { Player, VerovioConverter } from '@music-i18n/musicxml-player';
 import { fetchAuthedAsset } from '@/lib/api';
 import { failureMessage } from '@/lib/userMessages';
-import { OsmdPlaybackRenderer } from './osmdPlaybackRenderer';
+import { OsmdPlaybackPlayerRendererStub, OsmdPlaybackRenderer } from './osmdPlaybackRenderer';
 import { StudyPlayerController } from './studyPlayerController';
 import {
+  findTimemapIndexAtPosition,
   getPlaybackPositionFromTimemap,
   getPlayerPositionMs,
   readPlayerTimemap,
@@ -133,13 +134,21 @@ function isMobileView() {
 
 const MOBILE_MEASURES_MIN = 1;
 const MOBILE_MEASURES_MAX = 5;
+/** Zoom OSMD com 1 compasso por linha (referência “100%”). */
+const MOBILE_ZOOM_BASELINE_MEASURES = 1;
+const MOBILE_SCALE_MIN = 0.52;
+const MOBILE_SCALE_MAX = 1.28;
 
-/** No celular, cada linha fica entre 2 e 5 compassos por padrão (zoom manual até 5). */
-function measuresPerMobileLine(width: number): number {
-  if (width < 390) return 2;
-  if (width < 460) return 3;
-  if (width < 540) return 4;
-  return 5;
+/** Padrão mobile: 1 compasso por linha; afastar aumenta até {@link MOBILE_MEASURES_MAX}. */
+function measuresPerMobileLine(_width: number): number {
+  return MOBILE_ZOOM_BASELINE_MEASURES;
+}
+
+/** Encolhe a gravação ao caber mais compassos na mesma largura de tela. */
+function mobileLayoutZoom(measuresPerLine: number): number {
+  const m = Math.max(MOBILE_MEASURES_MIN, Math.min(MOBILE_MEASURES_MAX, measuresPerLine));
+  const raw = MOBILE_ZOOM_BASELINE_MEASURES / m;
+  return Math.min(MOBILE_SCALE_MAX, Math.max(MOBILE_SCALE_MIN, raw));
 }
 
 export class StudySession {
@@ -159,6 +168,7 @@ export class StudySession {
   private midiOnlyMode = false;
   private osmd: OpenSheetMusicDisplay | null = null;
   private osmdPlaybackRenderer: OsmdPlaybackRenderer | null = null;
+  private osmdPlayerRendererStub: OsmdPlaybackPlayerRendererStub | null = null;
   private workletPatched = false;
   private scrollPatched = false;
 
@@ -268,8 +278,14 @@ export class StudySession {
       fullscreenScore: this.fullscreenScore,
       isMobile: this.isMobile,
       mobileMeasuresPerLine: this.isMobile ? this.currentMobileMeasures() : 0,
-      canZoomMobileIn: this.isMobile && this.currentMobileMeasures() > MOBILE_MEASURES_MIN && !this.mobileLayoutRendering,
-      canZoomMobileOut: this.isMobile && this.currentMobileMeasures() < MOBILE_MEASURES_MAX && !this.mobileLayoutRendering,
+      canZoomMobileIn:
+        this.isMobile &&
+        !this.mobileLayoutRendering &&
+        this.currentMobileMeasures() > MOBILE_MEASURES_MIN,
+      canZoomMobileOut:
+        this.isMobile &&
+        !this.mobileLayoutRendering &&
+        this.currentMobileMeasures() < MOBILE_MEASURES_MAX,
       playbackPosition: this.playbackPosition,
       playbackCursorX: this.playbackCursorX,
       loading: this.loading,
@@ -334,7 +350,7 @@ export class StudySession {
       else this.fitScoreToViewport();
       const p = this.osmd?.render?.();
       const afterRender = () => {
-        this.osmdPlaybackRenderer?.onResize();
+        this.osmdPlaybackRenderer?.onLayoutChanged();
         if (this.isPlaying) this.syncPlaybackCursor();
       };
       if (p && typeof (p as Promise<void>).then === 'function') {
@@ -354,13 +370,13 @@ export class StudySession {
   }
 
   /**
-   * Zoom do celular: aproximar reduz compassos por linha (notas maiores);
-   * afastar aumenta a quantidade, entre 1 e 5 (só mobile).
+   * Zoom do celular: afastar = mais compassos na mesma linha (1–5);
+   * aproximar = menos compassos e notas maiores.
    */
   zoomMobile(direction: 'in' | 'out') {
     if (!isMobileView() || !this.osmd || !this.xmlLoaded || this.mobileLayoutRendering) return;
-    const current = this.currentMobileMeasures();
-    const next = direction === 'in' ? current - 1 : current + 1;
+    const measures = this.currentMobileMeasures();
+    const next = direction === 'in' ? measures - 1 : measures + 1;
     if (next < MOBILE_MEASURES_MIN || next > MOBILE_MEASURES_MAX) return;
     this.mobileMeasuresOverride = next;
     void this.rerenderMobileLayout();
@@ -801,7 +817,8 @@ export class StudySession {
         drawingParameters: 'default',
         autoResize: !mobile,
         followCursor: false,
-        pageFormat: mobile ? 'A4_P' : 'Endless',
+        disableCursor: true,
+        pageFormat: 'Endless',
         cursorsOptions: [{ type: 1, color: '#dc2626', alpha: 0.95, follow: false }],
       });
       await this.osmd.load(xml);
@@ -809,8 +826,7 @@ export class StudySession {
       else this.fitScoreToViewport();
       await this.osmd.render();
       await this.shrinkPageToContainer();
-      this.osmd.enableOrDisableCursors?.(true);
-      this.applyOsmdCursorStyle();
+      this.osmd.enableOrDisableCursors?.(false);
       this.osmdPlaybackRenderer?.resetCursor();
       if (token === this.loadToken) {
         this.xmlLoaded = true;
@@ -835,15 +851,15 @@ export class StudySession {
     const container = this.options.getScoreContainer() ?? this.options.getOsmdContainer();
     const available = Math.max(280, container?.clientWidth ?? window.innerWidth);
     const rules = engravingRules(this.osmd);
-    const zoom = 1;
     const measures = this.currentMobileMeasures();
+    const zoom = mobileLayoutZoom(measures);
     const pageWidth = available / (10 * zoom);
-    rules.PageFormat.width = pageWidth;
     rules.PageLeftMargin = 0.3;
     rules.PageRightMargin = 0.3;
     rules.SystemLeftMargin = 0;
     rules.SystemRightMargin = 0;
     rules.RenderXMeasuresPerLineAkaSystem = measures;
+    rules.PageFormat.width = pageWidth;
     rules.FixedMeasureWidth = true;
     const innerWidth = Math.max(8, pageWidth - rules.PageLeftMargin - rules.PageRightMargin);
     rules.FixedMeasureWidthFixedValue = Math.max(8, (innerWidth * 0.98) / measures);
@@ -871,7 +887,8 @@ export class StudySession {
     try {
       this.applyMobileLayout();
       await this.osmd.render();
-      this.osmdPlaybackRenderer?.onResize();
+      await this.fitMobileScoreWidthIfNeeded();
+      this.osmdPlaybackRenderer?.onLayoutChanged();
       if (this.isPlaying) this.syncPlaybackCursor();
     } catch (err) {
       console.error('Falha ao aplicar o zoom da partitura:', err);
@@ -887,6 +904,11 @@ export class StudySession {
   }
 
   private async shrinkPageToContainer() {
+    await this.fitMobileScoreWidthIfNeeded();
+  }
+
+  /** Só encolhe se a SVG passar da largura útil; respeita o piso de zoom do layout mobile. */
+  private async fitMobileScoreWidthIfNeeded() {
     if (!this.osmd || !isMobileView()) return;
     const mount = this.options.getOsmdContainer();
     const container = this.options.getScoreContainer() ?? mount;
@@ -895,15 +917,20 @@ export class StudySession {
     const available = Math.max(240, container.clientWidth - 8);
     const rendered = svg.getBoundingClientRect().width;
     if (rendered <= available + 8 || rendered <= 0) return;
+
+    const floorZoom = mobileLayoutZoom(this.currentMobileMeasures()) * 0.92;
     const current = this.osmd.Zoom > 0 ? this.osmd.Zoom : 1;
-    const next = current * (available / rendered);
-    if (next < 0.85) {
-      const rules = engravingRules(this.osmd);
-      rules.PageFormat.width = Math.max(28, rules.PageFormat.width * (next / 0.85));
-      (this.osmd as { Zoom: number }).Zoom = 0.85;
-    } else {
+    let next = current * (available / rendered);
+    if (next >= floorZoom) {
       (this.osmd as { Zoom: number }).Zoom = next;
+      await this.osmd.render();
+      return;
     }
+
+    const rules = engravingRules(this.osmd);
+    const scale = Math.max(floorZoom, next) / current;
+    rules.PageFormat.width = Math.max(28, rules.PageFormat.width * scale);
+    (this.osmd as { Zoom: number }).Zoom = Math.max(floorZoom, next);
     await this.osmd.render();
   }
 
@@ -963,10 +990,11 @@ export class StudySession {
         this.osmdPlaybackRenderer = new OsmdPlaybackRenderer(
           () => this.osmd,
           () => this.options.getScoreContainer(),
-          () => this.isMobile && this.isPlaying,
+          () => this.isPlaying && (this.isMobile || this.fullscreenScore),
         );
+        this.osmdPlayerRendererStub = new OsmdPlaybackPlayerRendererStub(this.osmdPlaybackRenderer);
       }
-      const renderer = this.osmdPlaybackRenderer;
+      const renderer = this.osmdPlayerRendererStub ?? this.osmdPlaybackRenderer;
       try {
         this.player = await Player.create({
           container: el,
@@ -1104,24 +1132,12 @@ export class StudySession {
       try {
         const el = this as HTMLElement;
         const container = el?.closest?.('.score-container') as HTMLElement | null;
-        const containerHeight = container?.clientHeight;
-        if (container && !shouldFollowScoreScroll()) {
+        if (container) {
+          // Durante o play no mobile o follow fica só no OsmdPlaybackRenderer (evita dois scrolls).
+          if (shouldFollowScoreScroll()) return;
           return;
         }
-        if (!container || !containerHeight || !container.getBoundingClientRect || !el.getBoundingClientRect) {
-          return original.call(this, arg as boolean | ScrollIntoViewOptions);
-        }
-        const elRect = el.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
-        const offsetTop = elRect.top - containerRect.top + container.scrollTop;
-        const target = offsetTop - containerHeight / 2 + elRect.height / 2;
-        const behavior =
-          typeof arg === 'object' && arg?.behavior ? arg.behavior : 'smooth';
-        container.scrollTo({
-          top: Math.max(0, target),
-          behavior,
-        });
-        return;
+        return original.call(this, arg as boolean | ScrollIntoViewOptions);
       } catch {
         return original.call(this, arg as boolean | ScrollIntoViewOptions);
       }
@@ -1243,30 +1259,35 @@ export class StudySession {
     return { measureIndex, measureStartMs, measureOffsetMs };
   }
 
-  private applyOsmdCursorStyle() {
-    if (!this.osmd) return;
-    try {
-      this.osmd.cursor.CursorOptions = {
-        ...this.osmd.cursor.CursorOptions,
-        type: 1,
-        color: '#dc2626',
-        alpha: 0.95,
-        follow: false,
-      };
-      const cursorEl = this.osmd.cursor.cursorElement;
-      if (cursorEl) cursorEl.style.zIndex = '30';
-    } catch {
-      /* ignore */
-    }
-  }
-
-  /** Atualiza o rótulo “Compasso X, tempo Y” (a linha visual vem do cursor do OSMD via moveTo). */
+  /** Rótulo “Compasso X, tempo Y” + linha de reprodução (OsmdPlaybackRenderer). */
   private syncPlaybackCursor() {
     const posMs = this.getPlayerPositionMs();
     const timemap = readPlayerTimemap(this.player);
     if (posMs == null || !timemap) return;
-    const pos = getPlaybackPositionFromTimemap(timemap, posMs, this.beatsPerMeasure);
+    const osmdMeasureCount = this.osmd?.Sheet?.SourceMeasures?.length;
+    const pos = getPlaybackPositionFromTimemap(
+      timemap,
+      posMs,
+      this.beatsPerMeasure,
+      osmdMeasureCount,
+    );
     if (!pos) return;
+
+    const timemapIndex = findTimemapIndexAtPosition(timemap, posMs);
+    const entry = timemap[timemapIndex];
+    const measureStartMs = entry?.timestamp ?? 0;
+    let durationMs = entry?.duration ?? 0;
+    if (durationMs <= 0 && timemap[timemapIndex + 1]) {
+      durationMs = (timemap[timemapIndex + 1].timestamp ?? 0) - measureStartMs;
+    }
+    const offsetMs = Math.max(0, posMs - measureStartMs);
+    this.osmdPlaybackRenderer?.moveTo(
+      pos.measureIndex,
+      measureStartMs,
+      offsetMs,
+      durationMs > 0 ? durationMs : undefined,
+    );
+
     this.lastCursorMeasure = pos.measure;
     this.lastCursorBeat = pos.beatInMeasure;
     this.playbackPosition = {
@@ -1334,9 +1355,18 @@ export class StudySession {
       const measure = this.lastCursorMeasure >= 1 ? this.lastCursorMeasure : 1;
       const beat = this.lastCursorBeat >= 0 ? this.lastCursorBeat : 0;
       const moveTo = this.getMoveToFromMeasureBeat(measure, beat);
-      const pl = this.player as { moveTo?: (a: number, b: number, c: number) => void; play?: () => void };
+      const pl = this.player as {
+        moveTo?: (a: number, b: number, c: number) => void;
+        play?: () => void;
+        rewind?: () => void;
+        duration?: number;
+        position?: number;
+      };
       this.isPlaying = true;
-      if (moveTo && pl.moveTo) {
+      this.osmdPlaybackRenderer?.beginPlayback();
+      if (measure === 1 && beat === 0) {
+        pl.rewind?.();
+      } else if (moveTo && pl.moveTo) {
         pl.moveTo(moveTo.measureIndex, moveTo.measureStartMs, moveTo.measureOffsetMs);
       }
       pl.play?.();
