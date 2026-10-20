@@ -6,6 +6,9 @@ export interface SongScore {
   url: string;
 }
 
+export type StudyScoreStatus = 'none' | 'processing' | 'ready' | 'failed';
+export type StudyAudioStatus = 'none' | 'processing' | 'ready' | 'failed' | 'skipped';
+
 export interface Song extends Auditable {
   id: EntityId;
   title: string;
@@ -15,6 +18,10 @@ export interface Song extends Auditable {
   key?: string;
   durationSeconds?: number;
   scores: SongScore[];
+  studyScoreStatus?: StudyScoreStatus;
+  studyAudioStatus?: StudyAudioStatus;
+  studyScoreReady?: boolean;
+  studyAudioReady?: boolean;
   visibility: 'public' | 'private';
   visibleToStudents?: boolean;
   visibleToMusicians?: boolean;

@@ -635,6 +635,11 @@ function formatCell(
       published: 'Publicado',
       public: 'Pública',
       private: 'Privada',
+      none: '—',
+      processing: 'Processando',
+      ready: 'Pronta',
+      failed: 'Falhou',
+      skipped: 'Sem áudio',
     };
     return labels[String(value)] ?? String(value ?? '—');
   }

@@ -1,5 +1,7 @@
 import { apiAuthHeaders, apiFetch } from '@/lib/api';
 import { getApiUrl } from '@/config/environment';
+import { studyProcessingGateEnabled, studyScoreReady } from '@/config/studyProcessing';
+import type { Song } from '@/domains/songs/types';
 import {
   DEFAULT_INSTRUMENT_METADATA,
   resolveInstrumentMetadata,
@@ -80,12 +82,40 @@ export async function fetchFilteredXml(songId: string, partIds: string[]): Promi
   return response.text();
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+export async function waitForStudyScoreReady(
+  songId: string,
+  options?: { timeoutMs?: number; intervalMs?: number },
+): Promise<Song> {
+  const timeoutMs = options?.timeoutMs ?? 120_000;
+  const intervalMs = options?.intervalMs ?? 2_000;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const song = await apiFetch<Song>(`/songs/${encodeURIComponent(songId)}`);
+    if (studyScoreReady(song)) return song;
+    if (song.studyScoreStatus === 'failed') {
+      throw new Error('study_score_failed');
+    }
+    await wait(intervalMs);
+  }
+  throw new Error('study_score_timeout');
+}
+
 export async function fetchPartMidi(songId: string, partIds: string[]): Promise<ArrayBuffer | null> {
   const query = partIds.map((id) => encodeURIComponent(id)).join(',');
-  const response = await fetch(
-    `${getApiUrl()}/songs/${encodeURIComponent(songId)}/midi?parts=${query}`,
-    { headers: apiAuthHeaders() },
-  );
-  if (response.status !== 200) return null;
-  return response.arrayBuffer();
+  const url = `${getApiUrl()}/songs/${encodeURIComponent(songId)}/midi?parts=${query}`;
+  const poll = studyProcessingGateEnabled();
+  const deadline = poll ? Date.now() + 120_000 : Date.now();
+  while (Date.now() <= deadline) {
+    const response = await fetch(url, { headers: apiAuthHeaders() });
+    if (response.status === 200) return response.arrayBuffer();
+    if (!poll || response.status !== 202) return null;
+    await wait(2_000);
+  }
+  return null;
 }

@@ -19,6 +19,13 @@ import {
 } from '@/study/songParts';
 import type { Person } from '@/domains/people/types';
 import { youtubeWatchUrl } from '@/domains/songs/youtube';
+import {
+  studyAudioReady,
+  studyProcessingGateEnabled,
+  studyProcessingLabel,
+  studyScoreReady,
+} from '@/config/studyProcessing';
+import { waitForStudyScoreReady } from '@/study/songParts';
 
 export interface StudyStartOptions {
   song: Song;
@@ -42,6 +49,7 @@ interface SetupState {
   instruments: InstrumentInfo[];
   scoreInstrumentIds: string[];
   midiInstrumentIds: string[];
+  audioPending: boolean;
 }
 
 export function StudySongCatalog({ onStart, ownerId = null, personId = null, initialSongId = null }: StudySongCatalogProps) {
@@ -132,6 +140,16 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
         header: 'Partituras',
         minSize: 110,
       },
+      ...(studyProcessingGateEnabled()
+        ? [
+            {
+              id: 'studyPrep',
+              accessorFn: (song: Song) => studyProcessingLabel(song) ?? 'Pronta',
+              header: 'Preparação',
+              minSize: 140,
+            } satisfies TableColumnDef<Song>,
+          ]
+        : []),
     ],
     [],
   );
@@ -142,7 +160,16 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
     setPreparingId(String(song.id));
     setError(null);
     try {
-      const songId = String(song.id);
+      let activeSong = song;
+      if (studyProcessingGateEnabled()) {
+        if (activeSong.studyScoreStatus === 'failed') {
+          throw new Error('study_score_failed');
+        }
+        if (!studyScoreReady(activeSong)) {
+          activeSong = await waitForStudyScoreReady(String(song.id));
+        }
+      }
+      const songId = String(activeSong.id);
       let instruments: InstrumentInfo[] = [];
       try {
         const parts = await fetchSongParts(songId);
@@ -154,15 +181,19 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
         const scoreIds = keep(stored.score);
         const midiIds = keep(stored.midi);
         setSetup({
-          song,
+          song: activeSong,
           xml: '',
           instruments,
           scoreInstrumentIds: scoreIdsForViewport(scoreIds.length > 0 ? scoreIds : defaults),
           midiInstrumentIds: midiIds.length > 0 ? midiIds : defaults,
+          audioPending: studyProcessingGateEnabled() && !studyAudioReady(activeSong),
         });
         return;
       } catch {
-        /* partitura antiga ou API sem naipes: lê o XML inteiro */
+        if (studyProcessingGateEnabled()) {
+          throw new Error('study_parts_unavailable');
+        }
+        /* mock legado: lê o XML inteiro */
       }
       const response = await fetchAuthedAsset(score.url);
       if (!response.ok) throw new Error('score_fetch_failed');
@@ -170,14 +201,29 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
       instruments = extractInstrumentsFromXml(xml);
       const allIds = instruments.map((instrument) => instrument.id);
       setSetup({
-        song,
+        song: activeSong,
         xml,
         instruments,
         scoreInstrumentIds: scoreIdsForViewport(allIds),
         midiInstrumentIds: allIds,
+        audioPending: studyProcessingGateEnabled() && !studyAudioReady(activeSong),
       });
     } catch (caught) {
-      setError(failureMessage(caught, `Não foi possível preparar a partitura de ${song.title}.`));
+      if (caught instanceof Error && caught.message === 'study_score_failed') {
+        setError(
+          `A partitura de ${song.title} não pôde ser preparada. Peça ao maestro para reenviar o MusicXML.`,
+        );
+      } else if (caught instanceof Error && caught.message === 'study_score_timeout') {
+        setError(
+          `A partitura de ${song.title} ainda está sendo processada. Aguarde e tente novamente.`,
+        );
+      } else if (caught instanceof Error && caught.message === 'study_parts_unavailable') {
+        setError(
+          `Os naipes de ${song.title} ainda não estão disponíveis. Tente novamente em instantes.`,
+        );
+      } else {
+        setError(failureMessage(caught, `Não foi possível preparar a partitura de ${song.title}.`));
+      }
     } finally {
       setPreparingId(null);
     }
@@ -341,6 +387,13 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
               </p>
             )}
 
+            {setup.audioPending ? (
+              <p className="border-t border-[var(--border)] px-6 py-3 text-sm text-[var(--muted)]">
+                A partitura já pode ser aberta. O áudio de referência ainda está sendo gerado — o play
+                ficará disponível em breve.
+              </p>
+            ) : null}
+
             <footer className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--card)] px-6 py-4">
               {!canContinue && (
                 <p className="text-sm text-red-600">
@@ -412,6 +465,14 @@ function SongStudyActions({
   onStart: () => void;
 }) {
   const watchUrl = youtubeWatchUrl(song.videoUrl ?? '');
+  const prepLabel = studyProcessingLabel(song);
+  const blocked =
+    studyProcessingGateEnabled() &&
+    song.studyScoreStatus === 'failed';
+  const waitingScore =
+    studyProcessingGateEnabled() &&
+    !studyScoreReady(song) &&
+    song.studyScoreStatus !== 'failed';
   return (
     <div className="flex shrink-0 flex-wrap justify-end gap-2">
       {watchUrl ? (
@@ -428,10 +489,17 @@ function SongStudyActions({
       <button
         type="button"
         className="btn-primary min-h-11"
-        disabled={preparing}
+        disabled={preparing || blocked}
         onClick={onStart}
+        title={prepLabel ?? undefined}
       >
-        {preparing ? <MusicLoader compact label="Preparando…" /> : 'Iniciar estudo'}
+        {preparing || waitingScore ? (
+          <MusicLoader compact label={waitingScore ? 'Processando…' : 'Preparando…'} />
+        ) : blocked ? (
+          'Indisponível'
+        ) : (
+          'Iniciar estudo'
+        )}
       </button>
     </div>
   );

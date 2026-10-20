@@ -9,6 +9,7 @@ import {
   metadataFromMusicXml,
 } from "@/domains/songs/musicXmlMetadata";
 import { youtubeEmbedUrl, youtubeWatchUrl } from "@/domains/songs/youtube";
+import { extractInstrumentsFromXml } from "@/study/studyUtils";
 
 export interface EntityFormDynamicChoices {
   people: Array<CrudOption & { hasUser: boolean }> | null;
@@ -85,6 +86,14 @@ export function EntityForm({
       setFileError(
         field.name,
         "O arquivo não parece ser MusicXML válido. Confira se exportou como .xml ou .musicxml e tente novamente.",
+      );
+      return;
+    }
+    if (extractInstrumentsFromXml(content).length === 0) {
+      input.value = "";
+      setFileError(
+        field.name,
+        "A partitura não define naipes utilizáveis. Exporte novamente como MusicXML partwise com lista de instrumentos.",
       );
       return;
     }

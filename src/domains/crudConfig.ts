@@ -628,6 +628,11 @@ const songs: DomainCrudConfig = {
     { path: 'key', label: 'Tonalidade' },
     { path: 'visibility', label: 'Visualização', format: 'status' },
     { path: 'hasScore', label: 'Partitura', format: 'boolean' },
+    {
+      path: 'studyScoreStatus',
+      label: 'Prep. estudo',
+      format: 'status',
+    },
     { path: 'status', label: 'Status', format: 'status' },
     actorColumn,
   ],
