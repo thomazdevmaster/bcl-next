@@ -1,7 +1,9 @@
 <!-- BEGIN:nextjs-agent-rules -->
+
 # This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+
 <!-- END:nextjs-agent-rules -->
 
 # Agentes — Banda Carmelitana (`front-next`)
@@ -14,7 +16,7 @@ Leia este arquivo antes de alterar código. Complementos: `README.md`, `docs/arq
 
 A memória institucional da Banda Carmelitana Luminarense **não se inventa** e **não se completa** com texto de turismo, Wikipedia ou conhecimento geral do modelo.
 
-1. **Fonte primária:** `src/assets/A PRESENÇA DA MÚSICA NA HISTÓRIA LUMINARENSE (2023).pdf` — Hugo Nicodemos Biavati, *A Presença da Música na História Luminarense (1894 a 1978)*.
+1. **Fonte primária:** `src/assets/A PRESENÇA DA MÚSICA NA HISTÓRIA LUMINARENSE (2023).pdf` — Hugo Nicodemos Biavati, _A Presença da Música na História Luminarense (1894 a 1978)_.
 2. **Base de conhecimento para agentes:** `docs/historia-banda.md` (síntese obrigatória desse PDF). Trate o que está ali como **verdade**. Em conflito com a página Sobre, seeds, copy antiga ou sites externos, **prevalece o livro**.
 3. O volume cobre **1894–1978**. Fatos posteriores só entram se já estiverem no produto (contato, CNPJ, sede atual) ou se o próprio livro os registrar (ex.: mortes de Sinhô e Nem, reformas da sede).
 4. Ao escrever ou alterar Sobre, home, blog, legendas, textos de seed ou qualquer menção histórica: ler `docs/historia-banda.md` **antes**. Não usar a narrativa de “músicos solitários nas montanhas” nem a data **1910** como fundação da associação — o livro funda a corporação em **1894** (Américo José da Costa) e o primeiro estatuto em **1912**.
@@ -32,15 +34,15 @@ Perfis autenticados: `aluno`, `musico`, `maestro`, `admin`. Conta tem `roles[]`.
 
 Fluxo oficial: **App Router** (`src/app/**`).
 
-| Pasta | Uso |
-| --- | --- |
-| `src/app/` | Rotas |
-| `src/domains/` | Entidades, catálogo, CRUD config, seed |
-| `src/core/auth/` | Papéis, permissões, máscara |
-| `src/core/theme/tokens.css` | Cores, tipo, raios — não espalhar hex solto |
-| `src/components/domain/` | Workspace genérico de gestão |
-| `src/study/` (incl. `StudyPage.tsx`) | Sessão de estudo (client-only; OSMD/player usam `window`) |
-| `src/lib/api.ts` | HTTP da API (`NEXT_PUBLIC_API_URL`, fallback `http://localhost:3001`) |
+| Pasta                                | Uso                                                                   |
+| ------------------------------------ | --------------------------------------------------------------------- |
+| `src/app/`                           | Rotas                                                                 |
+| `src/domains/`                       | Entidades, catálogo, CRUD config, seed                                |
+| `src/core/auth/`                     | Papéis, permissões, máscara                                           |
+| `src/core/theme/tokens.css`          | Cores, tipo, raios — não espalhar hex solto                           |
+| `src/components/domain/`             | Workspace genérico de gestão                                          |
+| `src/study/` (incl. `StudyPage.tsx`) | Sessão de estudo (client-only; OSMD/player usam `window`)             |
+| `src/lib/api.ts`                     | HTTP da API (`NEXT_PUBLIC_API_URL`, fallback `http://localhost:3001`) |
 
 Não recriar `/students`, `src/legacy-pages` nem CRUD paralelo. IDs de registro: **só a API** (não `crypto.randomUUID()` no POST).
 
