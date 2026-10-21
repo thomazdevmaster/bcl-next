@@ -59,3 +59,9 @@ skills-lock.json
 # PASTA DE PROTÓTIPOS DE DESIGN
 src/app/prototype
 src/components/prototype
+
+# VSCODE
+.vscode
+
+# PRETTIER
+prettier.config.mjs
