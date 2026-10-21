@@ -1,122 +1,171 @@
-'use client';
+"use client";
 
-import { FormEvent, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { useAuth } from '@/contexts/AuthContext';
-import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
-import { MusicLoader } from '@/components/MusicLoader';
-import { postLoginRoute } from '@/core/auth/postLoginRoute';
-import { userFacingError } from '@/lib/userMessages';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Controller, FormProvider, useForm } from "react-hook-form";
+import { useAuth } from "@/contexts/AuthContext";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { MusicLoader } from "@/components/MusicLoader";
+import { FormStageActions } from "@/components/forms/FormStageActions";
+import { FormStageBlock } from "@/components/forms/FormStageBlock";
+import { FormStageField } from "@/components/forms/FormStageField";
+import { FormView } from "@/components/forms/core/FormView";
+import { postLoginRoute } from "@/core/auth/postLoginRoute";
+import { loginSchema, type LoginFormValues } from "@/domains/users/schemas/login.schema";
+import { userFacingError } from "@/lib/userMessages";
+
+const DEFAULT_VALUES: LoginFormValues = {
+  identifier: "",
+  password: "",
+  keepLoggedIn: true,
+};
+const LINK_MOTION_CLASS =
+  "transition-[color,transform,opacity] duration-150 ease-out hover:-translate-y-px hover:opacity-100 active:translate-y-0 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
 
 export default function LoginPage() {
   const auth = useAuth();
   const router = useRouter();
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
-  const [keep, setKeep] = useState(true);
+  const form = useForm<LoginFormValues>({
+    defaultValues: DEFAULT_VALUES,
+    resolver: zodResolver(loginSchema),
+    mode: "onChange",
+  });
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
 
   useEffect(() => {
     if (!auth.isHydrated || !auth.isLoggedIn) return;
-    router.replace(auth.user ? postLoginRoute(auth.user) : '/');
+    router.replace(auth.user ? postLoginRoute(auth.user) : "/");
   }, [auth.isHydrated, auth.isLoggedIn, auth.user, router]);
 
-  const onSubmit = async (event: FormEvent) => {
-    event.preventDefault();
+  const onSubmit = async ({ identifier, password, keepLoggedIn }: LoginFormValues) => {
     setError(null);
-    setBusy(true);
     try {
-      const session = await auth.login(identifier, password, keep);
+      const session = await auth.login(identifier, password, keepLoggedIn);
       router.push(postLoginRoute(session));
     } catch (err) {
       setError(userFacingError(err));
-    } finally {
-      setBusy(false);
     }
   };
 
   const onGoogleCredential = async (credential: string) => {
     setError(null);
-    setBusy(true);
+    setGoogleBusy(true);
     try {
-      const session = await auth.loginWithGoogle(credential, keep);
+      const session = await auth.loginWithGoogle(credential, form.getValues("keepLoggedIn"));
       router.push(postLoginRoute(session));
     } catch (err) {
       setError(userFacingError(err));
     } finally {
-      setBusy(false);
+      setGoogleBusy(false);
     }
   };
 
   return (
-    <div className="mx-auto max-w-md px-4 py-16">
-      <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8 shadow-[var(--shadow-soft)]">
-        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Acesso interno</p>
-        <h1 className="mt-2 text-3xl font-semibold">Entrar</h1>
-        <p className="mt-2 text-sm text-[var(--muted)]">
-          Entre com seu nome de usuário ou e-mail e a senha da banda.
-        </p>
-
-        <div className="mt-8">
-          <GoogleSignInButton text="signin_with" onCredential={(credential) => void onGoogleCredential(credential)} disabled={busy} />
-        </div>
-        <div className="my-6 flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-[var(--muted)]" aria-hidden="true">
-          <span className="h-px flex-1 bg-[var(--border)]" />
-          ou
-          <span className="h-px flex-1 bg-[var(--border)]" />
-        </div>
-
-        <form className="flex flex-col gap-4" onSubmit={onSubmit}>
-          <label className="flex flex-col gap-1.5 text-sm font-medium">
-            Usuário ou e-mail
-            <input
-              className="min-h-11 w-full"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              type="text"
-              placeholder="nome.sobrenome ou voce@exemplo.com"
-              autoComplete="username"
-              autoCapitalize="none"
-              spellCheck={false}
-              required
+    <div className="mx-auto max-w-xl px-4 py-16">
+      <FormProvider {...form}>
+        <FormView
+          eyebrow="Acesso interno"
+          title="Entrar"
+          description="Entre com seu nome de usuário ou e-mail e a senha da banda."
+          onSubmit={form.handleSubmit(onSubmit)}
+          noValidate
+          className="sm:p-8"
+          formClassName="space-y-4"
+        >
+          <div>
+            <GoogleSignInButton
+              text="signin_with"
+              onCredential={(credential) => void onGoogleCredential(credential)}
+              disabled={googleBusy || form.formState.isSubmitting}
             />
-          </label>
-          <label className="flex flex-col gap-1.5 text-sm font-medium">
-            Senha
-            <input
-              className="min-h-11 w-full"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              type="password"
-              placeholder="Sua senha"
-              autoComplete="current-password"
-              required
-            />
-          </label>
-          <label className="flex min-h-11 items-center gap-2 text-sm">
-            <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} />
-            Manter conectado
-          </label>
-          {error && (
-            <p className="text-sm text-[var(--destructive)]" role="alert">
+            <div
+              className="my-6 flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
+              aria-hidden="true"
+            >
+              <span className="h-px flex-1 bg-[var(--border)]" />
+              ou
+              <span className="h-px flex-1 bg-[var(--border)]" />
+            </div>
+          </div>
+
+          <FormStageBlock title="Credenciais" surface="plain" className="!pb-0">
+            <div className="space-y-4">
+              <FormStageField<LoginFormValues>
+                name="identifier"
+                label="Usuário ou e-mail"
+                placeholder="nome.sobrenome ou voce@exemplo.com"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                infoMessage="Informe seu nome de usuário ou e-mail cadastrado."
+                disabled={googleBusy}
+                onEdit={() => setError(null)}
+              />
+              <FormStageField<LoginFormValues>
+                name="password"
+                label="Senha"
+                type="password"
+                placeholder="Sua senha"
+                autoComplete="current-password"
+                infoMessage="Digite a senha da sua conta."
+                disabled={googleBusy}
+                onEdit={() => setError(null)}
+              />
+              <Controller
+                control={form.control}
+                name="keepLoggedIn"
+                render={({ field }) => (
+                  <label className="flex min-h-11 items-center gap-2 text-sm">
+                    <input
+                      ref={field.ref}
+                      name={field.name}
+                      type="checkbox"
+                      checked={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      disabled={googleBusy}
+                    />
+                    Manter conectado
+                  </label>
+                )}
+              />
+            </div>
+          </FormStageBlock>
+
+          {error ? (
+            <p
+              className="rounded-md border border-[var(--destructive)]/40 px-3 py-2 text-sm text-[var(--destructive)] starting:translate-y-1 starting:opacity-0 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none motion-reduce:starting:translate-y-0 motion-reduce:starting:opacity-100"
+              role="alert"
+            >
               {error}
             </p>
-          )}
-          <button type="submit" className="btn-primary min-h-11 w-full" disabled={busy}>
-            {busy ? <MusicLoader compact label="Entrando…" /> : 'Entrar'}
-          </button>
+          ) : null}
+
+          <FormStageActions
+            active={0}
+            total={1}
+            busy={googleBusy || form.formState.isSubmitting}
+            onBack={() => undefined}
+            onNext={() => undefined}
+            fullWidth
+            submitLabel="Entrar"
+            pendingLabel="Entrando…"
+            pendingContent={<MusicLoader compact label="Entrando…" />}
+          />
+
           <div className="flex flex-wrap justify-between gap-3 text-sm">
-            <Link href="/esqueci-senha" className="min-h-11 inline-flex items-center">
+            <Link href="/esqueci-senha" className={`inline-flex min-h-11 items-center ${LINK_MOTION_CLASS}`}>
               Esqueci a senha
             </Link>
-            <Link href="/cadastro" className="min-h-11 inline-flex items-center">
+            <Link href="/cadastro" className={`inline-flex min-h-11 items-center ${LINK_MOTION_CLASS}`}>
               Criar cadastro
             </Link>
           </div>
-        </form>
-      </div>
+        </FormView>
+      </FormProvider>
     </div>
   );
 }

@@ -1,7 +1,9 @@
 <!-- BEGIN:nextjs-agent-rules -->
+
 # This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+
 <!-- END:nextjs-agent-rules -->
 
 # Agentes — Banda Carmelitana (`front-next`)
@@ -14,7 +16,7 @@ Leia este arquivo antes de alterar código. Complementos: `README.md`, `docs/arq
 
 A memória institucional da Banda Carmelitana Luminarense **não se inventa** e **não se completa** com texto de turismo, Wikipedia ou conhecimento geral do modelo.
 
-1. **Fonte primária:** `src/assets/A PRESENÇA DA MÚSICA NA HISTÓRIA LUMINARENSE (2023).pdf` — Hugo Nicodemos Biavati, *A Presença da Música na História Luminarense (1894 a 1978)*.
+1. **Fonte primária:** `src/assets/A PRESENÇA DA MÚSICA NA HISTÓRIA LUMINARENSE (2023).pdf` — Hugo Nicodemos Biavati, _A Presença da Música na História Luminarense (1894 a 1978)_.
 2. **Base de conhecimento para agentes:** `docs/historia-banda.md` (síntese obrigatória desse PDF). Trate o que está ali como **verdade**. Em conflito com a página Sobre, seeds, copy antiga ou sites externos, **prevalece o livro**.
 3. O volume cobre **1894–1978**. Fatos posteriores só entram se já estiverem no produto (contato, CNPJ, sede atual) ou se o próprio livro os registrar (ex.: mortes de Sinhô e Nem, reformas da sede).
 4. Ao escrever ou alterar Sobre, home, blog, legendas, textos de seed ou qualquer menção histórica: ler `docs/historia-banda.md` **antes**. Não usar a narrativa de “músicos solitários nas montanhas” nem a data **1910** como fundação da associação — o livro funda a corporação em **1894** (Américo José da Costa) e o primeiro estatuto em **1912**.
@@ -32,15 +34,15 @@ Perfis autenticados: `aluno`, `musico`, `maestro`, `admin`. Conta tem `roles[]`.
 
 Fluxo oficial: **App Router** (`src/app/**`).
 
-| Pasta | Uso |
-| --- | --- |
-| `src/app/` | Rotas |
-| `src/domains/` | Entidades, catálogo, CRUD config, seed |
-| `src/core/auth/` | Papéis, permissões, máscara |
-| `src/core/theme/tokens.css` | Cores, tipo, raios — não espalhar hex solto |
-| `src/components/domain/` | Workspace genérico de gestão |
-| `src/study/` (incl. `StudyPage.tsx`) | Sessão de estudo (client-only; OSMD/player usam `window`) |
-| `src/lib/api.ts` | HTTP da API (`NEXT_PUBLIC_API_URL`, fallback `http://localhost:3001`) |
+| Pasta                                | Uso                                                                   |
+| ------------------------------------ | --------------------------------------------------------------------- |
+| `src/app/`                           | Rotas                                                                 |
+| `src/domains/`                       | Entidades, catálogo, CRUD config, seed                                |
+| `src/core/auth/`                     | Papéis, permissões, máscara                                           |
+| `src/core/theme/tokens.css`          | Cores, tipo, raios — não espalhar hex solto                           |
+| `src/components/domain/`             | Workspace genérico de gestão                                          |
+| `src/study/` (incl. `StudyPage.tsx`) | Sessão de estudo (client-only; OSMD/player usam `window`)             |
+| `src/lib/api.ts`                     | HTTP da API (`NEXT_PUBLIC_API_URL`, fallback `http://localhost:3001`) |
 
 Não recriar `/students`, `src/legacy-pages` nem CRUD paralelo. IDs de registro: **só a API** (não `crypto.randomUUID()` no POST).
 
@@ -59,6 +61,19 @@ Novo domínio: tipos em `src/domains/<nome>/` → `catalog.ts` → `permissions.
 - Não expandir escopo: sem microserviços, BFF extra ou segundo CRUD “só para estudo”.
 - Lint/tipos nos arquivos tocados. O ESLint global ainda pode falhar em código antigo do player — não “consertar o mundo” sem pedido.
 - Na dúvida de produto: perguntar.
+
+## Padrão obrigatório para formulários
+
+Formulários novos e formulários alterados devem seguir o mesmo fluxo de validação e composição. Reutilize `src/components/forms/`; não crie uma segunda família de campos, mensagens ou etapas por página.
+
+1. **Schema no domínio:** crie ou mantenha o schema em `src/domains/<dominio>/schemas/<nome>.schema.ts`. Use Zod, exporte o schema e o tipo inferido (`z.infer<typeof schema>`). Coloque no schema as regras de formato, obrigatoriedade, limites e validações entre campos. Para regras de domínio existentes, reutilize funções do domínio em vez de copiá-las. Use `superRefine` para erros cruzados, como confirmação de senha. Referência: `src/domains/users/schemas/signup.schema.ts`.
+2. **Estado e validação:** configure `useForm<T>` com `defaultValues` completos e `zodResolver(schema)`; envolva os campos em `FormProvider` e conecte o envio com `form.handleSubmit`. Use `noValidate` no elemento `<form>` para manter a validação sob o schema e o React Hook Form. Não duplique regras de negócio em estado manual ou validações HTML paralelas.
+3. **Composição compartilhada:** use `FormView` como estrutura padrão para título, descrição e `<form>`. Agrupe campos relacionados com `FormStageBlock`; use `FormStageField` para campos de texto e demais inputs string suportados. Em campo customizado ou não suportado por `FormStageField`, integre o controle ao React Hook Form e reutilize `FormFieldValidationShell` para rótulo, estado visual, descrição e acessibilidade. Não crie inputs de formulário paralelos com estilo e validação próprios.
+4. **Etapas:** em formulário dividido em etapas, use `FormStageProgress` para navegação e `FormStageActions` para Voltar, Continuar e Enviar. Mantenha os valores ao trocar de etapa, valide antes de avançar e limite a navegação às etapas já alcançadas. Em formulário de etapa única, não mostre progresso; use as ações compartilhadas para o envio quando o fluxo se encaixar.
+5. **Mensagens e estados:** passe mensagens de orientação e opcionais pelas props `infoMessage` e `optionalMessage` do campo. Erros do schema devem aparecer no campo correspondente pela integração compartilhada (`FormFieldStatusMessage` / `FormFieldStateStrip`); erros gerais de API devem usar uma mensagem global acessível, como `role="alert"`. Não dependa apenas de cor ou animação para indicar estado.
+6. **Envio:** mantenha a chamada à API no handler de envio. Desabilite ações enquanto a requisição estiver pendente, mostre o rótulo de envio e converta falhas com o tratamento de mensagens já usado no domínio. Validação cliente melhora o fluxo, mas não substitui validação no servidor.
+7. **Formatação e usabilidade:** use `formatValue` para máscaras ou normalizações de apresentação, sem substituir a validação do schema. Preserve `label`, `autoComplete`, `inputMode`, `aria-describedby`, `aria-invalid` e os estados acessíveis dos componentes compartilhados. Botões e controles devem ter alvo de toque mínimo de 44 px e caber em viewport de 360 px.
+8. **Exceções:** uma composição especial, como autenticação externa ou formulário em diálogo, pode exigir outro contêiner. Ainda assim, reutilize schema, React Hook Form, campos, mensagens e ações compartilhados; só amplie a biblioteca comum quando o componente atual não cobrir uma necessidade real reutilizável.
 
 ## Celular e uso real (obrigatório)
 

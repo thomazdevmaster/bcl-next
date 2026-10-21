@@ -49,6 +49,8 @@
   --accent-foreground: var(--color-ink);
   --destructive: #dc2626;
   --destructive-foreground: var(--color-white);
+  --success: #15803d;
+  --warning: #a16207;
   --ring: var(--color-brand);
   --radius: 0.75rem;
   --shadow-soft: 0 10px 30px rgba(11, 28, 44, 0.08);
@@ -98,6 +100,8 @@
   --accent-foreground: #e8f1f6;
   --destructive: #f07171;
   --destructive-foreground: #07131e;
+  --success: #4ade80;
+  --warning: #facc15;
   --ring: var(--color-brand);
   --code-bg: #163044;
   --header-bg: #07131e;
