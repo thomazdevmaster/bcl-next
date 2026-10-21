@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { can } from '@/core/auth/permissions';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -11,7 +11,7 @@ type PendingUser = { id: string | number; username: string; name: string; email?
 const contactLine = (user: PendingUser) => [`@${user.username}`, user.email].filter(Boolean).join(' · ');
 type RoleOption = { code: string; name: string };
 
-export function UserApprovals() {
+export function UserApprovals({ layout = 'stacked' }: { layout?: 'stacked' | 'columns' }) {
   const { roles, permissions } = useAuth();
   const allowed = can(roles, 'users', 'approve', permissions);
   const [pending, setPending] = useState<PendingUser[]>([]);
@@ -22,7 +22,7 @@ export function UserApprovals() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const load = () => {
+  const load = useCallback(() => {
     if (!allowed) return;
     Promise.all([
       apiFetch<PendingUser[]>('/users/pending'),
@@ -46,11 +46,11 @@ export function UserApprovals() {
       .catch((caught: unknown) => {
         setError(userFacingError(caught));
       });
-  };
+  }, [allowed]);
 
   useEffect(() => {
     load();
-  }, [allowed]);
+  }, [load]);
 
   if (!allowed) return null;
 
@@ -117,8 +117,8 @@ export function UserApprovals() {
   };
 
   return (
-    <div className="space-y-6">
-      {error && <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>}
+    <div className={layout === 'columns' ? 'grid grid-cols-1 gap-6 lg:grid-cols-2' : 'space-y-6'}>
+      {error && <div role="alert" className={`rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 ${layout === 'columns' ? 'lg:col-span-2' : ''}`}>{error}</div>}
 
       <section className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
         <h2 className="text-xl font-semibold">Cadastros aguardando aprovação</h2>

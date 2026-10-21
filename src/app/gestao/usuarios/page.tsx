@@ -3,9 +3,9 @@ import { UsersWorkspace } from "@/components/domain/users/UsersWorkspace";
 
 export default function UsuariosPage() {
   return (
-    <div className="mx-auto space-y-8">
-      <UserApprovals />
-      <UsersWorkspace />
+    <div className="mx-auto space-y-6">
+      <UserApprovals layout="columns" />
+      <UsersWorkspace createHeading="Usuários" />
     </div>
   );
 }
