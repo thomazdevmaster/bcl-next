@@ -26,9 +26,8 @@ import {
   getCrudConfig,
   getValue,
 } from "@/domains/crudConfig";
-import { canReadPrivateSongs, filterSongsForCatalog } from "@/domains/songs/catalogAccess";
+import { canReadPrivateSongs, filterSongRecordsForCatalog } from "@/domains/songs/catalogAccess";
 import type { Person } from "@/domains/people/types";
-import type { Song } from "@/domains/songs/types";
 import { filterPeopleForRole } from "@/domains/people/visibility";
 import { apiFetch } from "@/lib/api";
 import { sealPassword } from "@/lib/passwordCipher";
@@ -121,7 +120,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
     try {
       let rows = await apiFetch<Record<string, unknown>[]>(`/${domain.apiResource}`);
       if (resource === "songs" && !canReadFullSongs) {
-        rows = filterSongsForCatalog(rows as Song[], roles, permissions) as Record<string, unknown>[];
+        rows = filterSongRecordsForCatalog(rows, roles, permissions);
       }
       setItems(rows);
     } catch (caught) {

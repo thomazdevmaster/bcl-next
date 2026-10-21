@@ -20,6 +20,16 @@ export function filterSongsForCatalog(
   return songs.filter((song) => song.visibility === 'public');
 }
 
+/** Variante para listagens CRUD genéricas (`Record<string, unknown>`). */
+export function filterSongRecordsForCatalog(
+  rows: Record<string, unknown>[],
+  roles: AccessRoles,
+  permissions?: readonly string[] | null,
+): Record<string, unknown>[] {
+  if (canReadPrivateSongs(roles, permissions)) return rows;
+  return rows.filter((row) => row.visibility === 'public');
+}
+
 export function isSongVisibleInCatalog(
   song: Song,
   roles: AccessRoles,
