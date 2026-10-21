@@ -1,31 +1,41 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import Link from 'next/link';
-import { apiFetch } from '@/lib/api';
-import { sealPassword } from '@/lib/passwordCipher';
-import { failureMessage, userFacingError } from '@/lib/userMessages';
-import { usesRemoteApi } from '@/core/auth/accessToken';
-import { can } from '@/core/auth/permissions';
-import { hasRole, roleLabels } from '@/core/auth/roles';
-import { useAuth } from '@/contexts/AuthContext';
-import { getDomain } from '@/domains/catalog';
 import {
-  getCrudConfig,
-  getValue,
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import Link from "next/link";
+
+import { EntityDialog } from "@/components/shared/EntityDialog";
+import { TableView } from "@/components/tables/core/TableView";
+import { useAuth } from "@/contexts/AuthContext";
+import { usesRemoteApi } from "@/core/auth/accessToken";
+import { can } from "@/core/auth/permissions";
+import type { CrudResource } from "@/core/auth/permissions";
+import { hasRole, roleLabels } from "@/core/auth/roles";
+import { getDomain } from "@/domains/catalog";
+import {
   type CrudColumn,
   type CrudField,
   type CrudOption,
   type CrudOptionSource,
-} from '@/domains/crudConfig';
-import type { CrudResource } from '@/core/auth/permissions';
-import { filterPeopleForRole } from '@/domains/people/visibility';
-import type { Person } from '@/domains/people/types';
-import { TableView } from '@/components/tables/core/TableView';
-import { EntityDialog } from '@/components/shared/EntityDialog';
-import { EntityForm, type EntityFormDynamicChoices } from './EntityForm';
-import { createDomainTableColumns } from './table-columns';
-import { DomainGuard } from './DomainGuard';
+  getCrudConfig,
+  getValue,
+} from "@/domains/crudConfig";
+import type { Person } from "@/domains/people/types";
+import { filterPeopleForRole } from "@/domains/people/visibility";
+import { apiFetch } from "@/lib/api";
+import { sealPassword } from "@/lib/passwordCipher";
+import { failureMessage, userFacingError } from "@/lib/userMessages";
+
+import { DomainGuard } from "./DomainGuard";
+import { EntityForm, type EntityFormDynamicChoices } from "./EntityForm";
+import { createDomainTableColumns } from "./table-columns";
+import { UsersWorkspace } from "./users/UsersWorkspace";
 
 interface DomainWorkspaceProps {
   resource: CrudResource;
@@ -33,11 +43,14 @@ interface DomainWorkspaceProps {
   entityFields?: string[];
 }
 
-type DialogMode = 'create' | 'view' | 'edit' | null;
+type DialogMode = "create" | "view" | "edit" | null;
 
-const buttonMotion = 'transition-[transform,background-color,color,border-color,box-shadow] duration-150 ease-out active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100';
-const iconMotion = 'transition-transform duration-200 ease-out group-hover:scale-110 group-active:scale-75 motion-reduce:transition-none motion-reduce:group-hover:scale-100 motion-reduce:group-active:scale-100';
-const controlMotion = 'transition-[border-color,background-color,box-shadow] duration-150 ease-out motion-reduce:transition-none';
+const buttonMotion =
+  "transition-[transform,background-color,color,border-color,box-shadow] duration-150 ease-out active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100";
+const iconMotion =
+  "transition-transform duration-200 ease-out group-hover:scale-110 group-active:scale-75 motion-reduce:transition-none motion-reduce:group-hover:scale-100 motion-reduce:group-active:scale-100";
+const controlMotion =
+  "transition-[border-color,background-color,box-shadow] duration-150 ease-out motion-reduce:transition-none";
 
 /** Opção de pessoa com o que o formulário precisa para filtrar (sem conta, não é a própria). */
 interface PersonChoice extends CrudOption {
@@ -50,7 +63,12 @@ interface IssuedPassword {
   password: string;
 }
 
-export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
+export function DomainWorkspace(props: DomainWorkspaceProps) {
+  if (props.resource === "users") return <UsersWorkspace />;
+  return <GenericDomainWorkspace {...props} />;
+}
+
+function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
   const domain = getDomain(resource);
   const config = getCrudConfig(resource);
   const { roles, permissions, user } = useAuth();
@@ -59,17 +77,29 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
-  const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
-  const [values, setValues] = useState<Record<string, unknown>>(config.defaults);
+  const [selected, setSelected] = useState<Record<string, unknown> | null>(
+    null,
+  );
+  const [values, setValues] = useState<Record<string, unknown>>(
+    config.defaults,
+  );
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [deleteTarget, setDeleteTarget] = useState<Record<string, unknown> | null>(null);
-  const [issuedPassword, setIssuedPassword] = useState<IssuedPassword | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const [issuedPassword, setIssuedPassword] = useState<IssuedPassword | null>(
+    null,
+  );
   const [roleChoices, setRoleChoices] = useState<CrudOption[] | null>(null);
-  const [choices, setChoices] = useState<EntityFormDynamicChoices>({ people: null, instruments: null });
-  const canCreate = can(roles, resource, 'create', permissions);
-  const canUpdate = can(roles, resource, 'update', permissions);
-  const canDelete = can(roles, resource, 'delete', permissions);
-  const managesRoles = hasRole(roles, 'admin');
+  const [choices, setChoices] = useState<EntityFormDynamicChoices>({
+    people: null,
+    instruments: null,
+  });
+  const canCreate = can(roles, resource, "create", permissions);
+  const canUpdate = can(roles, resource, "update", permissions);
+  const canDelete = can(roles, resource, "delete", permissions);
+  const managesRoles = hasRole(roles, "admin");
 
   const sources = useMemo(() => {
     const needed = new Set<CrudOptionSource>();
@@ -78,31 +108,44 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
     }
     return needed;
   }, [config.fields]);
-  const needsPeople = sources.has('people') || sources.has('people-without-user');
-  const needsInstruments = sources.has('instruments');
+  const needsPeople =
+    sources.has("people") || sources.has("people-without-user");
+  const needsInstruments = sources.has("instruments");
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setItems(await apiFetch<Record<string, unknown>[]>(`/${domain.apiResource}`));
+      setItems(
+        await apiFetch<Record<string, unknown>[]>(`/${domain.apiResource}`),
+      );
     } catch (caught) {
-      setError(failureMessage(caught, 'Não foi possível carregar os registros. Confirme se a API está rodando.'));
+      setError(
+        failureMessage(
+          caught,
+          "Não foi possível carregar os registros. Confirme se a API está rodando.",
+        ),
+      );
     } finally {
       setLoading(false);
     }
   }, [domain.apiResource]);
 
   useEffect(() => {
+    // A listagem precisa iniciar quando o workspace monta.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchItems();
   }, [fetchItems]);
 
   useEffect(() => {
-    if (resource !== 'users' || !managesRoles) return;
+    if (resource !== "users" || !managesRoles) return;
     let active = true;
-    apiFetch<Array<{ code: string; name: string }>>('/roles')
+    apiFetch<Array<{ code: string; name: string }>>("/roles")
       .then((data) => {
-        if (active) setRoleChoices(data.map((role) => ({ value: role.code, label: role.name })));
+        if (active)
+          setRoleChoices(
+            data.map((role) => ({ value: role.code, label: role.name })),
+          );
       })
       .catch(() => {
         if (active) setRoleChoices(null);
@@ -116,15 +159,19 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
   useEffect(() => {
     if (!needsPeople) return;
     let active = true;
-    apiFetch<Array<Pick<Person, 'id' | 'firstName' | 'lastName' | 'userId'>>>('/people')
+    apiFetch<Array<Pick<Person, "id" | "firstName" | "lastName" | "userId">>>(
+      "/people",
+    )
       .then((data) => {
         if (!active) return;
         setChoices((current) => ({
           ...current,
           people: data.map((person) => ({
             value: String(person.id),
-            label: `${person.firstName ?? ''} ${person.lastName ?? ''}`.trim() || String(person.id),
-            hasUser: person.userId != null && person.userId !== '',
+            label:
+              `${person.firstName ?? ""} ${person.lastName ?? ""}`.trim() ||
+              String(person.id),
+            hasUser: person.userId != null && person.userId !== "",
           })),
         }));
       })
@@ -140,21 +187,31 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
   useEffect(() => {
     if (!needsInstruments) return;
     let active = true;
-    apiFetch<Array<{ id: string | number; name?: string; tuning?: string; status?: string }>>('/instruments')
+    apiFetch<
+      Array<{
+        id: string | number;
+        name?: string;
+        tuning?: string;
+        status?: string;
+      }>
+    >("/instruments")
       .then((data) => {
         if (!active) return;
         setChoices((current) => ({
           ...current,
           instruments: data
-            .filter((item) => item.status !== 'inactive')
+            .filter((item) => item.status !== "inactive")
             .map((item) => ({
               value: String(item.id),
-              label: [item.name, item.tuning].filter(Boolean).join(' · ') || String(item.id),
+              label:
+                [item.name, item.tuning].filter(Boolean).join(" · ") ||
+                String(item.id),
             })),
         }));
       })
       .catch(() => {
-        if (active) setChoices((current) => ({ ...current, instruments: null }));
+        if (active)
+          setChoices((current) => ({ ...current, instruments: null }));
       });
     return () => {
       active = false;
@@ -169,14 +226,18 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
       const id = String(saved.id);
       const entry: PersonChoice = {
         value: id,
-        label: `${String(saved.firstName ?? '')} ${String(saved.lastName ?? '')}`.trim() || id,
-        hasUser: saved.userId != null && saved.userId !== '',
+        label:
+          `${String(saved.firstName ?? "")} ${String(saved.lastName ?? "")}`.trim() ||
+          id,
+        hasUser: saved.userId != null && saved.userId !== "",
       };
       const exists = current.people.some((person) => person.value === id);
       return {
         ...current,
         people: exists
-          ? current.people.map((person) => (person.value === id ? entry : person))
+          ? current.people.map((person) =>
+              person.value === id ? entry : person,
+            )
           : [...current.people, entry],
       };
     });
@@ -184,7 +245,7 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
 
   const rows = useMemo(() => {
     let visibleItems = config.filter ? items.filter(config.filter) : items;
-    if (resource === 'people') {
+    if (resource === "people") {
       visibleItems = filterPeopleForRole(
         visibleItems as unknown as Person[],
         roles,
@@ -195,11 +256,12 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
   }, [config, items, permissions, resource, roles]);
 
   const tableColumns = useMemo(
-    () => createDomainTableColumns(
-      config.columns,
-      (row, column) => formatCell(row, column, roleChoices, choices.people),
-      resource,
-    ),
+    () =>
+      createDomainTableColumns(
+        config.columns,
+        (row, column) => formatCell(row, column, roleChoices, choices.people),
+        resource,
+      ),
     [choices.people, config.columns, resource, roleChoices],
   );
 
@@ -207,58 +269,81 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
     setSelected(null);
     setValues({ ...config.defaults });
     setFormErrors({});
-    setDialogMode('create');
+    setDialogMode("create");
   };
 
-  const openItem = useCallback((item: Record<string, unknown>, mode: 'view' | 'edit') => {
-    setSelected(item);
-    setValues({
-      ...config.defaults,
-      ...(config.toForm ? config.toForm(item) : item),
-    });
-    setFormErrors({});
-    setDialogMode(mode);
-  }, [config]);
+  const openItem = useCallback(
+    (item: Record<string, unknown>, mode: "view" | "edit") => {
+      setSelected(item);
+      setValues({
+        ...config.defaults,
+        ...(config.toForm ? config.toForm(item) : item),
+      });
+      setFormErrors({});
+      setDialogMode(mode);
+    },
+    [config],
+  );
 
-  const renderRowActions = useCallback((row: Record<string, unknown>) => (
-    <div className="flex justify-end gap-1">
-      {resource === 'songs' ? (
-        songHasScore(row) ? (
-          <Link
-            href={`/study/${row.id}`}
-            title="Estudar"
-            aria-label="Estudar"
-            className={`group inline-flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-brand-strong)] hover:bg-[var(--color-brand-soft)] ${buttonMotion}`}
-          >
-            <span className={`material-icons text-lg ${iconMotion}`} aria-hidden="true">school</span>
-          </Link>
-        ) : (
-          <button
-            type="button"
-            disabled
-            title="Sem partitura"
-            aria-label="Estudar"
-            className="inline-flex h-11 w-11 cursor-not-allowed items-center justify-center rounded-full text-[var(--muted)] opacity-40"
-          >
-            <span className="material-icons text-lg" aria-hidden="true">school</span>
-          </button>
-        )
-      ) : null}
-      <ActionButton icon="visibility" label="Visualizar" onClick={() => openItem(row, 'view')} />
-      {canUpdate && (
-        <ActionButton icon="edit" label="Editar" onClick={() => openItem(row, 'edit')} />
-      )}
-      {canDelete && (
+  const renderRowActions = useCallback(
+    (row: Record<string, unknown>) => (
+      <div className="flex justify-end gap-1">
+        {resource === "songs" ? (
+          songHasScore(row) ? (
+            <Link
+              href={`/study/${row.id}`}
+              title="Estudar"
+              aria-label="Estudar"
+              className={`group inline-flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-brand-strong)] hover:bg-[var(--color-brand-soft)] ${buttonMotion}`}
+            >
+              <span
+                className={`material-icons text-lg ${iconMotion}`}
+                aria-hidden="true"
+              >
+                school
+              </span>
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled
+              title="Sem partitura"
+              aria-label="Estudar"
+              className="inline-flex h-11 w-11 cursor-not-allowed items-center justify-center rounded-full text-[var(--muted)] opacity-40"
+            >
+              <span className="material-icons text-lg" aria-hidden="true">
+                school
+              </span>
+            </button>
+          )
+        ) : null}
         <ActionButton
-          icon="delete"
-          label="Excluir"
-          danger
-          disabled={resource === 'users' && String(row.id) === String(user?.id)}
-          onClick={() => setDeleteTarget(row)}
+          icon="visibility"
+          label="Visualizar"
+          onClick={() => openItem(row, "view")}
         />
-      )}
-    </div>
-  ), [canDelete, canUpdate, openItem, resource, user?.id]);
+        {canUpdate && (
+          <ActionButton
+            icon="edit"
+            label="Editar"
+            onClick={() => openItem(row, "edit")}
+          />
+        )}
+        {canDelete && (
+          <ActionButton
+            icon="delete"
+            label="Excluir"
+            danger
+            disabled={
+              resource === "users" && String(row.id) === String(user?.id)
+            }
+            onClick={() => setDeleteTarget(row)}
+          />
+        )}
+      </div>
+    ),
+    [canDelete, canUpdate, openItem, resource, user?.id],
+  );
 
   const dismissEntityDialog = useCallback(() => {
     setDialogMode(null);
@@ -275,11 +360,16 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
     event.preventDefault();
     const errors = validateValues(config.fields, values);
 
-    if (resource === 'users' && !managesRoles) {
-      const previous = Array.isArray(selected?.roles) ? selected.roles.map(String).sort() : [];
-      const next = Array.isArray(values.roles) ? values.roles.map(String).sort() : [];
-      if (previous.join('|') !== next.join('|')) {
-        errors.roles = 'Somente um administrador pode vincular ou desvincular papéis.';
+    if (resource === "users" && !managesRoles) {
+      const previous = Array.isArray(selected?.roles)
+        ? selected.roles.map(String).sort()
+        : [];
+      const next = Array.isArray(values.roles)
+        ? values.roles.map(String).sort()
+        : [];
+      if (previous.join("|") !== next.join("|")) {
+        errors.roles =
+          "Somente um administrador pode vincular ou desvincular papéis.";
       }
     }
 
@@ -289,10 +379,11 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
         candidate &&
         items.some(
           (item) =>
-            item.id !== selected?.id && normalizeUniqueValue(getValue(item, uniqueField)) === candidate,
+            item.id !== selected?.id &&
+            normalizeUniqueValue(getValue(item, uniqueField)) === candidate,
         )
       ) {
-        errors[uniqueField] = 'Já existe um registro com este valor.';
+        errors[uniqueField] = "Já existe um registro com este valor.";
       }
     }
 
@@ -306,9 +397,10 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
       const mapped = config.toPayload
         ? config.toPayload(values, selected ?? undefined)
         : withAudit(values, selected ?? undefined);
-      const payload: Record<string, unknown> = dialogMode === 'create' ? mapped : { ...selected, ...mapped };
+      const payload: Record<string, unknown> =
+        dialogMode === "create" ? mapped : { ...selected, ...mapped };
       // Senha de usuário nunca sai em claro: cifrada para a API; no mock, nem é enviada.
-      if (typeof payload.password === 'string') {
+      if (typeof payload.password === "string") {
         if (!usesRemoteApi() || !payload.password) {
           delete payload.password;
         } else {
@@ -316,36 +408,42 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
         }
       }
       const endpoint =
-        dialogMode === 'create'
+        dialogMode === "create"
           ? `/${domain.apiResource}`
           : `/${domain.apiResource}/${String(selected?.id)}`;
       const saved = await apiFetch<Record<string, unknown>>(endpoint, {
-        method: dialogMode === 'create' ? 'POST' : 'PUT',
+        method: dialogMode === "create" ? "POST" : "PUT",
         body: JSON.stringify(payload),
       });
-      const temporaryPassword = typeof saved.temporaryPassword === 'string' ? saved.temporaryPassword : '';
+      const temporaryPassword =
+        typeof saved.temporaryPassword === "string"
+          ? saved.temporaryPassword
+          : "";
       const stored = { ...saved };
       delete stored.temporaryPassword;
       setItems((current) =>
-        dialogMode === 'create'
+        dialogMode === "create"
           ? [...current, stored]
           : current.map((item) => (item.id === stored.id ? stored : item)),
       );
-      if (resource === 'people') refreshPeopleChoices(stored);
-      if (resource === 'users' && dialogMode === 'create') {
+      if (resource === "people") refreshPeopleChoices(stored);
+      if (resource === "users" && dialogMode === "create") {
         setChoices((current) => ({
           ...current,
           people:
             current.people?.map((person) =>
-              person.value === String(stored.personId) ? { ...person, hasUser: true } : person,
+              person.value === String(stored.personId)
+                ? { ...person, hasUser: true }
+                : person,
             ) ?? null,
         }));
       }
       if (temporaryPassword) {
-        const account = stored.user as Record<string, unknown> | null | undefined;
+        const account = stored.user as
+          Record<string, unknown> | null | undefined;
         setIssuedPassword({
           name: config.itemLabel(stored),
-          username: String(stored.username ?? account?.username ?? ''),
+          username: String(stored.username ?? account?.username ?? ""),
           password: temporaryPassword,
         });
       }
@@ -364,10 +462,15 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
     setError(null);
     let didDelete = false;
     try {
-      await apiFetch<void>(`/${domain.apiResource}/${String(deleteTarget.id)}`, {
-        method: 'DELETE',
-      });
-      setItems((current) => current.filter((item) => item.id !== deleteTarget.id));
+      await apiFetch<void>(
+        `/${domain.apiResource}/${String(deleteTarget.id)}`,
+        {
+          method: "DELETE",
+        },
+      );
+      setItems((current) =>
+        current.filter((item) => item.id !== deleteTarget.id),
+      );
       didDelete = true;
     } catch (caught) {
       setError(userFacingError(caught));
@@ -382,12 +485,22 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
       <section className="mx-auto space-y-6">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">Domínio</p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight">{domain.label}</h1>
-            <p className="mt-2 max-w-2xl text-[var(--muted)]">{domain.description}</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              Domínio
+            </p>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight">
+              {domain.label}
+            </h1>
+            <p className="mt-2 max-w-2xl text-[var(--muted)]">
+              {domain.description}
+            </p>
           </div>
           {canCreate && (
-            <button type="button" className={`btn-primary min-h-11 ${buttonMotion}`} onClick={openCreate}>
+            <button
+              type="button"
+              className={`btn-primary min-h-11 ${buttonMotion}`}
+              onClick={openCreate}
+            >
               Novo cadastro
             </button>
           )}
@@ -400,11 +513,15 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
           </article>
           <article className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-[var(--shadow-soft)]">
             <p className="text-sm text-[var(--muted)]">Registros visíveis</p>
-            <p className="text-lg font-semibold">{loading ? '…' : rows.length}</p>
+            <p className="text-lg font-semibold">
+              {loading ? "…" : rows.length}
+            </p>
           </article>
           <article className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-[var(--shadow-soft)]">
             <p className="text-sm text-[var(--muted)]">Escrita</p>
-            <p className="text-lg font-semibold">{canCreate ? 'Permitida' : 'Somente leitura'}</p>
+            <p className="text-lg font-semibold">
+              {canCreate ? "Permitida" : "Somente leitura"}
+            </p>
           </article>
         </div>
 
@@ -418,12 +535,14 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
               loading={loading}
               error={error}
               onRefresh={() => void fetchItems()}
-              globalFilterLabel={`Buscar ${domain.label.toLocaleLowerCase('pt-BR')}`}
-              emptyMessage={`Nenhum registro de ${domain.label.toLocaleLowerCase('pt-BR')} encontrado.`}
+              globalFilterLabel={`Buscar ${domain.label.toLocaleLowerCase("pt-BR")}`}
+              emptyMessage={`Nenhum registro de ${domain.label.toLocaleLowerCase("pt-BR")} encontrado.`}
               noResultsMessage="Nenhum registro corresponde à busca ou aos filtros."
               getRowLabel={(row) => config.itemLabel(row)}
               renderRowActions={renderRowActions}
-              toolbarLabels={{ section: `Controles de ${domain.label.toLocaleLowerCase('pt-BR')}` }}
+              toolbarLabels={{
+                section: `Controles de ${domain.label.toLocaleLowerCase("pt-BR")}`,
+              }}
             />
           </div>
         </article>
@@ -432,11 +551,11 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
       <EntityDialog
         open={dialogMode !== null}
         title={
-          dialogMode === 'create'
+          dialogMode === "create"
             ? `Novo ${config.singular}`
-            : dialogMode === 'edit'
+            : dialogMode === "edit"
               ? `Editar ${config.itemLabel(selected ?? {})}`
-              : dialogMode === 'view'
+              : dialogMode === "view"
                 ? config.itemLabel(selected ?? {})
                 : config.singular
         }
@@ -449,27 +568,27 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
           <EntityForm
             fields={config.fields.filter(
               (field) =>
-                (field.name !== 'createUser' && field.name !== 'username') ||
-                resource === 'users' ||
-                can(roles, 'users', 'create', permissions),
+                (field.name !== "createUser" && field.name !== "username") ||
+                resource === "users" ||
+                can(roles, "users", "create", permissions),
             )}
             values={values}
             errors={formErrors}
-            readOnly={dialogMode === 'view'}
-            editing={dialogMode === 'edit'}
+            readOnly={dialogMode === "view"}
+            editing={dialogMode === "edit"}
             saving={saving}
             roleChoices={roleChoices}
             dynamicChoices={choices}
-            rolesLocked={resource === 'users' && !managesRoles}
+            rolesLocked={resource === "users" && !managesRoles}
             onChange={(name, value) => {
               setValues((current) => ({ ...current, [name]: value }));
-              setFormErrors((current) => ({ ...current, [name]: '' }));
+              setFormErrors((current) => ({ ...current, [name]: "" }));
             }}
             onClose={closeDialog}
             onSubmit={handleSave}
             onEdit={
-              dialogMode === 'view' && canUpdate && selected
-                ? () => openItem(selected, 'edit')
+              dialogMode === "view" && canUpdate && selected
+                ? () => openItem(selected, "edit")
                 : undefined
             }
           />
@@ -488,16 +607,30 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
             className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h2 id="delete-title" className="text-xl font-semibold">Excluir {config.singular}</h2>
+            <h2 id="delete-title" className="text-xl font-semibold">
+              Excluir {config.singular}
+            </h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              Confirma a exclusão de <strong>{config.itemLabel(deleteTarget)}</strong>? Esta ação não pode ser desfeita.
+              Confirma a exclusão de{" "}
+              <strong>{config.itemLabel(deleteTarget)}</strong>? Esta ação não
+              pode ser desfeita.
             </p>
             <div className="mt-6 flex justify-end gap-3">
-              <button type="button" className={`btn-ghost min-h-11 ${buttonMotion}`} disabled={saving} onClick={() => setDeleteTarget(null)}>
+              <button
+                type="button"
+                className={`btn-ghost min-h-11 ${buttonMotion}`}
+                disabled={saving}
+                onClick={() => setDeleteTarget(null)}
+              >
                 Cancelar
               </button>
-              <button type="button" className={`btn-danger min-h-11 ${buttonMotion}`} disabled={saving} onClick={() => void handleDelete()}>
-                {saving ? 'Excluindo…' : 'Excluir'}
+              <button
+                type="button"
+                className={`btn-danger min-h-11 ${buttonMotion}`}
+                disabled={saving}
+                onClick={() => void handleDelete()}
+              >
+                {saving ? "Excluindo…" : "Excluir"}
               </button>
             </div>
           </div>
@@ -516,18 +649,31 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
             className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h2 id="issued-password-title" className="text-xl font-semibold">Acesso criado</h2>
+            <h2 id="issued-password-title" className="text-xl font-semibold">
+              Acesso criado
+            </h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              Envie o usuário e a senha inicial para <strong>{issuedPassword.name}</strong>. A senha não será mostrada
+              Envie o usuário e a senha inicial para{" "}
+              <strong>{issuedPassword.name}</strong>. A senha não será mostrada
               de novo e precisa ser trocada no primeiro acesso.
             </p>
             <label className="mt-4 flex flex-col gap-1.5 text-sm">
               Usuário
-              <input readOnly value={issuedPassword.username} className={`min-h-11 font-mono ${controlMotion}`} onFocus={(event) => event.currentTarget.select()} />
+              <input
+                readOnly
+                value={issuedPassword.username}
+                className={`min-h-11 font-mono ${controlMotion}`}
+                onFocus={(event) => event.currentTarget.select()}
+              />
             </label>
             <label className="mt-3 flex flex-col gap-1.5 text-sm">
               Senha
-              <input readOnly value={issuedPassword.password} className={`min-h-11 font-mono ${controlMotion}`} onFocus={(event) => event.currentTarget.select()} />
+              <input
+                readOnly
+                value={issuedPassword.password}
+                className={`min-h-11 font-mono ${controlMotion}`}
+                onFocus={(event) => event.currentTarget.select()}
+              />
             </label>
             <div className="mt-6 flex flex-wrap justify-end gap-3">
               <button
@@ -535,13 +681,19 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
                 className={`btn-outline-primary min-h-11 ${buttonMotion}`}
                 onClick={() => {
                   void navigator.clipboard
-                    .writeText(`Usuário: ${issuedPassword.username}\nSenha: ${issuedPassword.password}`)
+                    .writeText(
+                      `Usuário: ${issuedPassword.username}\nSenha: ${issuedPassword.password}`,
+                    )
                     .catch(() => undefined);
                 }}
               >
                 Copiar
               </button>
-              <button type="button" className={`btn-primary min-h-11 ${buttonMotion}`} onClick={() => setIssuedPassword(null)}>
+              <button
+                type="button"
+                className={`btn-primary min-h-11 ${buttonMotion}`}
+                onClick={() => setIssuedPassword(null)}
+              >
                 Já anotei
               </button>
             </div>
@@ -553,11 +705,14 @@ export function DomainWorkspace({ resource }: DomainWorkspaceProps) {
 }
 
 function songHasScore(row: Record<string, unknown>): boolean {
-  return Array.isArray(row.scores) && row.scores.some((score) => {
-    if (!score || typeof score !== 'object') return false;
-    const url = (score as { url?: unknown }).url;
-    return typeof url === 'string' && url.length > 0;
-  });
+  return (
+    Array.isArray(row.scores) &&
+    row.scores.some((score) => {
+      if (!score || typeof score !== "object") return false;
+      const url = (score as { url?: unknown }).url;
+      return typeof url === "string" && url.length > 0;
+    })
+  );
 }
 
 function ActionButton({
@@ -576,26 +731,38 @@ function ActionButton({
   return (
     <button
       type="button"
-      title={disabled ? 'Não é possível excluir o usuário da sessão.' : label}
+      title={disabled ? "Não é possível excluir o usuário da sessão." : label}
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
       className={`group inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full disabled:cursor-not-allowed disabled:opacity-30 ${buttonMotion} ${
-        danger ? 'text-red-600 hover:bg-red-50' : 'text-[var(--color-brand-strong)] hover:bg-[var(--color-brand-soft)]'
+        danger
+          ? "text-red-600 hover:bg-red-50"
+          : "text-[var(--color-brand-strong)] hover:bg-[var(--color-brand-soft)]"
       }`}
     >
-      <span className={`material-icons text-lg ${iconMotion}`} aria-hidden="true">{icon}</span>
+      <span
+        className={`material-icons text-lg ${iconMotion}`}
+        aria-hidden="true"
+      >
+        {icon}
+      </span>
     </button>
   );
 }
 
-function validateValues(fields: CrudField[], values: Record<string, unknown>): Record<string, string> {
+function validateValues(
+  fields: CrudField[],
+  values: Record<string, unknown>,
+): Record<string, string> {
   const errors: Record<string, string> = {};
   for (const field of fields) {
     if (field.showWhen && !field.showWhen(values)) continue;
     const value = values[field.name];
     const empty =
-      value === undefined || value === null || (Array.isArray(value) ? value.length === 0 : String(value).trim() === '');
+      value === undefined ||
+      value === null ||
+      (Array.isArray(value) ? value.length === 0 : String(value).trim() === "");
     if (field.required && empty) {
       errors[field.name] = `${field.label} é obrigatório.`;
       continue;
@@ -607,19 +774,19 @@ function validateValues(fields: CrudField[], values: Record<string, unknown>): R
 }
 
 function uniqueFieldsForResource(resource: CrudResource): string[] {
-  if (resource === 'users') return ['username'];
-  if (resource === 'people') return ['email', 'document.number'];
-  if (resource === 'media') return ['slug'];
-  if (resource === 'patrimony') return ['code'];
-  if (resource === 'instruments') return ['name'];
+  if (resource === "users") return ["username"];
+  if (resource === "people") return ["email", "document.number"];
+  if (resource === "media") return ["slug"];
+  if (resource === "patrimony") return ["code"];
+  if (resource === "instruments") return ["name"];
   return [];
 }
 
 function normalizeUniqueValue(value: unknown): string {
-  return String(value ?? '')
-    .replace(/[.\-\s/]/g, '')
+  return String(value ?? "")
+    .replace(/[.\-\s/]/g, "")
     .trim()
-    .toLocaleLowerCase('pt-BR');
+    .toLocaleLowerCase("pt-BR");
 }
 
 function withAudit(
@@ -637,61 +804,78 @@ function formatCell(
   personChoices: PersonChoice[] | null,
 ): string {
   const value = getValue(row, column.path);
-  if (column.path === 'hasScore') return songHasScore(row) ? 'Sim' : 'Não';
-  if (column.path === 'updatedBy') return value == null || value === '' ? 'system' : String(value);
-  if (column.path === 'visibility') {
-    if (value === 'public') return 'Pública';
+  if (column.path === "hasScore") return songHasScore(row) ? "Sim" : "Não";
+  if (column.path === "updatedBy")
+    return value == null || value === "" ? "system" : String(value);
+  if (column.path === "visibility") {
+    if (value === "public") return "Pública";
     const who = [
-      row.visibleToStudents ? 'alunos' : '',
-      row.visibleToMusicians ? 'músicos' : '',
+      row.visibleToStudents ? "alunos" : "",
+      row.visibleToMusicians ? "músicos" : "",
     ].filter(Boolean);
-    return who.length > 0 ? `Privada · ${who.join(' e ')}` : 'Privada';
+    return who.length > 0 ? `Privada · ${who.join(" e ")}` : "Privada";
   }
-  if (column.format === 'status') {
+  if (column.format === "status") {
     const labels: Record<string, string> = {
-      active: 'Ativo',
-      inactive: 'Inativo',
-      available: 'Disponível',
-      in_use: 'Em uso',
-      maintenance: 'Manutenção',
-      retired: 'Baixado',
-      draft: 'Rascunho',
-      scheduled: 'Agendada',
-      done: 'Realizada',
-      cancelled: 'Cancelada',
-      published: 'Publicado',
-      public: 'Pública',
-      private: 'Privada',
-      none: '—',
-      processing: 'Processando',
-      ready: 'Pronta',
-      failed: 'Falhou',
-      skipped: 'Sem áudio',
+      active: "Ativo",
+      inactive: "Inativo",
+      available: "Disponível",
+      in_use: "Em uso",
+      maintenance: "Manutenção",
+      retired: "Baixado",
+      draft: "Rascunho",
+      scheduled: "Agendada",
+      done: "Realizada",
+      cancelled: "Cancelada",
+      published: "Publicado",
+      public: "Pública",
+      private: "Privada",
+      none: "—",
+      processing: "Processando",
+      ready: "Pronta",
+      failed: "Falhou",
+      skipped: "Sem áudio",
     };
-    return labels[String(value)] ?? String(value ?? '—');
+    return labels[String(value)] ?? String(value ?? "—");
   }
-  if (column.format === 'boolean') return value ? 'Sim' : 'Não';
-  if (column.format === 'count') return String(Array.isArray(value) ? value.length : 0);
-  if (column.format === 'currency') {
-    return typeof value === 'number'
-      ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
-      : '—';
+  if (column.format === "boolean") return value ? "Sim" : "Não";
+  if (column.format === "count")
+    return String(Array.isArray(value) ? value.length : 0);
+  if (column.format === "currency") {
+    return typeof value === "number"
+      ? new Intl.NumberFormat("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        }).format(value)
+      : "—";
   }
-  if (column.format === 'date' || column.format === 'datetime') {
-    if (!value) return '—';
+  if (column.format === "date" || column.format === "datetime") {
+    if (!value) return "—";
     const date = new Date(String(value));
-    if (Number.isNaN(date.getTime())) return '—';
-    return column.format === 'date'
-      ? date.toLocaleDateString('pt-BR')
-      : date.toLocaleString('pt-BR');
+    if (Number.isNaN(date.getTime())) return "—";
+    return column.format === "date"
+      ? date.toLocaleDateString("pt-BR")
+      : date.toLocaleString("pt-BR");
   }
-  if (column.format === 'roles' && Array.isArray(value)) {
+  if (column.format === "roles" && Array.isArray(value)) {
     return value
-      .map((role) => roleChoices?.find((option) => option.value === String(role))?.label ?? roleLabels([String(role)]))
-      .join(', ');
+      .map(
+        (role) =>
+          roleChoices?.find((option) => option.value === String(role))?.label ??
+          roleLabels([String(role)]),
+      )
+      .join(", ");
   }
-  if ((column.path === 'personId' || column.path === 'assignedPersonId' || column.path === 'guardianId') && value) {
-    return personChoices?.find((option) => option.value === String(value))?.label ?? 'Vinculada';
+  if (
+    (column.path === "personId" ||
+      column.path === "assignedPersonId" ||
+      column.path === "guardianId") &&
+    value
+  ) {
+    return (
+      personChoices?.find((option) => option.value === String(value))?.label ??
+      "Vinculada"
+    );
   }
-  return value == null || value === '' ? '—' : String(value);
+  return value == null || value === "" ? "—" : String(value);
 }
