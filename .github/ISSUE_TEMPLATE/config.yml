@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: README do front
+    url: https://github.com/thomazdevmaster/bcl-next/blob/main/README.md
+    about: Instalação, perfis demo e variáveis de ambiente
+  - name: Arquitetura (API / estudo)
+    url: https://github.com/thomazdevmaster/bcl-next/blob/main/docs/arquitetura-backend.md
+    about: Backend, bucket e worker de MIDI (quando aplicável)
