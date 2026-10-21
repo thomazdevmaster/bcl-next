@@ -37,6 +37,7 @@ export default function GestaoPage() {
             ? can(roles, domain.id, 'create', permissions) || can(roles, domain.id, 'update', permissions)
             : false;
           const isStudy = item.href === '/study';
+          const isSongs = item.href === '/gestao/musicas';
           return (
             <Link
               key={item.href}
@@ -47,10 +48,16 @@ export default function GestaoPage() {
               <h2 className="mt-3 text-lg font-semibold text-[var(--foreground)]">{item.label}</h2>
               <p className="mt-1 text-sm text-[var(--muted)]">
                 {domain?.description ??
-                  'Estudos e treinamentos com partituras e acompanhamento MIDI.'}
+                  (isSongs
+                    ? 'Repertório público e partituras disponíveis para o seu perfil.'
+                    : 'Estudos e treinamentos com partituras e acompanhamento MIDI.')}
               </p>
               <p className="mt-3 text-xs uppercase tracking-wide text-[var(--color-brand-strong)]">
-                {isStudy ? 'Abrir módulo' : writable ? 'Leitura e escrita' : 'Somente leitura'}
+                {isStudy || isSongs
+                  ? 'Abrir módulo'
+                  : writable
+                    ? 'Leitura e escrita'
+                    : 'Somente leitura'}
               </p>
             </Link>
           );

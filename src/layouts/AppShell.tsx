@@ -119,6 +119,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     isFirst: boolean;
     mobile: boolean;
   }) => {
+    if (!group.label.trim()) return null;
     if (mobile || !sidenavCollapsed) {
       return (
         <p
@@ -138,7 +139,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div
         key={group.id}
         role="group"
-        aria-labelledby={!mobile && sidenavCollapsed ? undefined : `nav-group-${group.id}`}
+        aria-labelledby={
+          group.label.trim() && (mobile || !sidenavCollapsed) ? `nav-group-${group.id}` : undefined
+        }
       >
         <NavGroupHeading group={group} isFirst={groupIndex === 0} mobile={mobile} />
         {group.items.map((item) =>

@@ -26,11 +26,12 @@ export const PUBLIC_NAV: NavItem[] = [
 ];
 
 const STUDY_NAV: NavItem = { href: '/study', label: 'Estudo', icon: 'school' };
+const SONGS_NAV: NavItem = { href: '/gestao/musicas', label: 'Músicas', icon: 'library_music' };
 const ROLES_NAV: NavItem = { href: '/gestao/papeis', label: 'Papéis', icon: 'admin_panel_settings' };
 
 const MANAGEMENT_NAV_SOURCE: Array<NavItem & { resource: Resource; action?: Action }> = [
   { href: '/gestao', label: 'Painel', icon: 'dashboard', resource: 'portal', action: 'read' },
-  ...DOMAINS.filter((domain) => domain.navGroup === 'management').map((domain) => ({
+  ...DOMAINS.filter((domain) => domain.navGroup === 'management' && domain.id !== 'songs').map((domain) => ({
     href: domain.path,
     label: domain.label,
     icon: domain.icon,
@@ -51,11 +52,17 @@ function getManagementModuleItems(roles: AccessRoles, permissions?: readonly str
 }
 
 /** Lista plana para o painel `/gestao` (inclui Estudo junto aos módulos). */
+function getMyAreaItems(roles: AccessRoles): NavItem[] {
+  if (!roles.some((role) => role !== 'public')) return [];
+  return [STUDY_NAV, SONGS_NAV];
+}
+
 export function getManagementNav(roles: AccessRoles, permissions?: readonly string[] | null): NavItem[] {
   const items = getManagementModuleItems(roles, permissions);
-  if (roles.some((role) => role !== 'public')) {
+  const myArea = getMyAreaItems(roles);
+  if (myArea.length > 0) {
     const painel = items.findIndex((item) => item.href === '/gestao');
-    items.splice(painel + 1, 0, STUDY_NAV);
+    items.splice(painel + 1, 0, ...myArea);
   }
   return items;
 }
@@ -65,12 +72,11 @@ export function getAuthenticatedNavGroups(
   roles: AccessRoles,
   permissions?: readonly string[] | null,
 ): AuthenticatedNavGroup[] {
-  const groups: AuthenticatedNavGroup[] = [
-    { id: 'public', label: 'Site público', items: [...PUBLIC_NAV] },
-  ];
+  const groups: AuthenticatedNavGroup[] = [{ id: 'public', label: '', items: [...PUBLIC_NAV] }];
 
-  if (roles.some((role) => role !== 'public')) {
-    groups.push({ id: 'logged', label: 'Área logada', items: [STUDY_NAV] });
+  const myArea = getMyAreaItems(roles);
+  if (myArea.length > 0) {
+    groups.push({ id: 'logged', label: 'Minha Área', items: myArea });
   }
 
   const managementItems = getManagementModuleItems(roles, permissions);
