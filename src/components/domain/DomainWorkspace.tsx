@@ -26,6 +26,7 @@ import {
   getCrudConfig,
   getValue,
 } from "@/domains/crudConfig";
+import { canReadPrivateSongs, filterSongRecordsForCatalog } from "@/domains/songs/catalogAccess";
 import type { Person } from "@/domains/people/types";
 import { filterPeopleForRole } from "@/domains/people/visibility";
 import { apiFetch } from "@/lib/api";
@@ -99,6 +100,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
   const canCreate = can(roles, resource, "create", permissions);
   const canUpdate = can(roles, resource, "update", permissions);
   const canDelete = can(roles, resource, "delete", permissions);
+  const canReadFullSongs = canReadPrivateSongs(roles, permissions);
   const managesRoles = hasRole(roles, "admin");
 
   const sources = useMemo(() => {
@@ -116,9 +118,11 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
     setLoading(true);
     setError(null);
     try {
-      setItems(
-        await apiFetch<Record<string, unknown>[]>(`/${domain.apiResource}`),
-      );
+      let rows = await apiFetch<Record<string, unknown>[]>(`/${domain.apiResource}`);
+      if (resource === "songs" && !canReadFullSongs) {
+        rows = filterSongRecordsForCatalog(rows, roles, permissions);
+      }
+      setItems(rows);
     } catch (caught) {
       setError(
         failureMessage(
@@ -129,7 +133,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
     } finally {
       setLoading(false);
     }
-  }, [domain.apiResource]);
+  }, [canReadFullSongs, domain.apiResource, resource]);
 
   useEffect(() => {
     // A listagem precisa iniciar quando o workspace monta.
@@ -481,7 +485,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
   };
 
   return (
-    <DomainGuard resource={resource}>
+    <DomainGuard resource={resource} requireLogin={resource === "songs"}>
       <section className="mx-auto space-y-6">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>

@@ -7,7 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { roleLabels } from '@/core/auth/roles';
-import { getManagementNav, PUBLIC_NAV, titleForPath } from '@/core/navigation/menus';
+import { getAuthenticatedNavGroups, titleForPath, type AuthenticatedNavGroup } from '@/core/navigation/menus';
 import { UserAvatar } from '@/components/auth/UserAvatar';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -20,9 +20,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const auth = useAuth();
   const { theme, setTheme } = useTheme();
-  const managementNav = getManagementNav(auth.roles, auth.permissions);
-  const primaryNav = managementNav.slice(0, 4);
-  const extraNav = managementNav.slice(4);
+  const navGroups = getAuthenticatedNavGroups(auth.roles, auth.permissions);
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 960px)');
@@ -102,11 +100,73 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         isActiveRoute(href) ? 'bg-white/10 text-[var(--color-brand)] font-semibold' : 'text-[var(--sidebar-fg)]'
       } ${sidenavCollapsed ? 'justify-center px-0' : ''}`}
       title={label}
+      aria-label={label}
+      aria-current={isActiveRoute(href) ? 'page' : undefined}
     >
-      <span className="material-icons text-2xl w-6 flex-shrink-0">{icon}</span>
+      <span className="material-icons text-2xl w-6 flex-shrink-0" aria-hidden>
+        {icon}
+      </span>
       {!sidenavCollapsed && <span className="text-sm">{label}</span>}
     </Link>
   );
+
+  const NavGroupHeading = ({
+    group,
+    isFirst,
+    mobile,
+  }: {
+    group: AuthenticatedNavGroup;
+    isFirst: boolean;
+    mobile: boolean;
+  }) => {
+    if (!group.label.trim()) return null;
+    if (mobile || !sidenavCollapsed) {
+      return (
+        <p
+          id={`nav-group-${group.id}`}
+          className="px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-white/40"
+        >
+          {group.label}
+        </p>
+      );
+    }
+    if (isFirst) return null;
+    return <div className="mx-2 my-1 h-px bg-white/15" role="presentation" aria-hidden />;
+  };
+
+  const renderNavGroups = (onNavigate?: () => void, mobile = false) =>
+    navGroups.map((group, groupIndex) => (
+      <div
+        key={group.id}
+        role="group"
+        aria-labelledby={
+          group.label.trim() && (mobile || !sidenavCollapsed) ? `nav-group-${group.id}` : undefined
+        }
+      >
+        <NavGroupHeading group={group} isFirst={groupIndex === 0} mobile={mobile} />
+        {group.items.map((item) =>
+          mobile ? (
+            <Link
+              key={`${group.id}-${item.href}`}
+              href={item.href}
+              className={`flex min-h-12 items-center gap-3 px-4 text-sm no-underline hover:no-underline ${
+                isActiveRoute(item.href) ? 'bg-white/10 font-semibold text-[var(--color-brand)]' : 'text-[var(--sidebar-fg)]'
+              }`}
+              aria-label={item.label}
+              aria-current={isActiveRoute(item.href) ? 'page' : undefined}
+              onClick={onNavigate}
+            >
+              <span className="material-icons" aria-hidden>
+                {item.icon}
+              </span>
+              {item.label}
+            </Link>
+          ) : (
+            <NavLink key={`${group.id}-${item.href}`} {...item} />
+          ),
+        )}
+      </div>
+    ));
 
   return (
     <div
@@ -129,23 +189,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           )}
         </div>
-        <nav className="flex-1 overflow-y-auto py-2">
-          {primaryNav.map((item) => (
-            <NavLink key={item.href} {...item} />
-          ))}
-          {!sidenavCollapsed && extraNav.length > 0 && (
-            <div className="px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-white/40">Gestão</div>
-          )}
-          {extraNav.map((item) => (
-            <NavLink key={item.href} {...item} />
-          ))}
-          {!sidenavCollapsed && (
-            <div className="px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-white/40">Portal</div>
-          )}
-          {PUBLIC_NAV.map((item) => (
-            <NavLink key={`public-${item.href}`} {...item} />
-          ))}
-        </nav>
+        <nav className="flex-1 overflow-y-auto py-2">{renderNavGroups()}</nav>
         {desktop && auth.user ? (
           <div className="desktop-user-menu relative mx-2 mb-2 border-t border-[var(--sidebar-border)] pt-2">
             <button
@@ -332,19 +376,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <span className="material-icons">close</span>
               </button>
             </div>
-            <nav className="overflow-y-auto py-2">
-              {[...managementNav, ...PUBLIC_NAV].map((item) => (
-                <Link
-                  key={`${item.href}-${item.label}`}
-                  href={item.href}
-                  className="flex min-h-12 items-center gap-3 px-4 text-[var(--sidebar-fg)] no-underline hover:no-underline text-sm"
-                  onClick={() => setMoreOpen(false)}
-                >
-                  <span className="material-icons">{item.icon}</span>
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
+            <nav className="overflow-y-auto py-2">{renderNavGroups(() => setMoreOpen(false), true)}</nav>
           </aside>
         )}
 

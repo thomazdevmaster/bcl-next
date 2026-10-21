@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MusicLoader } from '@/components/MusicLoader';
 import { TableView } from '@/components/tables/core/TableView';
 import type { TableColumnDef } from '@/components/tables/core/table-features';
+import {
+  filterSongsForCatalog,
+  isSongVisibleInCatalog,
+} from '@/domains/songs/catalogAccess';
 import type { Song } from '@/domains/songs/types';
+import { useAuth } from '@/contexts/AuthContext';
 import { apiFetch, fetchAuthedAsset } from '@/lib/api';
 import { failureMessage } from '@/lib/userMessages';
 import {
@@ -53,6 +58,7 @@ interface SetupState {
 }
 
 export function StudySongCatalog({ onStart, ownerId = null, personId = null, initialSongId = null }: StudySongCatalogProps) {
+  const { roles, permissions } = useAuth();
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [preparingId, setPreparingId] = useState<string | null>(null);
@@ -92,11 +98,8 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
     setError(null);
     try {
       const items = await apiFetch<Song[]>('/songs');
-      setSongs(
-        items.filter((song) =>
-          song.scores?.some((score) => Boolean(score.url)),
-        ),
-      );
+      const withScores = items.filter((song) => song.scores?.some((score) => Boolean(score.url)));
+      setSongs(filterSongsForCatalog(withScores, roles, permissions));
     } catch (caught: unknown) {
       setError(
         failureMessage(
@@ -107,7 +110,7 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [permissions, roles]);
 
   useEffect(() => {
     void fetchSongs();
@@ -155,6 +158,10 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
   );
 
   const openSetup = async (song: Song) => {
+    if (!isSongVisibleInCatalog(song, roles, permissions)) {
+      setError('Essa música não está disponível para o seu perfil.');
+      return;
+    }
     const score = song.scores.find((item) => Boolean(item.url));
     if (!score) return;
     setPreparingId(String(song.id));

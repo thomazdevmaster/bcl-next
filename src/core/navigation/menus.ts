@@ -9,6 +9,14 @@ export interface NavItem {
   icon: string;
 }
 
+export type AuthenticatedNavGroupId = 'public' | 'logged' | 'management';
+
+export interface AuthenticatedNavGroup {
+  id: AuthenticatedNavGroupId;
+  label: string;
+  items: NavItem[];
+}
+
 export const PUBLIC_NAV: NavItem[] = [
   { href: '/', label: 'Início', icon: 'home' },
   { href: '/agenda', label: 'Agenda', icon: 'event' },
@@ -18,10 +26,12 @@ export const PUBLIC_NAV: NavItem[] = [
 ];
 
 const STUDY_NAV: NavItem = { href: '/study', label: 'Estudo', icon: 'school' };
+const SONGS_NAV: NavItem = { href: '/gestao/musicas', label: 'Músicas', icon: 'library_music' };
+const ROLES_NAV: NavItem = { href: '/gestao/papeis', label: 'Papéis', icon: 'admin_panel_settings' };
 
 const MANAGEMENT_NAV_SOURCE: Array<NavItem & { resource: Resource; action?: Action }> = [
   { href: '/gestao', label: 'Painel', icon: 'dashboard', resource: 'portal', action: 'read' },
-  ...DOMAINS.filter((domain) => domain.navGroup === 'management').map((domain) => ({
+  ...DOMAINS.filter((domain) => domain.navGroup === 'management' && domain.id !== 'songs').map((domain) => ({
     href: domain.path,
     label: domain.label,
     icon: domain.icon,
@@ -30,19 +40,51 @@ const MANAGEMENT_NAV_SOURCE: Array<NavItem & { resource: Resource; action?: Acti
   })),
 ];
 
-export function getManagementNav(roles: AccessRoles, permissions?: readonly string[] | null): NavItem[] {
+function getManagementModuleItems(roles: AccessRoles, permissions?: readonly string[] | null): NavItem[] {
   const items = MANAGEMENT_NAV_SOURCE.filter((item) => can(roles, item.resource, item.action ?? 'read', permissions)).map(
     ({ href, label, icon }) => ({ href, label, icon }),
   );
-  if (roles.some((role) => role !== 'public')) {
-    const painel = items.findIndex((item) => item.href === '/gestao');
-    items.splice(painel + 1, 0, STUDY_NAV);
-  }
   if (roles.includes('admin')) {
     const painel = items.findIndex((item) => item.href === '/gestao');
-    items.splice(painel + 1, 0, { href: '/gestao/papeis', label: 'Papéis', icon: 'admin_panel_settings' });
+    items.splice(painel + 1, 0, ROLES_NAV);
   }
   return items;
+}
+
+/** Lista plana para o painel `/gestao` (inclui Estudo junto aos módulos). */
+function getMyAreaItems(roles: AccessRoles): NavItem[] {
+  if (!roles.some((role) => role !== 'public')) return [];
+  return [STUDY_NAV, SONGS_NAV];
+}
+
+export function getManagementNav(roles: AccessRoles, permissions?: readonly string[] | null): NavItem[] {
+  const items = getManagementModuleItems(roles, permissions);
+  const myArea = getMyAreaItems(roles);
+  if (myArea.length > 0) {
+    const painel = items.findIndex((item) => item.href === '/gestao');
+    items.splice(painel + 1, 0, ...myArea);
+  }
+  return items;
+}
+
+/** Grupos rotulados para o menu lateral autenticado (`AppShell`). */
+export function getAuthenticatedNavGroups(
+  roles: AccessRoles,
+  permissions?: readonly string[] | null,
+): AuthenticatedNavGroup[] {
+  const groups: AuthenticatedNavGroup[] = [{ id: 'public', label: '', items: [...PUBLIC_NAV] }];
+
+  const myArea = getMyAreaItems(roles);
+  if (myArea.length > 0) {
+    groups.push({ id: 'logged', label: 'Minha Área', items: myArea });
+  }
+
+  const managementItems = getManagementModuleItems(roles, permissions);
+  if (managementItems.length > 0) {
+    groups.push({ id: 'management', label: 'Gestão', items: managementItems });
+  }
+
+  return groups;
 }
 
 export function titleForPath(pathname: string): string {
