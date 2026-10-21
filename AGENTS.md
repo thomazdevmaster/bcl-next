@@ -103,6 +103,27 @@ Alvo (não implementar sozinho): um monólito (Python ou Java) + PostgreSQL + bu
 
 Dois processos: `npm run api:server` (3001) e `npm run dev` (3000). Contas demo no README.
 
+## Issues no GitHub (`bcl-next`)
+
+Templates em `.github/ISSUE_TEMPLATE/` (**Bug**, **Melhoria**, **Tarefa técnica**). Issues em branco estão desabilitadas — escolha o tipo.
+
+Ao **criar issue pelo CLI** (conta `gh` com escopo `project`, board **bcl-Board**):
+
+1. Use o template correspondente (`--template` = campo `name` do front matter).
+2. Título com prefixo `[Bug]`, `[Melhoria]` ou `[Tarefa]`.
+3. Preencha o corpo seguindo as seções do template (mesmo usando `-b` / `--body-file`).
+4. Inclua no board: `--project "bcl-Board"`.
+
+Exemplos (repo `thomazdevmaster/bcl-next`):
+
+```bash
+gh issue create --template "Bug" --title "[Bug] …" --project "bcl-Board"
+gh issue create --template "Melhoria" --title "[Melhoria] …" --project "bcl-Board"
+gh issue create --template "Tarefa técnica" --title "[Tarefa] …" --project "bcl-Board"
+```
+
+Sem `--template`, use `-l bug` ou `-l enhancement` conforme o tipo e corpo estruturado igual ao `.md` do template. Não abrir issue genérica sem tipo.
+
 ## O que não fazer
 
 - Gerar `id` no POST do front.
