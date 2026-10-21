@@ -39,6 +39,7 @@ type Props = {
   relationshipOptions: CrudOption[];
   onChange: (name: string, value: unknown) => void;
   onRegisterHandlers: (handlers: GuardianStageHandlers | null) => void;
+  readOnly?: boolean;
 };
 
 function stringValue(values: Record<string, unknown>, name: string): string {
@@ -57,6 +58,7 @@ export function UserGuardianStage({
   relationshipOptions,
   onChange,
   onRegisterHandlers,
+  readOnly = false,
 }: Props) {
   const form = useForm<GuardianFormValues>({
     defaultValues: {
@@ -110,9 +112,13 @@ export function UserGuardianStage({
               name="guardianId"
               label="Pessoa responsável"
               required
+              disabled={readOnly}
               options={[
                 { value: "", label: "Selecione um usuário…" },
-                ...people.filter((person) => person.hasUser),
+                ...people.filter(
+                  (person) =>
+                    person.hasUser || person.value === guardianId,
+                ),
                 { value: NEW_GUARDIAN_VALUE, label: "Novo responsável" },
               ]}
               emptyMessage="Selecione um usuário existente ou escolha Novo responsável."
@@ -140,6 +146,7 @@ export function UserGuardianStage({
               name="guardianRelationship"
               label="Parentesco"
               required={Boolean(guardianId)}
+              disabled={readOnly}
               emptyMessage={
                 guardianId
                   ? "Selecione o parentesco."
@@ -158,6 +165,7 @@ export function UserGuardianStage({
                 name="guardian.firstName"
                 label="Nome"
                 autoComplete="given-name"
+                disabled={readOnly}
                 required
                 onEdit={syncFlatValue("guardian.firstName")}
               />
@@ -165,6 +173,7 @@ export function UserGuardianStage({
                 name="guardian.lastName"
                 label="Sobrenome"
                 autoComplete="family-name"
+                disabled={readOnly}
                 required
                 onEdit={syncFlatValue("guardian.lastName")}
               />
@@ -173,6 +182,7 @@ export function UserGuardianStage({
                 label="Data de nascimento"
                 type="date"
                 max={today}
+                disabled={readOnly}
                 required
                 onEdit={syncFlatValue("guardian.birthDate")}
               />
@@ -184,6 +194,7 @@ export function UserGuardianStage({
                 inputMode="tel"
                 placeholder="(00) 00000-0000"
                 formatValue={formatPhoneNumber}
+                disabled={readOnly}
                 required
                 onEdit={syncFlatValue("guardian.phone")}
               />
@@ -191,6 +202,7 @@ export function UserGuardianStage({
                 name="guardian.email"
                 label="E-mail"
                 type="email"
+                disabled={readOnly}
                 autoComplete="email"
                 required={false}
                 optionalMessage="Opcional."
@@ -202,6 +214,7 @@ export function UserGuardianStage({
                 label="Nome de usuário"
                 autoComplete="username"
                 placeholder="nome.sobrenome"
+                disabled={readOnly}
                 formatValue={(value) =>
                   value.toLowerCase().replace(/\s+/g, ".")
                 }
@@ -223,6 +236,7 @@ function GuardianSelectField({
   options,
   required,
   emptyMessage,
+  disabled = false,
   onValueChange,
 }: {
   name: "guardianId" | "guardianRelationship";
@@ -230,6 +244,7 @@ function GuardianSelectField({
   options: CrudOption[];
   required: boolean;
   emptyMessage: string;
+  disabled?: boolean;
   onValueChange: (value: string) => void;
 }) {
   const { control } = useFormContext<GuardianFormValues>();
@@ -250,6 +265,7 @@ function GuardianSelectField({
             label={label}
             name={field.name}
             required={required}
+            disabled={disabled}
             value={field.value}
             onBlur={field.onBlur}
             state={state}
@@ -264,6 +280,7 @@ function GuardianSelectField({
                 ref={field.ref}
                 id={id}
                 name={controlName}
+                disabled={disabled}
                 value={field.value}
                 onChange={(event) => {
                   field.onChange(event);

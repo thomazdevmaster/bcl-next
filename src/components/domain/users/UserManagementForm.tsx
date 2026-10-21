@@ -197,6 +197,7 @@ export function EntityForm({
             values={values}
             onChange={onChange}
             onRegisterHandlers={onRegisterPersonalContactHandlers}
+            readOnly={readOnly}
           />
         </div>
       ) : null}
@@ -211,6 +212,7 @@ export function EntityForm({
             relationshipOptions={guardianRelationshipOptions}
             onChange={onChange}
             onRegisterHandlers={onRegisterGuardianStageHandlers}
+            readOnly={readOnly}
           />
         </div>
       ) : null}
@@ -225,6 +227,7 @@ export function EntityForm({
             instruments={dynamicChoices.instruments ?? []}
             onChange={onChange}
             onRegisterHandlers={onRegisterProfilesStageHandlers}
+            readOnly={readOnly}
           />
         </div>
       ) : null}
@@ -237,6 +240,8 @@ export function EntityForm({
             values={values}
             onChange={onChange}
             onRegisterHandlers={onRegisterAccessStageHandlers}
+            readOnly={readOnly}
+            editing={editing}
           />
         </div>
       ) : null}
@@ -255,6 +260,7 @@ export function EntityForm({
             locked={rolesLocked}
             onChange={onChange}
             onRegisterHandlers={onRegisterPermissionsStageHandlers}
+            readOnly={readOnly}
           />
         </div>
       ) : null}

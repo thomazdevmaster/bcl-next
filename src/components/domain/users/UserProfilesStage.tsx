@@ -32,6 +32,7 @@ type Props = {
   instruments: CrudOption[];
   onChange: (name: string, value: unknown) => void;
   onRegisterHandlers: (handlers: ProfilesStageHandlers | null) => void;
+  readOnly?: boolean;
 };
 
 function valueAt(values: Record<string, unknown>, name: string): string {
@@ -44,6 +45,7 @@ export function UserProfilesStage({
   instruments,
   onChange,
   onRegisterHandlers,
+  readOnly = false,
 }: Props) {
   const form = useForm<PersonProfilesFormValues>({
     defaultValues: {
@@ -86,7 +88,11 @@ export function UserProfilesStage({
       <div className="grid gap-4">
         <FormStageBlock
           title="Perfis"
-          description="Escolha os perfis que se aplicam. Os dados correspondentes aparecem abaixo."
+          description={
+            readOnly
+              ? "Perfis e dados vinculados a esta pessoa."
+              : "Escolha os perfis que se aplicam. Os dados correspondentes aparecem abaixo."
+          }
           surface="plain"
           className="!pb-0"
         >
@@ -94,11 +100,13 @@ export function UserProfilesStage({
             <ProfileCheckbox
               name="isStudent"
               label="É aluno"
+              disabled={readOnly}
               onChange={(checked) => onChange("isStudent", checked)}
             />
             <ProfileCheckbox
               name="isMusician"
               label="É músico"
+              disabled={readOnly}
               onChange={(checked) => onChange("isMusician", checked)}
             />
           </div>
@@ -115,6 +123,7 @@ export function UserProfilesStage({
                     label={field.label}
                     options={field.options ?? []}
                     required={false}
+                    disabled={readOnly}
                     optionalMessage="Opcional."
                     onChange={sync(field.name)}
                   />
@@ -128,6 +137,7 @@ export function UserProfilesStage({
                     }
                     label={field.label}
                     type={field.type === "date" ? "date" : "text"}
+                    disabled={readOnly}
                     placeholder={field.placeholder}
                     required={field.name === "student.enrollmentDate"}
                     optionalMessage={
@@ -154,6 +164,7 @@ export function UserProfilesStage({
                       key={field.name}
                       name="musician.ownInstrument"
                       label={field.label}
+                      disabled={readOnly}
                       onChange={(checked) => onChange(field.name, checked)}
                     />
                   );
@@ -175,6 +186,7 @@ export function UserProfilesStage({
                     label={field.label}
                     options={options}
                     required={field.name === "musician.section"}
+                    disabled={readOnly}
                     optionalMessage={
                       field.name === "musician.playedInstrumentId"
                         ? "Opcional durante esta etapa de desenvolvimento."
@@ -194,6 +206,7 @@ export function UserProfilesStage({
                     name="musician.joinedAt"
                     label={field.label}
                     type="date"
+                    disabled={readOnly}
                     required={false}
                     optionalMessage="Opcional."
                     onEdit={sync(field.name)}
@@ -210,10 +223,12 @@ export function UserProfilesStage({
 function ProfileCheckbox({
   name,
   label,
+  disabled = false,
   onChange,
 }: {
   name: "isStudent" | "isMusician" | "musician.ownInstrument";
   label: string;
+  disabled?: boolean;
   onChange: (checked: boolean) => void;
 }) {
   const { control } = useFormContext<PersonProfilesFormValues>();
@@ -235,6 +250,7 @@ function ProfileCheckbox({
                 id={id}
                 name={field.name}
                 type="checkbox"
+                disabled={disabled}
                 checked={Boolean(field.value)}
                 onBlur={field.onBlur}
                 onChange={(event) => {
@@ -258,6 +274,7 @@ function ProfileSelect({
   options,
   required,
   optionalMessage,
+  disabled = false,
   onChange,
 }: {
   name:
@@ -270,6 +287,7 @@ function ProfileSelect({
   options: CrudOption[];
   required: boolean;
   optionalMessage?: string;
+  disabled?: boolean;
   onChange: () => void;
 }) {
   const { control } = useFormContext<PersonProfilesFormValues>();
@@ -294,6 +312,7 @@ function ProfileSelect({
             label={label}
             name={field.name}
             required={required}
+            disabled={disabled}
             value={field.value}
             onBlur={field.onBlur}
             state={state}
@@ -316,6 +335,7 @@ function ProfileSelect({
                 ref={field.ref}
                 id={id}
                 name={controlName}
+                disabled={disabled}
                 value={field.value}
                 onBlur={field.onBlur}
                 onChange={(event) => {

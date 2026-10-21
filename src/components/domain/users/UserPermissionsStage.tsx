@@ -22,6 +22,7 @@ type Props = {
   values: Record<string, unknown>;
   options: CrudOption[];
   locked: boolean;
+  readOnly?: boolean;
   onChange: (name: string, value: unknown) => void;
   onRegisterHandlers: (handlers: PermissionsStageHandlers | null) => void;
 };
@@ -30,6 +31,7 @@ export function UserPermissionsStage({
   values,
   options,
   locked,
+  readOnly = false,
   onChange,
   onRegisterHandlers,
 }: Props) {
@@ -54,7 +56,11 @@ export function UserPermissionsStage({
     <FormProvider {...form}>
       <FormStageBlock
         title="Permissões"
-        description="Escolha os papéis adicionais que esta conta poderá exercer. As permissões concedidas se somam."
+        description={
+          readOnly
+            ? "Papéis atribuídos a esta conta. As permissões concedidas se somam."
+            : "Escolha os papéis adicionais que esta conta poderá exercer. As permissões concedidas se somam."
+        }
         surface="plain"
         className="!pb-0"
       >
@@ -65,7 +71,7 @@ export function UserPermissionsStage({
             const selected = field.value;
             const state: ValidationState = fieldState.error
               ? "invalid"
-              : locked
+              : locked || readOnly
                 ? "info"
                 : selected.length > 0
                   ? "valid"
@@ -73,8 +79,10 @@ export function UserPermissionsStage({
             const status = FIELD_STATUS[state];
             const message =
               fieldState.error?.message ??
-              (locked
-                ? "Somente um administrador pode alterar os papéis desta conta."
+              (readOnly
+                ? "Visualização somente leitura."
+                : locked
+                  ? "Somente um administrador pode alterar os papéis desta conta."
                 : selected.length === 0
                   ? "Opcional. Os papéis de aluno e músico seguem os perfis cadastrados para a pessoa."
                   : undefined);
@@ -108,7 +116,7 @@ export function UserPermissionsStage({
                           <label
                             key={option.value}
                             htmlFor={checkboxId}
-                            className={`flex min-h-11 min-w-0 items-center gap-3 rounded-lg px-2 text-sm ${locked ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-[var(--accent)]"}`}
+                            className={`flex min-h-11 min-w-0 items-center gap-3 rounded-lg px-2 text-sm ${locked || readOnly ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-[var(--accent)]"}`}
                           >
                             <input
                               ref={
@@ -119,7 +127,7 @@ export function UserPermissionsStage({
                               type="checkbox"
                               value={option.value}
                               checked={checked}
-                              disabled={locked}
+                              disabled={locked || readOnly}
                               aria-invalid={invalid || undefined}
                               onBlur={field.onBlur}
                               onChange={(event) => {

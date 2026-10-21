@@ -40,6 +40,7 @@ type Props = {
   values: Record<string, unknown>;
   onChange: (name: string, value: unknown) => void;
   onRegisterHandlers: (handlers: PersonalContactFormHandlers | null) => void;
+  readOnly?: boolean;
 };
 
 type AddressInputName =
@@ -116,6 +117,7 @@ export function UserPersonalContactStage({
   values,
   onChange,
   onRegisterHandlers,
+  readOnly = false,
 }: Props) {
   const form = useForm<PersonDetailsFormValues>({
     defaultValues: {
@@ -128,7 +130,7 @@ export function UserPersonalContactStage({
         "document.type",
       ) as PersonDetailsFormValues["documentType"],
       documentNumber: valueFrom(values, "document.number"),
-      photoSource: "",
+      photoSource: valueFrom(values, "photoSource") as PersonDetailsFormValues["photoSource"],
       photoUrl: valueFrom(values, "photoUrl"),
       status: valueFrom(values, "status") as PersonDetailsFormValues["status"],
       postalCode: valueFrom(values, "postalCode"),
@@ -154,6 +156,17 @@ export function UserPersonalContactStage({
   });
   const photoSource = useWatch({ control: form.control, name: "photoSource" });
   const photoUrl = useWatch({ control: form.control, name: "photoUrl" });
+  const hasStructuredAddress = [
+    "postalCode",
+    "street",
+    "addressNumber",
+    "complement",
+    "unit",
+    "neighborhood",
+    "city",
+    "state",
+  ].some((name) => valueFrom(values, name).trim());
+  const legacyAddress = valueFrom(values, "address");
   const [cepLookupState, setCepLookupState] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
@@ -288,6 +301,7 @@ export function UserPersonalContactStage({
               name="firstName"
               label="Nome"
               autoComplete="given-name"
+              disabled={readOnly}
               required
               onEdit={syncField("firstName")}
             />
@@ -295,6 +309,7 @@ export function UserPersonalContactStage({
               name="lastName"
               label="Sobrenome"
               autoComplete="family-name"
+              disabled={readOnly}
               required
               onEdit={syncField("lastName")}
             />
@@ -303,6 +318,7 @@ export function UserPersonalContactStage({
               label="Data de nascimento"
               type="date"
               max={today}
+              disabled={readOnly}
               required
               onEdit={syncField("birthDate")}
             />
@@ -311,77 +327,90 @@ export function UserPersonalContactStage({
               label="Data de cadastro"
               type="date"
               max={today}
+              disabled={readOnly}
               required={false}
               optionalMessage="Em branco, será usada a data de hoje."
               onEdit={syncField("registeredAt")}
             />
-            <PersonalSelectField
-              name="documentType"
-              label="Documento"
-              options={[
-                { value: "", label: "Selecione um documento" },
-                { value: "none", label: "Não informado" },
-                { value: "cpf", label: "CPF" },
-                { value: "rg", label: "RG" },
-              ]}
-              required
-              warningMessage="Selecione CPF, RG ou Não informado."
-              onValueChange={(value) => onChange("document.type", value)}
-            />
-            <PersonalSelectField
-              name="status"
-              label="Status"
-              options={[
-                { value: "", label: "Selecione um status" },
-                { value: "active", label: "Ativo" },
-                { value: "inactive", label: "Inativo" },
-              ]}
-              required
-              warningMessage="Selecione um status."
-              onValueChange={(value) => onChange("status", value)}
-            />
-            {documentType === "cpf" || documentType === "rg" ? (
-              <FormStageField<PersonDetailsFormValues>
-                name="documentNumber"
-                label="Número do documento"
-                placeholder={
-                  documentType === "cpf" ? "000.000.000-00" : "Número do RG"
-                }
-                formatValue={documentType === "cpf" ? formatCpf : formatRgValue}
+            <div className="grid min-w-0 grid-cols-2 gap-4 sm:col-span-2">
+              <PersonalSelectField
+                name="documentType"
+                label="Documento"
+                options={[
+                  { value: "", label: "Selecione um documento" },
+                  { value: "none", label: "Não informado" },
+                  { value: "cpf", label: "CPF" },
+                  { value: "rg", label: "RG" },
+                ]}
                 required
-                onEdit={syncField("documentNumber")}
+                disabled={readOnly}
+                warningMessage="Selecione CPF, RG ou Não informado."
+                onValueChange={(value) => onChange("document.type", value)}
               />
-            ) : null}
-            <PhotoSourceSelect
-              onValueChange={(value) => {
-                onChange("photoSource", value);
-                onChange("photoUrl", "");
-              }}
-            />
-            {photoSource === "external" ? (
-              <FormStageField<PersonDetailsFormValues>
-                name="photoUrl"
-                label="URL externa da foto"
-                type="url"
-                placeholder="https://…"
-                required
-                validateOnChange="photoUrl"
-                onEdit={syncField("photoUrl")}
-              />
-            ) : photoSource === "upload" ? (
-              <ProfilePhotoPicker
-                photoUrl={photoUrl}
-                onUploaded={(url) => {
-                  setValue("photoUrl", url, {
-                    shouldDirty: true,
-                    shouldValidate: true,
-                  });
-                  onChange("photoUrl", url);
+              {documentType === "cpf" || documentType === "rg" ? (
+                <FormStageField<PersonDetailsFormValues>
+                  name="documentNumber"
+                  label="Número do documento"
+                  placeholder={
+                    documentType === "cpf" ? "000.000.000-00" : "Número do RG"
+                  }
+                  formatValue={documentType === "cpf" ? formatCpf : formatRgValue}
+                  disabled={readOnly}
+                  required
+                  onEdit={syncField("documentNumber")}
+                />
+              ) : null}
+            </div>
+            <div className="grid min-w-0 grid-cols-2 gap-4 sm:col-span-2">
+              <PhotoSourceSelect
+                disabled={readOnly}
+                onValueChange={(value) => {
+                  onChange("photoSource", value);
+                  onChange("photoUrl", "");
                 }}
               />
-            ) : (
-              <div aria-hidden="true" className="min-h-11" />
-            )}
+              {photoSource === "external" ? (
+                <FormStageField<PersonDetailsFormValues>
+                  name="photoUrl"
+                  label="URL externa da foto"
+                  type="url"
+                  placeholder="https://…"
+                  disabled={readOnly}
+                  required
+                  validateOnChange="photoUrl"
+                  onEdit={syncField("photoUrl")}
+                />
+              ) : photoSource === "upload" ? (
+                <ProfilePhotoPicker
+                  photoUrl={photoUrl}
+                  readOnly={readOnly}
+                  onUploaded={(url) => {
+                    setValue("photoUrl", url, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    });
+                    onChange("photoUrl", url);
+                  }}
+                />
+              ) : (
+                <div aria-hidden="true" className="min-h-11" />
+              )}
+            </div>
+            <div className="sm:col-span-2">
+              <PersonalSelectField
+                name="status"
+                label="Status"
+                options={[
+                  { value: "", label: "Selecione um status" },
+                  { value: "active", label: "Ativo" },
+                  { value: "inactive", label: "Inativo" },
+                ]}
+                required
+                disabled={readOnly}
+                warningMessage="Selecione um status."
+                onValueChange={(value) => onChange("status", value)}
+              />
+            </div>
           </div>
         </FormStageBlock>
 
@@ -395,6 +424,7 @@ export function UserPersonalContactStage({
               inputMode="tel"
               placeholder="(00) 00000-0000"
               formatValue={formatPhoneNumber}
+              disabled={readOnly}
               required
               onEdit={syncField("phone")}
             />
@@ -404,6 +434,7 @@ export function UserPersonalContactStage({
               type="email"
               autoComplete="email"
               placeholder="nome@exemplo.com"
+              disabled={readOnly}
               required={false}
               optionalMessage="Opcional, mas necessário para entrar com e-mail em vez do nome de usuário."
               onEdit={syncField("email")}
@@ -418,6 +449,18 @@ export function UserPersonalContactStage({
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
+              {legacyAddress && !hasStructuredAddress ? (
+                <FormStageField<PersonDetailsFormValues>
+                  name="address"
+                  label="Endereço"
+                  autoComplete="street-address"
+                  className="sm:col-span-2"
+                  disabled={readOnly}
+                  required={false}
+                  optionalMessage="Opcional."
+                  onEdit={syncField("address")}
+                />
+              ) : null}
               <div className="sm:col-span-2">
                 <FormStageField<PersonDetailsFormValues>
                   name="postalCode"
@@ -426,6 +469,7 @@ export function UserPersonalContactStage({
                   inputMode="numeric"
                   placeholder="00000-000"
                   formatValue={formatPostalCode}
+                  disabled={readOnly}
                   required={false}
                   optionalMessage="Opcional. Ao informar 8 números, o endereço será consultado."
                   validateOnChange="postalCode"
@@ -446,7 +490,7 @@ export function UserPersonalContactStage({
                 label="Logradouro"
                 autoComplete="address-line1"
                 className="sm:col-span-2"
-                disabled={autoFilledFields.has("street")}
+                disabled={readOnly || autoFilledFields.has("street")}
                 required={false}
                 optionalMessage="Opcional."
                 onEdit={syncAddress}
@@ -455,6 +499,7 @@ export function UserPersonalContactStage({
                 name="addressNumber"
                 label="Número"
                 placeholder="Número ou S/N"
+                disabled={readOnly}
                 required={false}
                 optionalMessage="Opcional."
                 onEdit={syncAddress}
@@ -463,7 +508,7 @@ export function UserPersonalContactStage({
                 name="complement"
                 label="Complemento"
                 autoComplete="address-line2"
-                disabled={autoFilledFields.has("complement")}
+                disabled={readOnly || autoFilledFields.has("complement")}
                 required={false}
                 optionalMessage="Opcional."
                 onEdit={syncAddress}
@@ -472,7 +517,7 @@ export function UserPersonalContactStage({
                 name="neighborhood"
                 label="Bairro / Distrito"
                 className="sm:col-span-2"
-                disabled={autoFilledFields.has("neighborhood")}
+                disabled={readOnly || autoFilledFields.has("neighborhood")}
                 required={false}
                 optionalMessage="Opcional."
                 onEdit={syncAddress}
@@ -481,7 +526,7 @@ export function UserPersonalContactStage({
                 name="city"
                 label="Cidade (Município)"
                 autoComplete="address-level2"
-                disabled={autoFilledFields.has("city")}
+                disabled={readOnly || autoFilledFields.has("city")}
                 required={false}
                 optionalMessage="Opcional."
                 onEdit={syncAddress}
@@ -498,7 +543,7 @@ export function UserPersonalContactStage({
                 ]}
                 required={false}
                 warningMessage="Opcional."
-                disabled={autoFilledFields.has("state")}
+                disabled={readOnly || autoFilledFields.has("state")}
                 onValueChange={() => syncAddress()}
               />
             </div>
@@ -512,9 +557,11 @@ export function UserPersonalContactStage({
 function ProfilePhotoPicker({
   photoUrl,
   onUploaded,
+  readOnly = false,
 }: {
   photoUrl: string;
   onUploaded: (url: string) => void;
+  readOnly?: boolean;
 }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -526,37 +573,43 @@ function ProfilePhotoPicker({
   return (
     <div className="flex min-h-16 min-w-0 flex-col justify-center gap-1.5">
       <div className="flex min-w-0 items-center gap-3">
-        <label
-          className={`inline-flex min-h-11 max-w-full cursor-pointer items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--ring)] ${invalid ? "border-[var(--destructive)] text-[var(--destructive)]" : "btn-outline-primary"}`}
-        >
-          <span className="material-icons text-lg" aria-hidden="true">
-            {hasUploadedPhoto ? "refresh" : "upload"}
-          </span>
-          <span className="truncate">
-            {uploading
-              ? "Enviando foto…"
-              : hasUploadedPhoto
-                ? "Reenviar foto"
-                : "Selecionar foto"}
-          </span>
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif"
-            className="sr-only"
-            disabled={uploading}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (!file) return;
-              setError(null);
-              setUploading(true);
-              uploadMediaFile(file)
-                .then(onUploaded)
-                .catch((reason: unknown) => setError(userFacingError(reason)))
-                .finally(() => setUploading(false));
-            }}
-          />
-        </label>
+        {readOnly ? (
+          <p className="text-sm text-[var(--muted)]">
+            {hasUploadedPhoto ? "Foto de perfil" : "Nenhuma foto enviada."}
+          </p>
+        ) : (
+          <label
+            className={`inline-flex min-h-11 max-w-full cursor-pointer items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--ring)] ${invalid ? "border-[var(--destructive)] text-[var(--destructive)]" : "btn-outline-primary"}`}
+          >
+            <span className="material-icons text-lg" aria-hidden="true">
+              {hasUploadedPhoto ? "refresh" : "upload"}
+            </span>
+            <span className="truncate">
+              {uploading
+                ? "Enviando foto…"
+                : hasUploadedPhoto
+                  ? "Reenviar foto"
+                  : "Selecionar foto"}
+            </span>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="sr-only"
+              disabled={uploading}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file) return;
+                setError(null);
+                setUploading(true);
+                uploadMediaFile(file)
+                  .then(onUploaded)
+                  .catch((reason: unknown) => setError(userFacingError(reason)))
+                  .finally(() => setUploading(false));
+              }}
+            />
+          </label>
+        )}
         {hasUploadedPhoto ? (
           <Image
             src={photoUrl}
@@ -586,8 +639,10 @@ function ProfilePhotoPicker({
 
 function PhotoSourceSelect({
   onValueChange,
+  disabled = false,
 }: {
   onValueChange: (value: string) => void;
+  disabled?: boolean;
 }) {
   const { control, setValue, trigger } =
     useFormContext<PersonDetailsFormValues>();
@@ -610,6 +665,7 @@ function PhotoSourceSelect({
             label="Foto de perfil"
             name={field.name}
             required={false}
+            disabled={disabled}
             value={field.value}
             onBlur={field.onBlur}
             state={state}
@@ -623,6 +679,7 @@ function PhotoSourceSelect({
                 ref={field.ref}
                 id={id}
                 name={name}
+                disabled={disabled}
                 value={field.value}
                 onChange={(event) => {
                   field.onChange(event);
