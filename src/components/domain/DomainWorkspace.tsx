@@ -26,7 +26,9 @@ import {
   getCrudConfig,
   getValue,
 } from "@/domains/crudConfig";
+import { canReadPrivateSongs, filterSongsForCatalog } from "@/domains/songs/catalogAccess";
 import type { Person } from "@/domains/people/types";
+import type { Song } from "@/domains/songs/types";
 import { filterPeopleForRole } from "@/domains/people/visibility";
 import { apiFetch } from "@/lib/api";
 import { sealPassword } from "@/lib/passwordCipher";
@@ -99,7 +101,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
   const canCreate = can(roles, resource, "create", permissions);
   const canUpdate = can(roles, resource, "update", permissions);
   const canDelete = can(roles, resource, "delete", permissions);
-  const canReadFullSongs = can(roles, "songs", "read", permissions);
+  const canReadFullSongs = canReadPrivateSongs(roles, permissions);
   const managesRoles = hasRole(roles, "admin");
 
   const sources = useMemo(() => {
@@ -119,7 +121,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
     try {
       let rows = await apiFetch<Record<string, unknown>[]>(`/${domain.apiResource}`);
       if (resource === "songs" && !canReadFullSongs) {
-        rows = rows.filter((row) => row.visibility === "public");
+        rows = filterSongsForCatalog(rows as Song[], roles, permissions) as Record<string, unknown>[];
       }
       setItems(rows);
     } catch (caught) {
