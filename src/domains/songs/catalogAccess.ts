@@ -3,43 +3,34 @@ import { hasRole } from '@/core/auth/roles';
 import type { AccessRoles } from '@/core/auth/roles';
 
 import type { Song } from './types';
+import {
+  canReachSongRepertory,
+  canViewPrivateSongsAsMusician,
+  canViewPrivateSongsAsStudent,
+} from './songAccess';
 
-/** Espelha `SongVisibility` / `SongService.visible` na API. */
+/** Espelha `SongVisibility` na API (permisões do papel, não nomes fixos de role). */
 export function isSongVisibleInCatalog(
   song: Pick<Song, 'visibility' | 'visibleToStudents' | 'visibleToMusicians'>,
   roles: AccessRoles,
   permissions?: readonly string[] | null,
 ): boolean {
-  if (hasRole(roles, 'admin') || hasRole(roles, 'maestro')) {
+  if (hasRole(roles, 'admin') || can(roles, 'songs', 'update', permissions)) {
     return true;
   }
-  if (can(roles, 'songs', 'update', permissions)) {
-    return true;
+  if (!canReachSongRepertory(roles, permissions)) {
+    return false;
   }
   if (song.visibility === 'public') {
     return true;
   }
-  if (hasRole(roles, 'aluno') && song.visibleToStudents) {
+  if (canViewPrivateSongsAsStudent(roles, permissions) && song.visibleToStudents) {
     return true;
   }
-  if (hasRole(roles, 'musico') && song.visibleToMusicians) {
+  if (canViewPrivateSongsAsMusician(roles, permissions) && song.visibleToMusicians) {
     return true;
   }
   return false;
-}
-
-/** @deprecated Use {@link isSongVisibleInCatalog}; mantido para leituras que assumiam `songs:read` = catálogo inteiro. */
-export function canReadPrivateSongs(
-  roles: AccessRoles,
-  permissions?: readonly string[] | null,
-): boolean {
-  return (
-    hasRole(roles, 'admin') ||
-    hasRole(roles, 'maestro') ||
-    can(roles, 'songs', 'update', permissions) ||
-    hasRole(roles, 'aluno') ||
-    hasRole(roles, 'musico')
-  );
 }
 
 export function filterSongsForCatalog(

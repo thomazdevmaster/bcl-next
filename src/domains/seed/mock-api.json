@@ -685,7 +685,7 @@
       "description": "Cadastro público da comunidade. Acesso ao painel interno.",
       "systemRole": true,
       "locked": true,
-      "permissions": ["portal:read"]
+      "permissions": ["portal:read", "study:read", "songs:read"]
     }
   ]
 }

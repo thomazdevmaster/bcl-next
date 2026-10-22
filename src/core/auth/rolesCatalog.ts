@@ -7,9 +7,10 @@ export type RolesCatalogGroup = { id: string; label: string; resources: CatalogR
 
 const RESOURCE_ACTIONS: Partial<Record<Resource, Action[]>> = {
   portal: ['read'],
+  study: ['read'],
   users: ['read', 'create', 'update', 'delete', 'approve'],
   people: ['read', 'create', 'update', 'delete', 'read_members', 'view_sensitive'],
-  songs: ['read', 'create', 'update', 'delete'],
+  songs: ['read', 'read_private_student', 'read_private_musician', 'create', 'update', 'delete'],
   patrimony: ['read', 'create', 'update', 'delete'],
   instruments: ['read', 'create', 'update', 'delete'],
   presentations: ['read', 'create', 'update', 'delete'],
@@ -19,6 +20,7 @@ const RESOURCE_ACTIONS: Partial<Record<Resource, Action[]>> = {
 };
 
 const PORTAL_RESOURCES: Resource[] = ['portal', 'homepage', 'blogpage'];
+const MY_AREA_RESOURCES: Resource[] = ['study', 'songs'];
 const GESTAO_RESOURCES: Resource[] = [
   'users',
   'people',
@@ -49,6 +51,7 @@ export function allPermissionKeys(): string[] {
 export function buildRolesCatalog(): RolesCatalogGroup[] {
   return [
     { id: 'portal', label: 'Portal público', resources: PORTAL_RESOURCES.map(catalogResource) },
+    { id: 'myarea', label: 'Minha Área', resources: MY_AREA_RESOURCES.map(catalogResource) },
     { id: 'gestao', label: 'Gestão', resources: GESTAO_RESOURCES.map(catalogResource) },
   ];
 }

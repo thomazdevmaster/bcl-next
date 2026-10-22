@@ -30,14 +30,27 @@ export function persistActiveRoles(userId: string | number, activeRoles: AccessR
 export function filterPermissionsForActiveRoles(
   accountPermissions: readonly string[] | null | undefined,
   activeRoles: AccessRoles,
+  permissionsByRole?: Readonly<Record<string, readonly string[]>> | null,
 ): readonly string[] | null {
+  if (activeRoles.includes('admin')) {
+    return accountPermissions?.length ? accountPermissions : null;
+  }
+
+  if (permissionsByRole && Object.keys(permissionsByRole).length > 0) {
+    const merged = new Set<string>();
+    activeRoles.forEach((role) => {
+      permissionsByRole[role]?.forEach((key) => merged.add(key));
+    });
+    return merged.size > 0 ? [...merged] : null;
+  }
+
   if (!accountPermissions || accountPermissions.length === 0) return null;
-  if (activeRoles.includes('admin')) return accountPermissions;
   const allowed = new Set<string>();
   activeRoles.forEach((role) => {
     defaultPermissionsForCode(role).forEach((key) => allowed.add(key));
   });
-  return accountPermissions.filter((key) => allowed.has(key));
+  const filtered = accountPermissions.filter((key) => allowed.has(key));
+  return filtered.length > 0 ? filtered : null;
 }
 
 export function normalizeActiveRoles(next: AccessRoles, accountRoles: AccessRoles): AccessRoles {

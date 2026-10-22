@@ -106,6 +106,17 @@ export const DOMAINS: DomainDefinition[] = [
 ];
 
 export function getDomain(id: Resource): DomainDefinition {
+  if (id === 'study') {
+    return {
+      id: 'study',
+      label: 'Estudo',
+      description: 'Treino com partitura e MIDI.',
+      path: '/study',
+      icon: 'school',
+      apiResource: 'songs',
+      navGroup: 'management',
+    };
+  }
   const domain = DOMAINS.find((item) => item.id === id);
   if (!domain) {
     throw new Error(`Domínio não registrado: ${id}`);

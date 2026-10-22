@@ -16,6 +16,8 @@ import { MusicLoader } from '@/components/MusicLoader';
 import { EntityDialog } from '@/components/shared/EntityDialog';
 import { IconSelect, type IconSelectOption } from '@/components/shared/IconSelect';
 import { usesRemoteApi } from '@/core/auth/accessToken';
+import { normalizeActiveRoles } from '@/core/auth/activeRoles';
+import type { AccessRoles } from '@/core/auth/roles';
 import { useAuth, type SessionUser } from '@/contexts/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatPhoneNumber, phoneDigits } from '@/lib/formatPhone';
@@ -45,6 +47,10 @@ const tabButtonClass =
 
 const inputClass =
   'min-h-12 w-full min-w-0 rounded-xl border border-[var(--border)] bg-[var(--input)] px-3 text-base text-[var(--foreground)] outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--ring)]';
+
+function roleSelectionKey(roles: AccessRoles): string {
+  return [...roles].sort().join('|');
+}
 
 function toForm(user: SessionUser): ProfileForm {
   return {
@@ -82,6 +88,12 @@ export default function ProfilePage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletePhrase, setDeletePhrase] = useState('');
   const [accountDeletionSimulated, setAccountDeletionSimulated] = useState(false);
+  const [draftActiveRoles, setDraftActiveRoles] = useState<AccessRoles>(auth.activeRoles);
+  const [applyingActiveRoles, setApplyingActiveRoles] = useState(false);
+
+  useEffect(() => {
+    setDraftActiveRoles(auth.activeRoles);
+  }, [auth.activeRoles]);
 
   useEffect(() => {
     if (!auth.isHydrated) return;
@@ -262,6 +274,18 @@ export default function ProfilePage() {
     form.address.trim() !== originalForm.address.trim() ||
     form.pictureUrl.trim() !== originalForm.pictureUrl.trim();
   const forcedPasswordChange = Boolean(auth.user.mustChangePassword);
+  const normalizedDraft = normalizeActiveRoles(draftActiveRoles, auth.accountRoles);
+  const activeRolesPending =
+    roleSelectionKey(normalizedDraft) !== roleSelectionKey(auth.activeRoles);
+  const canPickMultipleRoles = auth.accountRoles.length > 1;
+
+  const applyActiveRoles = () => {
+    if (!activeRolesPending || applyingActiveRoles) return;
+    setApplyingActiveRoles(true);
+    auth.setActiveRoles(normalizedDraft);
+    window.location.assign('/');
+  };
+
   return (
     <main className="mx-auto min-h-[70vh] w-full max-w-6xl p-1">
       <header className="mb-6 sm:mb-8">
@@ -400,17 +424,37 @@ export default function ProfilePage() {
               <section className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 sm:p-6">
                 <h3 className="text-lg font-bold">Acesso ao sistema</h3>
                 <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                  Escolha qual perfil usar nesta sessão. As permissões da conta continuam preservadas.
+                  Marque os perfis que deseja usar e recarregue a sessão. A alteração só vale após
+                  confirmar — você pode ajustar a seleção sem recarregar a cada clique.
                 </p>
-                <div className="mt-5">
+                <div className="mt-5 flex flex-col gap-4">
                   <ActiveRolesSelector
                     accountRoles={auth.accountRoles}
-                    activeRoles={auth.activeRoles}
-                    onChange={(roles) => {
-                      auth.setActiveRoles(roles);
-                      router.push('/');
-                    }}
+                    activeRoles={draftActiveRoles}
+                    disabled={applyingActiveRoles}
+                    onChange={setDraftActiveRoles}
                   />
+                  {canPickMultipleRoles || activeRolesPending ? (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-[var(--muted)]" role="status">
+                        {activeRolesPending
+                          ? 'Há alterações nos perfis ativos ainda não aplicadas.'
+                          : 'Perfis ativos iguais à sessão atual.'}
+                      </p>
+                      <button
+                        type="button"
+                        className="btn-primary min-h-11 w-full shrink-0 sm:w-auto"
+                        disabled={!activeRolesPending || applyingActiveRoles}
+                        onClick={applyActiveRoles}
+                      >
+                        {applyingActiveRoles ? (
+                          <MusicLoader compact label="Recarregando…" />
+                        ) : (
+                          'Recarregar com perfis selecionados'
+                        )}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </section>
             </div>

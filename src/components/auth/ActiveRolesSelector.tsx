@@ -55,7 +55,8 @@ export function ActiveRolesSelector({
     <fieldset className="flex flex-col gap-2 border-0 p-0">
       <legend className="text-sm font-medium text-[var(--foreground)]">Perfis de acesso</legend>
       <p className="text-xs text-[var(--muted)]">
-        Escolha um ou mais perfis para usar o menu e as permissões do sistema. Pelo menos um deve ficar ativo.
+        Escolha um ou mais perfis; depois confirme com recarregar na página de perfil. Pelo menos um deve
+        ficar ativo.
       </p>
       <IconSelect
         label="Perfis de acesso"

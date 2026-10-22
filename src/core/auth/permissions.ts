@@ -3,6 +3,7 @@ import { hasRole, isPrivilegedRole } from './roles';
 
 export const RESOURCES = [
   'portal',
+  'study',
   'users',
   'people',
   'songs',
@@ -16,18 +17,32 @@ export const RESOURCES = [
 
 export type Resource = (typeof RESOURCES)[number];
 
-export const ACTIONS = ['read', 'create', 'update', 'delete', 'read_members', 'view_sensitive', 'approve', 'manage_roles', 'assign_admin'] as const;
+export const ACTIONS = [
+  'read',
+  'read_private_student',
+  'read_private_musician',
+  'create',
+  'update',
+  'delete',
+  'read_members',
+  'view_sensitive',
+  'approve',
+  'manage_roles',
+  'assign_admin',
+] as const;
 export type Action = (typeof ACTIONS)[number];
 
 export type Permission = `${Resource}:${Action}`;
 
 /** Domínios com formulário genérico. A home tem editor próprio. */
-export type CrudResource = Exclude<Resource, 'portal' | 'homepage' | 'blogpage'>;
+export type CrudResource = Exclude<Resource, 'portal' | 'homepage' | 'blogpage' | 'study'>;
 
 export type PeopleReadScope = 'none' | 'students' | 'members';
 
 export const ACTION_LABEL: Record<Action, string> = {
   read: 'Ver',
+  read_private_student: 'Ver privadas (como aluno)',
+  read_private_musician: 'Ver privadas (como músico)',
   create: 'Criar',
   update: 'Editar',
   delete: 'Excluir',
@@ -46,17 +61,21 @@ const ROLE_ACTIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
   },
   amigos: {
     portal: ['read'],
+    study: ['read'],
+    songs: ['read'],
   },
   aluno: {
     portal: ['read'],
-    songs: ['read'],
+    study: ['read'],
+    songs: ['read', 'read_private_student'],
     instruments: ['read'],
     people: ['read'],
     presentations: ['read'],
   },
   musico: {
     portal: ['read'],
-    songs: ['read'],
+    study: ['read'],
+    songs: ['read', 'read_private_musician'],
     patrimony: ['read'],
     instruments: ['read'],
     people: ['read', 'read_members'],
@@ -64,6 +83,7 @@ const ROLE_ACTIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
   },
   maestro: {
     portal: ['read'],
+    study: ['read'],
     media: FULL_CRUD,
     songs: FULL_CRUD,
     patrimony: FULL_CRUD,
@@ -74,6 +94,7 @@ const ROLE_ACTIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
   },
   admin: {
     portal: ['read'],
+    study: ['read'],
     media: FULL_CRUD,
     songs: FULL_CRUD,
     patrimony: FULL_CRUD,
@@ -94,6 +115,17 @@ export function permissionKeysForRole(role: string): string[] {
   );
 }
 
+function roleMatrixAllows(
+  roles: AccessRoles,
+  resource: Resource,
+  action: Action,
+): boolean {
+  return roles.some((role) => {
+    const grants = ROLE_ACTIONS[role as Role];
+    return grants?.[resource]?.includes(action) ?? false;
+  });
+}
+
 export function can(
   roles: AccessRoles,
   resource: Resource,
@@ -101,11 +133,11 @@ export function can(
   permissions?: readonly string[] | null,
 ): boolean {
   if (hasRole(roles, 'admin')) return true;
-  if (permissions) return permissions.includes(`${resource}:${action}`);
-  return roles.some((role) => {
-    const grants = ROLE_ACTIONS[role as Role];
-    return grants?.[resource]?.includes(action) ?? false;
-  });
+  const key = `${resource}:${action}` as Permission;
+  if (permissions?.length) {
+    return permissions.includes(key) || roleMatrixAllows(roles, resource, action);
+  }
+  return roleMatrixAllows(roles, resource, action);
 }
 
 export function peopleReadScope(

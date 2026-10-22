@@ -484,7 +484,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
   };
 
   return (
-    <DomainGuard resource={resource} requireLogin={resource === "songs"}>
+    <DomainGuard resource={resource}>
       <section className="mx-auto space-y-6">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
