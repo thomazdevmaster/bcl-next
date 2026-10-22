@@ -31,6 +31,7 @@ import {
   studyScoreReady,
 } from '@/config/studyProcessing';
 import { waitForStudyScoreReady } from '@/study/songParts';
+import { StudyPublicRepertoireNotice } from '@/components/study/StudyPublicRepertoireNotice';
 
 export interface StudyStartOptions {
   song: Song;
@@ -289,11 +290,14 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
     <>
       <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)]">
         <div className="border-b border-[var(--border)] p-4">
-          <div>
-            <h2 className="text-lg font-semibold">Músicas disponíveis</h2>
-            <p className="text-sm text-[var(--muted)]">
-              Somente músicas que possuem partitura.
-            </p>
+          <div className="flex flex-col gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Músicas disponíveis</h2>
+              <p className="text-sm text-[var(--muted)]">
+                Somente músicas que possuem partitura.
+              </p>
+            </div>
+            <StudyPublicRepertoireNotice context="study" />
           </div>
         </div>
 

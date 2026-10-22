@@ -38,3 +38,18 @@ export function canViewPrivateSongsAsMusician(
 ): boolean {
   return can(roles, 'songs', READ_PRIVATE_MUSICIAN, permissions);
 }
+
+/** Sem privadas nem gestão editorial — só repertório público (ex.: perfil amigos). */
+export function seesPublicRepertoireOnly(
+  roles: AccessRoles,
+  permissions?: readonly string[] | null,
+): boolean {
+  if (!canReachSongRepertory(roles, permissions)) return false;
+  if (can(roles, 'songs' as Resource, 'update', permissions)) return false;
+  if (canViewPrivateSongsAsStudent(roles, permissions)) return false;
+  if (canViewPrivateSongsAsMusician(roles, permissions)) return false;
+  return true;
+}
+
+/** @deprecated Use {@link seesPublicRepertoireOnly}. */
+export const seesPublicStudyRepertoireOnly = seesPublicRepertoireOnly;

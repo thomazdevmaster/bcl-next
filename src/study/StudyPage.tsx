@@ -15,6 +15,7 @@ import {
 import { youtubeEmbedUrl, youtubeWatchUrl } from '@/domains/songs/youtube';
 import { StudyMobileSheet } from '@/components/study/StudyMobileSheet';
 import { MobileScoreZoom } from '@/study/MobileScoreZoom';
+import { StudyPublicRepertoireNotice } from '@/components/study/StudyPublicRepertoireNotice';
 import { StudyScoreHeaderView } from '@/study/StudyScoreHeader';
 
 export default function StudyPage() {
@@ -227,6 +228,7 @@ export default function StudyPage() {
             <p className="mt-1 max-w-4xl text-[var(--muted)]">
               Escolha uma música, configure a partitura e o MIDI e comece a praticar.
             </p>
+            <StudyPublicRepertoireNotice compact className="mt-3 max-w-4xl" />
           </div>
           {state.xmlLoaded ? (
             <button type="button" className="btn-outline-primary inline-flex min-h-11 items-center gap-1.5" onClick={backToExamples}>
