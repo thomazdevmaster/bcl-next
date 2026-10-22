@@ -62,3 +62,9 @@ src/components/prototype
 
 # VSCODE
 .vscode
+
+# Glossary e documentação
+GLOSSARY.md
+docs/specs
+docs/adr
+docs/issues

@@ -3,10 +3,12 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
 } from "react";
+import { createColumnHelper } from "@tanstack/react-table";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
@@ -31,6 +33,7 @@ import type { Person } from "@/domains/people/types";
 import { isPersonUnderage } from "@/domains/people/types";
 import { TableView } from "@/components/tables/core/TableView";
 import { EntityDialog } from "@/components/shared/EntityDialog";
+import { IconSelect } from "@/components/shared/IconSelect";
 import { FormStageActions } from "@/components/forms/FormStageActions";
 import {
   FormStageProgress,
@@ -57,6 +60,13 @@ import { personProfilesSchema } from "@/domains/users/schemas/person-profiles.sc
 import { accessSchema } from "@/domains/users/schemas/access.schema";
 import { permissionsSchema } from "@/domains/users/schemas/permissions.schema";
 import { createDomainTableColumns } from "@/components/domain/table-columns";
+import { tableFeatures } from "@/components/tables/core/table-features";
+import type { TableColumnDef } from "@/components/tables/core/table-features";
+import {
+  getAdministrativeCompletionStatuses,
+  evaluateAdministrativeCompletion,
+  type AdministrativeCompletionStatus,
+} from "@/domains/users/administrativeCompletion";
 
 interface UserManagementWorkspaceProps {
   resource: CrudResource;
@@ -95,6 +105,11 @@ interface IssuedPassword {
   username: string;
   password: string;
 }
+
+const userTableColumnHelper = createColumnHelper<
+  typeof tableFeatures,
+  Record<string, unknown>
+>();
 
 function UserWorkspaceGuard({
   resource,
@@ -184,6 +199,9 @@ export function UserManagementWorkspace({
   ];
   const { roles, permissions, user } = useAuth();
   const [items, setItems] = useState<Record<string, unknown>[]>([]);
+  const [completionStatuses, setCompletionStatuses] = useState<
+    Map<string, AdministrativeCompletionStatus>
+  >(() => new Map());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -210,13 +228,9 @@ export function UserManagementWorkspace({
     [],
   );
   const isAccountView =
-    resource === "users" &&
-    dialogMode === "view" &&
-    selected?.personId != null;
+    resource === "users" && dialogMode === "view" && selected?.personId != null;
   const isAccountEdit =
-    resource === "users" &&
-    dialogMode === "edit" &&
-    selected?.personId != null;
+    resource === "users" && dialogMode === "edit" && selected?.personId != null;
   const isAccountWorkflow = isAccountView || isAccountEdit;
   const accountWorkflowFields = isAccountWorkflow
     ? [
@@ -298,17 +312,38 @@ export function UserManagementWorkspace({
   }
   const needsPeople =
     sources.has("people") || sources.has("people-without-user");
-  const needsInstruments =
-    sources.has("instruments") ||
-    isAccountWorkflow;
+  const needsInstruments = sources.has("instruments") || isAccountWorkflow;
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setItems(
-        await apiFetch<Record<string, unknown>[]>(`/${domain.apiResource}`),
-      );
+      if (resource === "users") {
+        const [usersResult, peopleResult] = await Promise.allSettled([
+          apiFetch<Record<string, unknown>[]>("/users"),
+          apiFetch<unknown>("/people"),
+        ]);
+        if (usersResult.status === "rejected") throw usersResult.reason;
+        setItems(usersResult.value);
+        setCompletionStatuses(
+          peopleResult.status === "fulfilled"
+            ? getAdministrativeCompletionStatuses(
+                usersResult.value,
+                peopleResult.value,
+              )
+            : new Map(
+                usersResult.value.map((user) => [
+                  String(user.id),
+                  "unverified",
+                ]),
+              ),
+        );
+      } else {
+        setItems(
+          await apiFetch<Record<string, unknown>[]>(`/${domain.apiResource}`),
+        );
+        setCompletionStatuses(new Map());
+      }
     } catch (caught) {
       setError(
         failureMessage(
@@ -319,7 +354,7 @@ export function UserManagementWorkspace({
     } finally {
       setLoading(false);
     }
-  }, [domain.apiResource]);
+  }, [domain.apiResource, resource]);
 
   useEffect(() => {
     // A listagem precisa iniciar quando o workspace monta.
@@ -459,6 +494,48 @@ export function UserManagementWorkspace({
     (row, column) => formatCell(row, column, roleChoices, choices.people),
     resource,
   );
+  const userCompletionColumn = useMemo<TableColumnDef<
+    Record<string, unknown>
+  > | null>(() => {
+    if (resource !== "users") return null;
+    return userTableColumnHelper.display({
+      id: "administrativeCompletion",
+      header: "Complemento",
+      enableSorting: false,
+      enableGrouping: false,
+      cell: ({ row }) => {
+        const status =
+          completionStatuses.get(String(row.original.id)) ?? "unverified";
+        const badge = {
+          incomplete: {
+            label: "Cadastro incompleto",
+            className:
+              "border-[var(--warning)]/40 bg-[var(--warning)]/10 text-[var(--warning)]",
+          },
+          complete: {
+            label: "Completo",
+            className:
+              "border-[var(--success)]/40 bg-[var(--success)]/10 text-[var(--success)]",
+          },
+          unverified: {
+            label: "Não foi possível verificar",
+            className:
+              "border-[var(--border)] bg-[var(--accent)] text-[var(--muted)]",
+          },
+        }[status];
+        return (
+          <span
+            className={`inline-flex min-h-8 items-center rounded-full border px-3 py-1 text-xs font-semibold ${badge.className}`}
+          >
+            {badge.label}
+          </span>
+        );
+      },
+    });
+  }, [completionStatuses, resource]);
+  const visibleTableColumns = userCompletionColumn
+    ? [...tableColumns, userCompletionColumn]
+    : tableColumns;
 
   const openCreate = () => {
     setSelected(null);
@@ -637,7 +714,9 @@ export function UserManagementWorkspace({
       }
       if (Object.keys(accessErrors).length > 0) {
         setFormErrors((current) => ({ ...current, ...accessErrors }));
-        setActiveStage(wizardStages.findIndex((stage) => stage.id === "access"));
+        setActiveStage(
+          wizardStages.findIndex((stage) => stage.id === "access"),
+        );
         return;
       }
     }
@@ -713,6 +792,12 @@ export function UserManagementWorkspace({
         setItems((current) =>
           current.map((item) =>
             String(item.id) === String(selected.id) ? stored : item,
+          ),
+        );
+        setCompletionStatuses((current) =>
+          new Map(current).set(
+            String(selected.id),
+            evaluateAdministrativeCompletion(updatedPerson),
           ),
         );
         refreshPeopleChoices(updatedPerson);
@@ -907,6 +992,7 @@ export function UserManagementWorkspace({
           ? [...current, stored]
           : current.map((item) => (item.id === stored.id ? stored : item)),
       );
+      if (resource === "users" && dialogMode === "create") void fetchItems();
       if (resource === "people") refreshPeopleChoices(stored);
       if (resource === "users" && dialogMode === "create") {
         setChoices((current) => ({
@@ -921,9 +1007,7 @@ export function UserManagementWorkspace({
       }
       if (temporaryPassword) {
         const account = stored.user as
-          | Record<string, unknown>
-          | null
-          | undefined;
+          Record<string, unknown> | null | undefined;
         setIssuedPasswords((current) => [
           ...current,
           {
@@ -939,7 +1023,14 @@ export function UserManagementWorkspace({
       if (dialogMode === "create") onCreated?.();
     } catch (caught) {
       if (updatedPerson && selected) {
-        const name = `${String(updatedPerson.firstName ?? "")} ${String(updatedPerson.lastName ?? "")}`.trim();
+        setCompletionStatuses((current) =>
+          new Map(current).set(
+            String(selected.id),
+            evaluateAdministrativeCompletion(updatedPerson),
+          ),
+        );
+        const name =
+          `${String(updatedPerson.firstName ?? "")} ${String(updatedPerson.lastName ?? "")}`.trim();
         setItems((current) =>
           current.map((item) =>
             String(item.id) === String(selected.id)
@@ -1002,27 +1093,40 @@ export function UserManagementWorkspace({
     Boolean(values.birthDate) && isPersonUnderage(String(values.birthDate));
   const isCreatingGuardian =
     combinedUser && minor && values.guardianId === NEW_GUARDIAN_VALUE;
-  const wizardStages = combinedUser || isAccountWorkflow
-    ? [
-        {
-          id: "personal",
-          title: "Dados pessoais e contato",
-          shortTitle: "Dados",
-        },
-        ...(minor
-          ? [
-              {
-                id: "guardian",
-                title: "Responsável",
-                shortTitle: "Responsável",
-              },
-            ]
-          : []),
-        { id: "profiles", title: "Perfis da pessoa", shortTitle: "Perfis" },
-        { id: "access", title: "Acesso", shortTitle: "Acesso" },
-        { id: "permissions", title: "Permissões", shortTitle: "Permissões" },
-      ]
-    : [];
+  const wizardStages =
+    combinedUser || isAccountWorkflow
+      ? [
+          {
+            id: "personal",
+            title: "Dados pessoais e contato",
+            shortTitle: "Dados",
+            icon: "person",
+          },
+          ...(minor
+            ? [
+                {
+                  id: "guardian",
+                  title: "Responsável",
+                  shortTitle: "Responsável",
+                icon: "supervisor_account",
+                },
+              ]
+            : []),
+          {
+            id: "profiles",
+            title: "Perfis da pessoa",
+            shortTitle: "Perfis",
+            icon: "groups",
+          },
+          { id: "access", title: "Acesso", shortTitle: "Acesso", icon: "key" },
+          {
+            id: "permissions",
+            title: "Permissões",
+            shortTitle: "Permissões",
+            icon: "admin_panel_settings",
+          },
+        ]
+      : [];
   const stageFieldNames: Record<string, string[]> = {
     personal: combinedFields
       .filter(
@@ -1116,10 +1220,12 @@ export function UserManagementWorkspace({
         const parsed = accessSchema.safeParse(accessDetailsFrom(values));
         const usernameMissing =
           isAccountEdit && !String(values.username ?? "").trim();
-        return [[
-          stage.title,
-          parsed.success && !usernameMissing ? "complete" : "error",
-        ] as const];
+        return [
+          [
+            stage.title,
+            parsed.success && !usernameMissing ? "complete" : "error",
+          ] as const,
+        ];
       }
       if (stage.id === "permissions") {
         const parsed = permissionsSchema.safeParse({
@@ -1314,7 +1420,7 @@ export function UserManagementWorkspace({
               <TableView
                 tableId={resource}
                 data={rows}
-                columns={tableColumns}
+                columns={visibleTableColumns}
                 getRowId={(row, index) => String(row.id ?? index)}
                 loading={loading}
                 error={error}
@@ -1358,20 +1464,40 @@ export function UserManagementWorkspace({
           {((combinedUser && dialogMode === "create") || isAccountWorkflow) &&
           wizardStages.length > 0 ? (
             <div className="border-b border-[var(--border)] px-4 pt-4 sm:px-6">
-              <FormStageProgress
-                stages={wizardStages}
-                active={activeStage}
-                maxReachable={wizardStages.length - 1}
-                statuses={isAccountView ? undefined : stageStatuses}
-                onSelect={isAccountView ? setActiveStage : selectWizardStage}
-                ariaLabel={
-                  isAccountView
-                    ? "Etapas dos dados do integrante"
-                    : isAccountEdit
-                      ? "Etapas da edição do integrante"
-                      : "Etapas do novo integrante"
-                }
+              <IconSelect
+                label="Etapas do formulário"
+                options={wizardStages.map((stage) => ({
+                  value: stage.id,
+                  label: stage.shortTitle,
+                  icon: stage.icon,
+                }))}
+                value={wizardStages[activeStage]?.id ?? wizardStages[0].id}
+                onChange={(stageId) => {
+                  const index = wizardStages.findIndex(
+                    (stage) => stage.id === stageId,
+                  );
+                  if (index < 0) return;
+                  if (isAccountView) setActiveStage(index);
+                  else selectWizardStage(index);
+                }}
+                className="relative mb-3 min-w-0 w-full md:hidden"
               />
+              <div className="hidden md:block">
+                <FormStageProgress
+                  stages={wizardStages}
+                  active={activeStage}
+                  maxReachable={wizardStages.length - 1}
+                  statuses={isAccountView ? undefined : stageStatuses}
+                  onSelect={isAccountView ? setActiveStage : selectWizardStage}
+                  ariaLabel={
+                    isAccountView
+                      ? "Etapas dos dados do integrante"
+                      : isAccountEdit
+                        ? "Etapas da edição do integrante"
+                        : "Etapas do novo integrante"
+                  }
+                />
+              </div>
             </div>
           ) : null}
           <UserManagementForm
@@ -1484,14 +1610,14 @@ export function UserManagementWorkspace({
                         void handleSave();
                       }
                     }
-                : combinedUser && dialogMode === "create"
-                ? (event) => {
-                    event.preventDefault();
-                    if (activeStage < wizardStages.length - 1) {
-                      goToNextStage();
-                    }
-                  }
-                : handleSave
+                  : combinedUser && dialogMode === "create"
+                    ? (event) => {
+                        event.preventDefault();
+                        if (activeStage < wizardStages.length - 1) {
+                          goToNextStage();
+                        }
+                      }
+                    : handleSave
             }
             footerActions={
               combinedUser && dialogMode === "create" ? (

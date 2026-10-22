@@ -303,6 +303,7 @@ export function UserPersonalContactStage({
               autoComplete="given-name"
               disabled={readOnly}
               required
+              validateOnMount
               onEdit={syncField("firstName")}
             />
             <FormStageField<PersonDetailsFormValues>
@@ -311,6 +312,7 @@ export function UserPersonalContactStage({
               autoComplete="family-name"
               disabled={readOnly}
               required
+              validateOnMount
               onEdit={syncField("lastName")}
             />
             <FormStageField<PersonDetailsFormValues>
@@ -330,9 +332,10 @@ export function UserPersonalContactStage({
               disabled={readOnly}
               required={false}
               optionalMessage="Em branco, será usada a data de hoje."
+              validateOnMount
               onEdit={syncField("registeredAt")}
             />
-            <div className="grid min-w-0 grid-cols-2 gap-4 sm:col-span-2">
+            <div className="grid min-w-0 gap-4 sm:col-span-2">
               <PersonalSelectField
                 name="documentType"
                 label="Documento"
@@ -361,7 +364,7 @@ export function UserPersonalContactStage({
                 />
               ) : null}
             </div>
-            <div className="grid min-w-0 grid-cols-2 gap-4 sm:col-span-2">
+            <div className="grid min-w-0 gap-4 sm:col-span-2">
               <PhotoSourceSelect
                 disabled={readOnly}
                 onValueChange={(value) => {
@@ -426,6 +429,7 @@ export function UserPersonalContactStage({
               formatValue={formatPhoneNumber}
               disabled={readOnly}
               required
+              validateOnMount
               onEdit={syncField("phone")}
             />
             <FormStageField<PersonDetailsFormValues>
@@ -437,6 +441,7 @@ export function UserPersonalContactStage({
               disabled={readOnly}
               required={false}
               optionalMessage="Opcional, mas necessário para entrar com e-mail em vez do nome de usuário."
+              validateOnMount
               onEdit={syncField("email")}
             />
           </div>

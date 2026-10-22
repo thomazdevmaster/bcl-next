@@ -41,14 +41,14 @@ export function FormFieldValidationShell({
   const status = FIELD_STATUS[state];
 
   return (
-    <div data-slot="styled-field" className={`flex w-full min-w-0 flex-col gap-1.5 ${className ?? ""}`}>
+    <div data-slot="styled-field" data-disabled={disabled ? "true" : undefined} className={`group flex w-full min-w-0 flex-col gap-1.5 ${className ?? ""}`}>
       <div>
         <div className="relative mt-2">
           <label
             id={labelId}
             htmlFor={!renderControl || labelForControl ? controlId : undefined}
             data-slot="styled-field-label"
-            className={`absolute left-3 top-0 z-10 inline-flex -translate-y-1/2 items-center gap-1.5 whitespace-nowrap bg-[var(--input)] px-1 font-medium leading-4 select-none ${labelText[size]} ${status.tone}`}
+            className={`absolute left-3 top-0 z-10 inline-flex -translate-y-1/2 items-center gap-1.5 whitespace-nowrap rounded-md bg-[var(--input)] px-1 font-medium leading-4 select-none group-data-[disabled=true]:bg-[var(--input-disabled)] ${labelText[size]} ${status.tone}`}
           >
             {label}
             {required ? (
