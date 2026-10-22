@@ -12,12 +12,12 @@ export type GestaoPathAccess =
   | { kind: 'deny-admin' }
   | { kind: 'deny-unknown' };
 
+/** Conta de acesso — não confundir com `/gestao/pessoas` (cadastro de integrantes). */
 const USUARIOS_ACCESS: PermissionRule[] = [
   { resource: 'users', action: 'read' },
   { resource: 'users', action: 'approve' },
   { resource: 'users', action: 'create' },
-  { resource: 'people', action: 'read' },
-  { resource: 'people', action: 'create' },
+  { resource: 'users', action: 'update' },
 ];
 
 function normalizePath(pathname: string): string {
