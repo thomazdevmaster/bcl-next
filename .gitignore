@@ -65,6 +65,4 @@ src/components/prototype
 
 # Glossary e documentação
 GLOSSARY.md
-docs/specs
-docs/adr
-docs/issues
+docs/
