@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { GestaoModuleGuard } from '@/components/gestao/GestaoModuleGuard';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function GestaoLayout({ children }: { children: React.ReactNode }) {
@@ -16,5 +17,5 @@ export default function GestaoLayout({ children }: { children: React.ReactNode }
   }, [isHydrated, isLoggedIn, router]);
 
   if (!isHydrated || !isLoggedIn) return null;
-  return <>{children}</>;
+  return <GestaoModuleGuard>{children}</GestaoModuleGuard>;
 }
