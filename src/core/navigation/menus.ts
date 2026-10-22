@@ -2,6 +2,7 @@ import type { Action, Resource } from '@/core/auth/permissions';
 import { can } from '@/core/auth/permissions';
 import type { AccessRoles } from '@/core/auth/roles';
 import { DOMAINS } from '@/domains/catalog';
+import { canAccessSongsModule, canAccessStudyModule } from '@/domains/songs/songAccess';
 
 export interface NavItem {
   href: string;
@@ -52,14 +53,20 @@ function getManagementModuleItems(roles: AccessRoles, permissions?: readonly str
 }
 
 /** Lista plana para o painel `/gestao` (inclui Estudo junto aos módulos). */
-function getMyAreaItems(roles: AccessRoles): NavItem[] {
-  if (!roles.some((role) => role !== 'public')) return [];
-  return [STUDY_NAV, SONGS_NAV];
+function getMyAreaItems(roles: AccessRoles, permissions?: readonly string[] | null): NavItem[] {
+  const items: NavItem[] = [];
+  if (canAccessStudyModule(roles, permissions)) {
+    items.push(STUDY_NAV);
+  }
+  if (canAccessSongsModule(roles, permissions)) {
+    items.push(SONGS_NAV);
+  }
+  return items;
 }
 
 export function getManagementNav(roles: AccessRoles, permissions?: readonly string[] | null): NavItem[] {
   const items = getManagementModuleItems(roles, permissions);
-  const myArea = getMyAreaItems(roles);
+  const myArea = getMyAreaItems(roles, permissions);
   if (myArea.length > 0) {
     const painel = items.findIndex((item) => item.href === '/gestao');
     items.splice(painel + 1, 0, ...myArea);
@@ -74,7 +81,7 @@ export function getAuthenticatedNavGroups(
 ): AuthenticatedNavGroup[] {
   const groups: AuthenticatedNavGroup[] = [{ id: 'public', label: '', items: [...PUBLIC_NAV] }];
 
-  const myArea = getMyAreaItems(roles);
+  const myArea = getMyAreaItems(roles, permissions);
   if (myArea.length > 0) {
     groups.push({ id: 'logged', label: 'Minha Área', items: myArea });
   }

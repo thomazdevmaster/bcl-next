@@ -27,7 +27,10 @@ import type { AppUser } from '@/domains/users/types';
 const AUTH_USER_KEY = 'app.auth.user';
 const AUTH_KEEP_LOGGED_KEY = 'app.auth.keepLoggedIn';
 
-export type SessionUser = AppUser & { permissions?: string[] };
+export type SessionUser = AppUser & {
+  permissions?: string[];
+  permissionsByRole?: Record<string, string[]>;
+};
 
 type AuthContextValue = {
   user: SessionUser | null;
@@ -212,7 +215,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const accountRoles = hydratedUser?.roles ?? PUBLIC_ROLES;
       const effectiveRoles = hydratedUser ? activeRoles : PUBLIC_ROLES;
       const permissions = hydratedUser
-        ? filterPermissionsForActiveRoles(hydratedUser.permissions, effectiveRoles)
+        ? filterPermissionsForActiveRoles(
+            hydratedUser.permissions,
+            effectiveRoles,
+            hydratedUser.permissionsByRole,
+          )
         : null;
       return {
         user: hydratedUser,

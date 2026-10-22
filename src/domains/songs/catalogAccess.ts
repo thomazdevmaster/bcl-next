@@ -1,14 +1,36 @@
 import { can } from '@/core/auth/permissions';
+import { hasRole } from '@/core/auth/roles';
 import type { AccessRoles } from '@/core/auth/roles';
 
 import type { Song } from './types';
+import {
+  canReachSongRepertory,
+  canViewPrivateSongsAsMusician,
+  canViewPrivateSongsAsStudent,
+} from './songAccess';
 
-/** Repertório completo (público + privado) exige `songs:read`. */
-export function canReadPrivateSongs(
+/** Espelha `SongVisibility` na API (permisões do papel, não nomes fixos de role). */
+export function isSongVisibleInCatalog(
+  song: Pick<Song, 'visibility' | 'visibleToStudents' | 'visibleToMusicians'>,
   roles: AccessRoles,
   permissions?: readonly string[] | null,
 ): boolean {
-  return can(roles, 'songs', 'read', permissions);
+  if (hasRole(roles, 'admin') || can(roles, 'songs', 'update', permissions)) {
+    return true;
+  }
+  if (!canReachSongRepertory(roles, permissions)) {
+    return false;
+  }
+  if (song.visibility === 'public') {
+    return true;
+  }
+  if (canViewPrivateSongsAsStudent(roles, permissions) && song.visibleToStudents) {
+    return true;
+  }
+  if (canViewPrivateSongsAsMusician(roles, permissions) && song.visibleToMusicians) {
+    return true;
+  }
+  return false;
 }
 
 export function filterSongsForCatalog(
@@ -16,25 +38,23 @@ export function filterSongsForCatalog(
   roles: AccessRoles,
   permissions?: readonly string[] | null,
 ): Song[] {
-  if (canReadPrivateSongs(roles, permissions)) return songs;
-  return songs.filter((song) => song.visibility === 'public');
+  return songs.filter((song) => isSongVisibleInCatalog(song, roles, permissions));
 }
 
-/** Variante para listagens CRUD genéricas (`Record<string, unknown>`). */
 export function filterSongRecordsForCatalog(
   rows: Record<string, unknown>[],
   roles: AccessRoles,
   permissions?: readonly string[] | null,
 ): Record<string, unknown>[] {
-  if (canReadPrivateSongs(roles, permissions)) return rows;
-  return rows.filter((row) => row.visibility === 'public');
-}
-
-export function isSongVisibleInCatalog(
-  song: Song,
-  roles: AccessRoles,
-  permissions?: readonly string[] | null,
-): boolean {
-  if (canReadPrivateSongs(roles, permissions)) return true;
-  return song.visibility === 'public';
+  return rows.filter((row) =>
+    isSongVisibleInCatalog(
+      {
+        visibility: row.visibility === 'public' ? 'public' : 'private',
+        visibleToStudents: Boolean(row.visibleToStudents),
+        visibleToMusicians: Boolean(row.visibleToMusicians),
+      },
+      roles,
+      permissions,
+    ),
+  );
 }
