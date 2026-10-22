@@ -2,10 +2,7 @@ import type { Action, Resource } from '@/core/auth/permissions';
 import { can } from '@/core/auth/permissions';
 import type { AccessRoles } from '@/core/auth/roles';
 import { DOMAINS } from '@/domains/catalog';
-import {
-  canAccessStudyModule,
-  shouldShowSongsManagementNav,
-} from '@/domains/songs/songAccess';
+import { canAccessSongsModule, canAccessStudyModule } from '@/domains/songs/songAccess';
 
 export interface NavItem {
   href: string;
@@ -61,7 +58,7 @@ function getMyAreaItems(roles: AccessRoles, permissions?: readonly string[] | nu
   if (canAccessStudyModule(roles, permissions)) {
     items.push(STUDY_NAV);
   }
-  if (shouldShowSongsManagementNav(roles, permissions)) {
+  if (canAccessSongsModule(roles, permissions)) {
     items.push(SONGS_NAV);
   }
   return items;

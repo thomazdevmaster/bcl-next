@@ -6,7 +6,7 @@ import { roleLabels } from '@/core/auth/roles';
 import { getManagementNav } from '@/core/navigation/menus';
 import { useAuth } from '@/contexts/AuthContext';
 import { DOMAINS } from '@/domains/catalog';
-import { seesPublicStudyRepertoireOnly } from '@/domains/songs/songAccess';
+import { seesPublicRepertoireOnly } from '@/domains/songs/songAccess';
 
 export default function GestaoPage() {
   const { roles, permissions, displayName, accountRoles } = useAuth();
@@ -49,11 +49,13 @@ export default function GestaoPage() {
               <h2 className="mt-3 text-lg font-semibold text-[var(--foreground)]">{item.label}</h2>
               <p className="mt-1 text-sm text-[var(--muted)]">
                 {domain?.description ??
-                  (isStudy && seesPublicStudyRepertoireOnly(roles, permissions)
+                  (isStudy && seesPublicRepertoireOnly(roles, permissions)
                     ? 'Treino com partitura e MIDI — neste perfil, apenas o repertório público.'
-                    : isSongs
-                      ? 'Repertório e gestão de partituras conforme suas permissões.'
-                      : 'Estudos e treinamentos com partituras e acompanhamento MIDI.')}
+                    : isSongs && seesPublicRepertoireOnly(roles, permissions)
+                      ? 'Consulta ao repertório público — partituras liberadas para amigos.'
+                      : isSongs
+                        ? 'Repertório e gestão de partituras conforme suas permissões.'
+                        : 'Estudos e treinamentos com partituras e acompanhamento MIDI.')}
               </p>
               <p className="mt-3 text-xs uppercase tracking-wide text-[var(--color-brand-strong)]">
                 {isStudy || isSongs

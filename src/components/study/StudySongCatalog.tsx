@@ -297,7 +297,7 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
                 Somente músicas que possuem partitura.
               </p>
             </div>
-            <StudyPublicRepertoireNotice />
+            <StudyPublicRepertoireNotice context="study" />
           </div>
         </div>
 
