@@ -37,6 +37,7 @@ import {
   type StudySongMetadataInput,
 } from './enrichStudyMusicXml';
 import {
+  extractMarkedTempoBpmFromXml,
   extractTempoInfoFromXml,
   extractInstrumentsFromXml,
   filterXmlByPartIds,
@@ -50,8 +51,10 @@ import {
 import {
   countDrumChannelNoteOns,
   drumChannelPitchHistogram,
+  alignStudyPlaybackMidiToTimemap,
   prepareStudyMidiBuffer,
   reencodeSmfForPlayback,
+  resolveStudyPlaybackTempoBpm,
   shouldReencodeSmfForPlayback,
 } from './studyMidiFix';
 import { composeStudyPlaybackMidi } from './studyPlaybackMidi';
@@ -497,12 +500,9 @@ export class StudySession {
     this.clearOsmdContainer();
 
     const tempoInfo = extractTempoInfoFromXml(enrichedXml);
-    this.baseBpm = tempoInfo?.bpm ?? 100;
     this.timeSignature = tempoInfo?.timeSignature ?? '4/4';
     this.beatsPerMeasure = tempoInfo?.beatsPerMeasure ?? 4;
-    this.bpm = this.baseBpm;
-    this.tempo = this.bpm / this.baseBpm;
-    this.updateBpmRange();
+    this.applyStudyTempoFromCatalog(tempoInfo?.bpm ?? 100);
     if (this.metronomeEnabled) this.restartMetronome();
 
     this.initializeInstrumentsFromXml(scoreId, enrichedXml, selection);
@@ -599,6 +599,7 @@ export class StudySession {
           this.selectedMidiInstrumentIds = instruments.map((item) => item.id);
         }
       }
+      this.applyStudyTempoFromCatalog();
       this.emit();
       if (token === this.loadToken && this.xmlLoaded) {
         this.lastRenderedSelectionKey = null;
@@ -1235,8 +1236,17 @@ export class StudySession {
 
   private syncPlayerDurationFromSequencer(): void {
     const player = this.getStudyPlayerInternals();
-    const durSec = player?._sequencer?.duration ?? 0;
-    if (player && durSec > 0) player._duration = durSec * 1000;
+    if (!player) return;
+    const timemap = readPlayerTimemap(this.player);
+    const timemapMs =
+      timemap?.reduce((total, entry) => total + Math.max(0, entry.duration ?? 0), 0) ?? 0;
+    const durSec = player._sequencer?.duration ?? 0;
+    const seqMs = durSec > 0 ? durSec * 1000 : 0;
+    if (timemapMs > 0) {
+      player._duration = timemapMs;
+      return;
+    }
+    if (seqMs > 0) player._duration = seqMs;
   }
 
   private capturePlayerFallbackMidi(): void {
@@ -1304,7 +1314,11 @@ export class StudySession {
   ): Promise<ArrayBuffer | null> {
     const xml = this.sourceXml;
     const includesPercussion = xml ? selectionIncludesPercussion(xml, partIds) : false;
-    const tempo = xml ? extractTempoInfoFromXml(xml)?.bpm ?? 120 : 120;
+    const tempo = resolveStudyPlaybackTempoBpm({
+      xml: this.musicXmlCatalog ?? xml,
+      midi: serverMidi,
+      referenceMidi: this.playerFallbackMidi,
+    });
 
     if (xml && includesPercussion) {
       const catalogXml = this.musicXmlCatalog ?? xml;
@@ -1425,7 +1439,9 @@ export class StudySession {
   private updateBpmRange() {
     const base = Math.max(30, this.baseBpm);
     const min = Math.max(30, Math.round(base * 0.5));
-    const max = Math.max(min + 10, Math.round(base * 2));
+    const marked =
+      extractMarkedTempoBpmFromXml(this.musicXmlCatalog ?? this.sourceXml) ?? this.bpm;
+    const max = Math.max(min + 10, Math.round(base * 2), Math.round(marked), 320);
     this.bpmMin = min;
     this.bpmMax = max;
   }
@@ -1435,6 +1451,32 @@ export class StudySession {
     const p = this.player as { velocity?: number };
     if ('velocity' in p) p.velocity = this.tempo;
     if (this.metronomeEnabled && this.isPlaying) this.restartMetronome();
+  }
+
+  /**
+   * `intrinsicBpm`: relógio do MIDI/Verovio (velocity = 1).
+   * Andamento de prática: maior marcação no catálogo (ex.: ♩ = 284).
+   */
+  private applyStudyTempoFromCatalog(intrinsicBpm?: number) {
+    const catalogXml = this.musicXmlCatalog ?? this.sourceXml;
+    const firstMeasure =
+      extractTempoInfoFromXml(this.sourceXml ?? catalogXml)?.bpm ?? intrinsicBpm ?? this.baseBpm;
+    const intrinsic = Math.max(
+      30,
+      intrinsicBpm ?? firstMeasure ?? this.baseBpm ?? 120,
+    );
+    const marked = extractMarkedTempoBpmFromXml(catalogXml) ?? intrinsic;
+    const targetBpm = Math.max(intrinsic, Math.round(marked));
+
+    this.baseBpm = intrinsic;
+    this.bpm = targetBpm;
+    this.tempo = this.bpm / this.baseBpm;
+    this.updateBpmRange();
+    this.applyTempo();
+    if (this.scoreHeader) {
+      this.scoreHeader = { ...this.scoreHeader, bpm: targetBpm };
+    }
+    this.emit();
   }
 
   private applyAudioVolume() {
@@ -1705,17 +1747,28 @@ export class StudySession {
     const p = this.getStudyPlayerInternals();
     const load = p?._sequencer?.loadNewSongList;
     if (!load) return false;
-    const tempoBpm = this.sourceXml
-      ? extractTempoInfoFromXml(this.sourceXml)?.bpm ?? 120
-      : 120;
-    const playbackBinary = shouldReencodeSmfForPlayback(midi)
+    const tempoBpm = resolveStudyPlaybackTempoBpm({
+      xml: this.musicXmlCatalog ?? this.sourceXml,
+      midi,
+      referenceMidi: this.playerFallbackMidi,
+    });
+    let playbackBinary = shouldReencodeSmfForPlayback(midi)
       ? reencodeSmfForPlayback(midi, tempoBpm)
       : midi;
+    const timemap = readPlayerTimemap(this.player);
+    if (timemap && timemap.length > 0) {
+      playbackBinary = alignStudyPlaybackMidiToTimemap(
+        playbackBinary,
+        timemap,
+        tempoBpm,
+      );
+    }
     load.call(p._sequencer, [{ binary: playbackBinary, fileName: 'study.mid' }]);
     this.configureSequencerForStudyPlayback();
     void p._context?.resume();
     const durSec = await this.waitForSequencerMidiReady();
     if (durSec <= 0) return false;
+    this.applyStudyTempoFromCatalog(tempoBpm);
     this.syncPlayerDurationFromSequencer();
     p._sequencer?.pause?.();
     if (p._sequencer && 'currentTime' in p._sequencer) {

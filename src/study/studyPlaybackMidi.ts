@@ -5,6 +5,7 @@ import {
   countDrumChannelNoteOns,
   mergeStudyMidiLayers,
   prepareStudyMidiBuffer,
+  readFirstSmfTempoBpm,
 } from './studyMidiFix';
 import {
   enrichPercussionPartListFromCatalog,
@@ -40,6 +41,7 @@ function buildPercussionXmlFromCatalog(catalogXml: string, percIds: string[]): s
 async function loadPercussionLayer(
   input: ComposeStudyPlaybackMidiInput,
   percIds: string[],
+  tempoBpm: number,
 ): Promise<ArrayBuffer | null> {
   let percXml = buildPercussionXmlFromCatalog(input.catalogXml, percIds);
 
@@ -50,7 +52,7 @@ async function loadPercussionLayer(
   }
 
   if (percXml.includes('<score')) {
-    const fromXml = buildUnpitchedMidiFromXml(percXml, percIds);
+    const fromXml = buildUnpitchedMidiFromXml(percXml, percIds, tempoBpm);
     if (fromXml && countDrumChannelNoteOns(fromXml) > 0) return fromXml;
   }
 
@@ -78,19 +80,24 @@ export async function composeStudyPlaybackMidi(
   const melodicIds = partIds.filter((id) => !percIds.includes(id));
 
   const layers: StudyPlaybackMidiLayer[] = [];
-
-  if (percIds.length > 0) {
-    const percussion = await loadPercussionLayer(input, percIds);
-    if (percussion) layers.push({ kind: 'percussion', buffer: percussion });
-  }
+  let playbackTempoBpm = tempoBpm;
 
   if (melodicIds.length > 0) {
     const melodic = await loadMelodicLayer(input, melodicIds);
-    if (melodic) layers.push({ kind: 'melodic', buffer: melodic });
+    if (melodic) {
+      const fromServer = readFirstSmfTempoBpm(melodic);
+      if (fromServer != null && fromServer > 0) playbackTempoBpm = fromServer;
+      layers.push({ kind: 'melodic', buffer: melodic });
+    }
+  }
+
+  if (percIds.length > 0) {
+    const percussion = await loadPercussionLayer(input, percIds, playbackTempoBpm);
+    if (percussion) layers.push({ kind: 'percussion', buffer: percussion });
   }
 
   if (layers.length === 0) return null;
   if (layers.length === 1) return layers[0].buffer;
 
-  return mergeStudyMidiLayers(layers, tempoBpm);
+  return mergeStudyMidiLayers(layers, playbackTempoBpm);
 }

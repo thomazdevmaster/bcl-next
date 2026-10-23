@@ -1,5 +1,7 @@
 /** Utilitários para MIDI de estudo (percussão GM / canal 10). */
 
+import { extractTempoInfoFromXml } from './studyUtils';
+
 export type StudySmfEvent = { tick: number; status: number; d1: number; d2: number };
 
 const TARGET_DIVISION = 480;
@@ -635,7 +637,146 @@ export function mergeStudyMidiLayers(
   }
 
   if (merged.length === 0) return null;
-  return smfFromTimedEvents(merged, tempoBpm, TARGET_DIVISION);
+
+  const mergedTempo =
+    layers
+      .filter((layer) => layer.kind === 'melodic')
+      .map((layer) => readFirstSmfTempoBpm(layer.buffer))
+      .find((value) => value != null && value > 0) ??
+    layers
+      .map((layer) => readFirstSmfTempoBpm(layer.buffer))
+      .find((value) => value != null && value > 0) ??
+    tempoBpm;
+
+  return smfFromTimedEvents(merged, mergedTempo, TARGET_DIVISION);
+}
+
+export type StudyTimemapEntry = {
+  measure?: number;
+  timestamp?: number;
+  duration?: number;
+};
+
+/** Andamento do SMF (Set Tempo) — alinhado ao que Verovio/API geraram. */
+export function readFirstSmfTempoBpm(midi: ArrayBuffer): number | null {
+  if (!isStandardMidiFile(midi)) return null;
+  const bytes = new Uint8Array(midi);
+  const view = new DataView(midi);
+  const tracks = view.getUint16(10);
+  let offset = 14;
+  for (let t = 0; t < tracks && offset + 8 <= bytes.length; t += 1) {
+    const trackLen = view.getUint32(offset + 4);
+    let i = offset + 8;
+    const end = i + trackLen;
+    let runningStatus = 0;
+    while (i < end) {
+      const delta = readVariableLength(bytes, i);
+      i = delta.next;
+      if (i >= end) break;
+
+      let status = bytes[i];
+      if (status < 0x80) {
+        status = runningStatus;
+      } else {
+        i += 1;
+      }
+
+      if (status === 0xff) {
+        if (i >= end) break;
+        const metaType = bytes[i];
+        i += 1;
+        const len = readVariableLength(bytes, i);
+        if (metaType === 0x51 && len.value === 3 && len.next + 3 <= end) {
+          const us =
+            (bytes[len.next] << 16) | (bytes[len.next + 1] << 8) | bytes[len.next + 2];
+          if (us > 0) return 60_000_000 / us;
+        }
+        i = len.next + len.value;
+        if (metaType === 0x2f) break;
+        continue;
+      }
+
+      if (status === 0xf0 || status === 0xf7) {
+        const len = readVariableLength(bytes, i);
+        i = len.next + len.value;
+        continue;
+      }
+
+      const dataLen = channelMessageDataLength(status);
+      if (dataLen === 0) break;
+      if (status >= 0x80 && status <= 0xef) runningStatus = status;
+      i += dataLen;
+    }
+    offset += 8 + trackLen;
+  }
+  return null;
+}
+
+/** Prioriza tempo do MIDI (API/Verovio); XML só como fallback. */
+export function resolveStudyPlaybackTempoBpm(options: {
+  xml?: string | null;
+  midi?: ArrayBuffer | null;
+  referenceMidi?: ArrayBuffer | null;
+}): number {
+  const candidates = [
+    options.midi ? readFirstSmfTempoBpm(options.midi) : null,
+    options.referenceMidi ? readFirstSmfTempoBpm(options.referenceMidi) : null,
+  ];
+  for (const value of candidates) {
+    if (value != null && value > 0) return value;
+  }
+  const fromXml = options.xml ? extractTempoInfoFromXml(options.xml)?.bpm : null;
+  if (fromXml != null && fromXml > 0) return fromXml;
+  return 120;
+}
+
+function sumTimemapDurationMs(timemap: StudyTimemapEntry[]): number {
+  return timemap.reduce((total, entry) => total + Math.max(0, entry.duration ?? 0), 0);
+}
+
+function ticksForTimemapDurationMs(
+  durationMs: number,
+  tempoBpm: number,
+  division: number,
+): number {
+  if (durationMs <= 0 || tempoBpm <= 0 || division <= 0) return 0;
+  return Math.round((durationMs * tempoBpm * division) / 60_000);
+}
+
+/**
+ * Alinha o MIDI injetado ao timemap do Verovio (mesma ideia do Player._adjustMidiDuration).
+ * Sem isso, o sequenciador e o cursor (timemap em ms) divergem — visível em peças rápidas.
+ */
+export function alignStudyPlaybackMidiToTimemap(
+  midi: ArrayBuffer,
+  timemap: StudyTimemapEntry[],
+  fallbackTempoBpm: number,
+): ArrayBuffer {
+  if (!isStandardMidiFile(midi) || timemap.length === 0) return midi;
+  const timemapMs = sumTimemapDurationMs(timemap);
+  if (timemapMs <= 0) return midi;
+
+  const { events, division } = extractTimedEventsFromSmf(midi);
+  if (events.length === 0) return midi;
+
+  const tempoBpm =
+    readFirstSmfTempoBpm(midi) ?? Math.max(30, fallbackTempoBpm);
+  const maxTick = events.reduce((max, ev) => Math.max(max, ev.tick), 0);
+  const targetEndTick = ticksForTimemapDurationMs(timemapMs, tempoBpm, division);
+  if (maxTick <= 0 || targetEndTick <= 0) return midi;
+  if (maxTick >= targetEndTick) return midi;
+
+  const padded = [
+    ...events,
+    {
+      tick: targetEndTick,
+      status: 0xb0,
+      d1: 50,
+      d2: 0,
+    },
+  ];
+
+  return smfFromTimedEvents(padded, tempoBpm, division);
 }
 
 /** SMF formato 0 / 1 faixa gerado no estudo já é válido; não regravar (preserva mapa GM). */
@@ -648,10 +789,11 @@ export function shouldReencodeSmfForPlayback(midi: ArrayBuffer): boolean {
 }
 
 /** Regrava SMF válido (formato 0) para o SpessaSynth — corrige stems com meta/tempo malformados. */
-export function reencodeSmfForPlayback(midi: ArrayBuffer, tempoBpm: number): ArrayBuffer {
+export function reencodeSmfForPlayback(midi: ArrayBuffer, fallbackTempoBpm: number): ArrayBuffer {
   if (!isStandardMidiFile(midi)) return midi;
   const { events, division } = extractTimedEventsFromSmf(midi);
   if (events.length === 0) return midi.slice(0);
+  const tempoBpm = readFirstSmfTempoBpm(midi) ?? Math.max(30, fallbackTempoBpm);
   const scaled = scaleEvents(events, division, TARGET_DIVISION);
   return smfFromTimedEvents(scaled, tempoBpm, TARGET_DIVISION);
 }

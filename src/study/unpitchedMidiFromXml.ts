@@ -240,11 +240,18 @@ function buildSmf(trackData: Uint8Array, division = 480): ArrayBuffer {
 }
 
 /** Gera MIDI SMF a partir de notação unpitched (bateria/percussão MuseScore). */
-export function buildUnpitchedMidiFromXml(xml: string, partIds: string[]): ArrayBuffer | null {
+export function buildUnpitchedMidiFromXml(
+  xml: string,
+  partIds: string[],
+  tempoOverrideBpm?: number,
+): ArrayBuffer | null {
   const doc = parseXml(xml);
   if (!doc || partIds.length === 0) return null;
 
-  const tempo = extractTempoInfoFromXml(xml)?.bpm ?? 120;
+  const tempo =
+    tempoOverrideBpm != null && tempoOverrideBpm > 0
+      ? tempoOverrideBpm
+      : extractTempoInfoFromXml(xml)?.bpm ?? 120;
   const allEvents: TimedEvent[] = [];
   let smfDivision = 480;
 
