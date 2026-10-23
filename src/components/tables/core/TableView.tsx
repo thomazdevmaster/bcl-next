@@ -114,6 +114,8 @@ export interface TableViewProps<TData extends RowData> {
   emptyMessage?: string;
   noResultsMessage?: string;
   renderRowActions?: (row: TData) => ReactNode;
+  /** Ícone ou badge ao lado do título no card mobile (≤959px). */
+  renderMobileCardHeaderExtra?: (row: TData) => ReactNode;
   getRowLabel?: (row: TData) => string;
   features?: TableViewFeatures;
   toolbarLabels?: Partial<TableToolbarLabels>;
@@ -159,6 +161,7 @@ export function TableView<TData extends RowData>({
   emptyMessage = "Nenhum registro disponível.",
   noResultsMessage = "Nenhum registro corresponde aos filtros.",
   renderRowActions,
+  renderMobileCardHeaderExtra,
   getRowLabel,
   features,
   toolbarLabels,
@@ -567,6 +570,11 @@ export function TableView<TData extends RowData>({
           rows={[...topRows, ...centerRows, ...bottomRows]}
           noResults={!loading && !error && !noData && table.getRowModel().rows.length === 0}
           noResultsMessage={noResultsMessage}
+          renderHeaderExtra={
+            renderMobileCardHeaderExtra
+              ? (row) => renderMobileCardHeaderExtra(row.original)
+              : undefined
+          }
         />
 
         <div

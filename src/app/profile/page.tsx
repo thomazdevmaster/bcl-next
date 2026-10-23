@@ -637,6 +637,7 @@ export default function ProfilePage() {
         title="Foto do perfil"
         size="xl"
         placement="center"
+        closeOnBackdropClick
         onClose={() => setIsPhotoPreviewOpen(false)}
       >
         {displayedPhoto ? (
@@ -660,6 +661,7 @@ export default function ProfilePage() {
             : 'Informe a senha atual e escolha uma nova senha.'
         }
         placement="center"
+        closeOnBackdropClick={false}
         onClose={closePasswordDialog}
       >
         {passwordUpdated ? (
@@ -739,6 +741,7 @@ export default function ProfilePage() {
         open={logoutDialogOpen}
         title="Sair da conta?"
         description="Você precisará entrar novamente para acessar sua área de gestão."
+        closeOnBackdropClick
         onClose={() => setLogoutDialogOpen(false)}
       >
         <div className="flex flex-col gap-4 p-4 sm:p-6">
@@ -776,6 +779,7 @@ export default function ProfilePage() {
             ? 'A simulação foi concluída. Nenhum dado foi removido.'
             : 'Esta ação é apenas uma simulação e não exclui sua conta nem seus dados.'
         }
+        closeOnBackdropClick
         onClose={closeDeleteDialog}
       >
         {accountDeletionSimulated ? (

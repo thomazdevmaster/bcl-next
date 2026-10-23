@@ -162,7 +162,14 @@ export function TableColumnOptionsDialog<TData extends RowData>({
     `group flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-[var(--radius)] px-3 text-left text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${buttonMotion} ${active ? "bg-[var(--accent)] text-[var(--accent-foreground)]" : "hover:bg-[var(--accent)]"}`;
 
   return (
-    <EntityDialog open={open} title="Opções da coluna" description={columnLabel} size="md" onClose={onClose}>
+    <EntityDialog
+      open={open}
+      title="Opções da coluna"
+      description={columnLabel}
+      size="md"
+      closeOnBackdropClick={false}
+      onClose={onClose}
+    >
       <div className="flex flex-col gap-3 p-4">
         {column.getCanPin() && (
           <div

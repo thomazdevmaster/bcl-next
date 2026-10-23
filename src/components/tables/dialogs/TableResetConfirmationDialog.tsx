@@ -10,7 +10,7 @@ interface TableResetConfirmationDialogProps {
 
 export function TableResetConfirmationDialog({ open, onClose, onConfirm }: TableResetConfirmationDialogProps) {
   return (
-    <EntityDialog open={open} title="Redefinir tabela?" size="sm" onClose={onClose}>
+    <EntityDialog open={open} title="Redefinir tabela?" size="sm" closeOnBackdropClick onClose={onClose}>
       <div className="flex flex-col gap-3 p-5">
         <p className="text-sm leading-relaxed text-[var(--muted)]">
           A configuração atual da tabela será perdida. Deseja continuar?

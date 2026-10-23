@@ -12,7 +12,10 @@ export interface EntityDialogProps {
   description?: string;
   size?: EntityDialogSize;
   placement?: EntityDialogPlacement;
-  /** Formulários de cadastro: false. Confirmações e informativas: true (padrão). */
+  /**
+   * Formulários com campos: false (só X, Cancelar, Salvar etc.).
+   * Informativas / confirmação sem campos: true — fecha no backdrop, Esc e clique fora de controles.
+   */
   closeOnBackdropClick?: boolean;
   onClose: () => void;
   children: ReactNode;
@@ -34,13 +37,22 @@ const placementClasses: Record<EntityDialogPlacement, string> = {
 
 const CLOSE_MS = 180;
 
+function isInteractiveDismissTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return Boolean(
+    target.closest(
+      'button, a, input, select, textarea, label, [role="button"], [role="link"], [contenteditable="true"]',
+    ),
+  );
+}
+
 export function EntityDialog({
   open,
   title,
   description,
   size = "md",
   placement = "center",
-  closeOnBackdropClick = true,
+  closeOnBackdropClick = false,
   onClose,
   children,
 }: EntityDialogProps) {
@@ -52,7 +64,9 @@ export function EntityDialog({
   const titleId = useId();
   const descriptionId = useId();
 
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   const clearCloseTimeout = useCallback(() => {
     if (closeTimeoutRef.current) {
@@ -72,15 +86,19 @@ export function EntityDialog({
     (notifyParent: boolean) => {
       const dialog = dialogRef.current;
       if (!dialog?.open || closing) {
-        if (!open) finishDomClose();
+        if (!open) {
+          clearCloseTimeout();
+          finishDomClose();
+        }
         return;
       }
 
       clearCloseTimeout();
 
+      if (notifyParent) onCloseRef.current();
+
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         finishDomClose();
-        if (notifyParent) onCloseRef.current();
         return;
       }
 
@@ -88,22 +106,23 @@ export function EntityDialog({
       closeTimeoutRef.current = setTimeout(() => {
         closeTimeoutRef.current = null;
         finishDomClose();
-        if (notifyParent) onCloseRef.current();
       }, CLOSE_MS);
     },
     [clearCloseTimeout, closing, finishDomClose, open],
   );
 
+  // Sincroniza `open` controlado com o ciclo de animação do <dialog> (mount/unmount).
   useEffect(() => {
     if (open) {
+      if (closing) return;
       clearCloseTimeout();
-      setClosing(false);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- estado de portal/animacao
       setRenderOpen(true);
       return;
     }
     if (!renderOpen) return;
     requestClose(false);
-  }, [clearCloseTimeout, open, renderOpen, requestClose]);
+  }, [clearCloseTimeout, closing, open, renderOpen, requestClose]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -130,7 +149,7 @@ export function EntityDialog({
       data-closing={closing ? "true" : undefined}
       onCancel={(event) => {
         event.preventDefault();
-        requestClose(true);
+        if (closeOnBackdropClick) requestClose(true);
       }}
       onClick={(event) => {
         if (closeOnBackdropClick && event.target === event.currentTarget) requestClose(true);
@@ -151,7 +170,15 @@ export function EntityDialog({
           <span className="material-icons transition-transform duration-150 group-hover:rotate-90 motion-reduce:transition-none motion-reduce:group-hover:rotate-0" aria-hidden="true">close</span>
         </button>
       </header>
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
+      <div
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+        onClick={(event) => {
+          if (!closeOnBackdropClick || isInteractiveDismissTarget(event.target)) return;
+          requestClose(true);
+        }}
+      >
+        {children}
+      </div>
     </dialog>,
     document.body,
   );
