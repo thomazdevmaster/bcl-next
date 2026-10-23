@@ -199,6 +199,103 @@ export function prepareMusicXmlForStudyPlayback(xml: string): string {
   return normalizePercussionMidiInXml(sanitizeMusicXmlPartList(xml));
 }
 
+export function partIdIsPercussive(xml: string, partId: string): boolean {
+  const doc = parseXml(xml);
+  if (!doc) return false;
+  if (partUsesUnpitchedNotation(doc, partId)) return true;
+  const scorePart = doc.querySelector(`part-list > score-part[id="${partId}"]`);
+  if (!scorePart) return false;
+  if (scorePart.querySelector('midi-unpitched')) return true;
+  if (scorePartLooksPercussive(scorePart) && !partUsesPitchedNotation(doc, partId)) return true;
+  return false;
+}
+
+function partUsesPitchedNotation(doc: Document, partId: string): boolean {
+  const partEl = doc.querySelector(`part[id="${partId}"]`);
+  if (!partEl) return false;
+  return partEl.querySelector('note > pitch') != null;
+}
+
+export function selectionIncludesPercussion(xml: string, partIds: string[]): boolean {
+  return partIds.some((id) => partIdIsPercussive(xml, id));
+}
+
+export function selectionIsPercussionOnly(xml: string, partIds: string[]): boolean {
+  if (partIds.length === 0) return false;
+  return partIds.every((id) => partIdIsPercussive(xml, id));
+}
+
+/**
+ * API/recorte pode omitir midi-instrument; copia do XML completo (MuseScore) restaura midi-unpitched.
+ */
+/** Mescla naipes vindos da API no XML em memória sem perder o part-list completo (midi-unpitched). */
+export function mergeMusicXmlFetchedParts(baseXml: string, fetchedXml: string): string {
+  if (!baseXml.includes('<score')) return fetchedXml;
+  if (!fetchedXml.includes('<score')) return baseXml;
+
+  const baseDoc = parseXml(baseXml);
+  const fetchDoc = parseXml(fetchedXml);
+  if (!baseDoc || !fetchDoc) return baseXml;
+
+  const basePartList = baseDoc.querySelector('part-list');
+  const fetchPartList = fetchDoc.querySelector('part-list');
+  if (basePartList && fetchPartList) {
+    fetchPartList.querySelectorAll('score-part').forEach((fetchScorePart) => {
+      const id = fetchScorePart.getAttribute('id') || '';
+      if (!id) return;
+      let target = basePartList.querySelector(`score-part[id="${id}"]`);
+      if (!target) {
+        target = baseDoc.createElement('score-part');
+        target.setAttribute('id', id);
+        basePartList.appendChild(target);
+      }
+      target.replaceWith(baseDoc.importNode(fetchScorePart, true));
+    });
+    stripPartListGroups(basePartList);
+  }
+
+  fetchDoc.querySelectorAll('part').forEach((fetchPart) => {
+    const id = fetchPart.getAttribute('id') || '';
+    if (!id) return;
+    const existing = baseDoc.querySelector(`part[id="${id}"]`);
+    if (existing) existing.replaceWith(baseDoc.importNode(fetchPart, true));
+    else baseDoc.documentElement.appendChild(baseDoc.importNode(fetchPart, true));
+  });
+
+  return sanitizeMusicXmlPartList(new XMLSerializer().serializeToString(baseDoc));
+}
+
+export function enrichPercussionPartListFromCatalog(
+  partXml: string,
+  catalogXml: string,
+  partIds: string[],
+): string {
+  if (!partXml.includes('<score') || !catalogXml.includes('<score') || partIds.length === 0) {
+    return partXml;
+  }
+  const partDoc = parseXml(partXml);
+  const catalogDoc = parseXml(catalogXml);
+  if (!partDoc || !catalogDoc) return partXml;
+
+  for (const partId of partIds) {
+    const target = partDoc.querySelector(`part-list > score-part[id="${partId}"]`);
+    const source = catalogDoc.querySelector(`part-list > score-part[id="${partId}"]`);
+    if (!target || !source) continue;
+
+    target.querySelectorAll('score-instrument').forEach((node) => node.remove());
+    source.querySelectorAll('score-instrument').forEach((node) => {
+      target.appendChild(partDoc.importNode(node, true));
+    });
+
+    target.querySelectorAll('midi-instrument').forEach((node) => node.remove());
+    source.querySelectorAll('midi-instrument').forEach((node) => {
+      target.appendChild(partDoc.importNode(node, true));
+    });
+  }
+
+  return new XMLSerializer().serializeToString(partDoc);
+}
+
 export const filterXmlByPartIds = (xml: string, selectedIds: string[]): string => {
   if (selectedIds.length === 0) return xml;
   const doc = parseXml(xml);
