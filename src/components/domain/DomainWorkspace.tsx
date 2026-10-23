@@ -89,6 +89,9 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
     string,
     unknown
   > | null>(null);
+  const [bulkDeleteTargets, setBulkDeleteTargets] = useState<
+    Record<string, unknown>[] | null
+  >(null);
   const [issuedPassword, setIssuedPassword] = useState<IssuedPassword | null>(
     null,
   );
@@ -117,7 +120,9 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
     setLoading(true);
     setError(null);
     try {
-      let rows = await apiFetch<Record<string, unknown>[]>(`/${domain.apiResource}`);
+      let rows = await apiFetch<Record<string, unknown>[]>(
+        `/${domain.apiResource}`,
+      );
       if (resource === "songs") {
         rows = filterSongRecordsForCatalog(rows, roles, permissions);
       }
@@ -460,26 +465,46 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    const targets = bulkDeleteTargets ?? (deleteTarget ? [deleteTarget] : []);
+    if (targets.length === 0) return;
     setSaving(true);
     setError(null);
-    let didDelete = false;
     try {
-      await apiFetch<void>(
-        `/${domain.apiResource}/${String(deleteTarget.id)}`,
-        {
-          method: "DELETE",
-        },
+      const results = await Promise.allSettled(
+        targets.map((target) =>
+          apiFetch<void>(`/${domain.apiResource}/${String(target.id)}`, {
+            method: "DELETE",
+          }),
+        ),
       );
-      setItems((current) =>
-        current.filter((item) => item.id !== deleteTarget.id),
+      const deletedIds = targets
+        .filter((_, index) => results[index].status === "fulfilled")
+        .map((target) => target.id);
+      const failedTargets = targets.filter(
+        (_, index) => results[index].status === "rejected",
       );
-      didDelete = true;
+      if (deletedIds.length > 0) {
+        setItems((current) =>
+          current.filter((item) => !deletedIds.includes(item.id)),
+        );
+      }
+      if (failedTargets.length > 0) {
+        const failure = results.find((result) => result.status === "rejected");
+        setError(
+          userFacingError(
+            failure?.status === "rejected" ? failure.reason : undefined,
+            `Não foi possível excluir ${failedTargets.length} registro(s).`,
+          ),
+        );
+        if (bulkDeleteTargets) setBulkDeleteTargets(failedTargets);
+      } else {
+        setBulkDeleteTargets(null);
+        setDeleteTarget(null);
+      }
     } catch (caught) {
       setError(userFacingError(caught));
     } finally {
       setSaving(false);
-      if (didDelete) setDeleteTarget(null);
     }
   };
 
@@ -499,13 +524,15 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
             </p>
           </div>
           {canCreate && (
-            <button
-              type="button"
-              className={`btn-primary min-h-11 ${buttonMotion}`}
-              onClick={openCreate}
-            >
-              Novo cadastro
-            </button>
+            <div className="hidden min-[960px]:block">
+              <button
+                type="button"
+                className={`btn-primary min-h-11 ${buttonMotion}`}
+                onClick={openCreate}
+              >
+                Novo cadastro
+              </button>
+            </div>
           )}
         </header>
 
@@ -542,7 +569,60 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
               emptyMessage={`Nenhum registro de ${domain.label.toLocaleLowerCase("pt-BR")} encontrado.`}
               noResultsMessage="Nenhum registro corresponde à busca ou aos filtros."
               getRowLabel={(row) => config.itemLabel(row)}
+              mobilePrimaryAction={
+                canCreate ? (
+                  <button
+                    type="button"
+                    className={"btn-primary min-h-11 w-full " + buttonMotion}
+                    onClick={openCreate}
+                  >
+                    Novo cadastro
+                  </button>
+                ) : undefined
+              }
+              mobileSelectionEnabled={canDelete}
+              onDeleteSelected={(targets, clearSelection) => {
+                if (!canDelete || targets.length === 0) return;
+                clearSelection();
+                setBulkDeleteTargets(targets);
+                setDeleteTarget(null);
+              }}
               renderRowActions={renderRowActions}
+              renderMobileRowActions={(row) => [
+                ...(resource === "songs" && songHasScore(row)
+                  ? [
+                      {
+                        label: "Estudar",
+                        icon: "school",
+                        onSelect: () => {
+                          window.location.assign(`/study/${row.id}`);
+                        },
+                      },
+                    ]
+                  : []),
+                ...(canUpdate
+                  ? [
+                      {
+                        label: "Editar",
+                        icon: "edit",
+                        onSelect: () => openItem(row, "edit"),
+                      },
+                    ]
+                  : []),
+                ...(canDelete
+                  ? [
+                      {
+                        label: "Excluir",
+                        icon: "delete",
+                        danger: true,
+                        disabled:
+                          resource === "users" &&
+                          String(row.id) === String(user?.id),
+                        onSelect: () => setDeleteTarget(row),
+                      },
+                    ]
+                  : []),
+              ]}
               toolbarLabels={{
                 section: `Controles de ${domain.label.toLocaleLowerCase("pt-BR")}`,
               }}
@@ -598,32 +678,49 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
         ) : null}
       </EntityDialog>
 
-      {deleteTarget && (
+      {(deleteTarget || bulkDeleteTargets) && (
         <div
           className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50 p-4 sm:items-center"
           role="dialog"
           aria-modal="true"
           aria-labelledby="delete-title"
-          onClick={() => setDeleteTarget(null)}
+          onClick={() => {
+            setDeleteTarget(null);
+            setBulkDeleteTargets(null);
+          }}
         >
           <div
             className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <h2 id="delete-title" className="text-xl font-semibold">
-              Excluir {config.singular}
+              {bulkDeleteTargets
+                ? `Excluir ${bulkDeleteTargets.length} registro(s)`
+                : `Excluir ${config.singular}`}
             </h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              Confirma a exclusão de{" "}
-              <strong>{config.itemLabel(deleteTarget)}</strong>? Esta ação não
-              pode ser desfeita.
+              {bulkDeleteTargets ? (
+                <>
+                  Confirma a exclusão dos registros selecionados? Esta ação não
+                  pode ser desfeita.
+                </>
+              ) : (
+                <>
+                  Confirma a exclusão de{" "}
+                  <strong>{config.itemLabel(deleteTarget ?? {})}</strong>? Esta
+                  ação não pode ser desfeita.
+                </>
+              )}
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
                 className={`btn-ghost min-h-11 ${buttonMotion}`}
                 disabled={saving}
-                onClick={() => setDeleteTarget(null)}
+                onClick={() => {
+                  setDeleteTarget(null);
+                  setBulkDeleteTargets(null);
+                }}
               >
                 Cancelar
               </button>

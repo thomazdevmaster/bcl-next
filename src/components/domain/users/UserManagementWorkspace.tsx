@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
 } from "react";
 import { createColumnHelper } from "@tanstack/react-table";
 import Link from "next/link";
@@ -83,6 +84,8 @@ interface UserManagementWorkspaceProps {
   combinedUser?: boolean;
   refreshKey?: number;
   onCreated?: () => void;
+  onCreateHandlerReady?: (handler: (() => void) | null) => void;
+  mobilePrimaryAction?: ReactNode;
   /** @deprecated Columns and fields now come from the domain CRUD configuration. */
   entityFields?: string[];
 }
@@ -155,6 +158,8 @@ export function UserManagementWorkspace({
   combinedUser = false,
   refreshKey,
   onCreated,
+  onCreateHandlerReady,
+  mobilePrimaryAction,
 }: UserManagementWorkspaceProps) {
   const domain = getDomain(resource);
   const config = getCrudConfig(resource);
@@ -217,6 +222,9 @@ export function UserManagementWorkspace({
     string,
     unknown
   > | null>(null);
+  const [bulkDeleteTargets, setBulkDeleteTargets] = useState<
+    Record<string, unknown>[] | null
+  >(null);
   const [issuedPasswords, setIssuedPasswords] = useState<IssuedPassword[]>([]);
   const [roleChoices, setRoleChoices] = useState<CrudOption[] | null>(null);
   const [choices, setChoices] = useState<UserManagementFormDynamicChoices>({
@@ -354,7 +362,14 @@ export function UserManagementWorkspace({
     } finally {
       setLoading(false);
     }
-  }, [domain.apiResource, resource]);
+  }, [
+    domain.apiResource,
+    resource,
+    setCompletionStatuses,
+    setError,
+    setItems,
+    setLoading,
+  ]);
 
   useEffect(() => {
     // A listagem precisa iniciar quando o workspace monta.
@@ -556,11 +571,13 @@ export function UserManagementWorkspace({
     [completionStatuses, resource],
   );
 
-  const openCreate = () => {
+  const openCreate = useCallback(() => {
+    const createConfig = getCrudConfig(resource);
+    const createUserConfig = combinedUser ? getCrudConfig("users") : null;
     setSelected(null);
     setValues({
-      ...config.defaults,
-      ...(userConfig?.defaults ?? {}),
+      ...createConfig.defaults,
+      ...(createUserConfig?.defaults ?? {}),
       ...createInitialValues,
       ...(combinedUser ? { status: "", photoSource: "" } : {}),
     });
@@ -569,7 +586,34 @@ export function UserManagementWorkspace({
     setActiveStage(0);
     setValidatedStageTitles([]);
     setDialogMode("create");
-  };
+  }, [
+    combinedUser,
+    createInitialValues,
+    resource,
+    setActiveStage,
+    setDialogMode,
+    setFormErrors,
+    setGuardianError,
+    setSelected,
+    setValidatedStageTitles,
+    setValues,
+  ]);
+
+  useEffect(() => {
+    if (!createOnly || !canCreate || !canCreateAccount) {
+      onCreateHandlerReady?.(null);
+      return;
+    }
+
+    onCreateHandlerReady?.(openCreate);
+    return () => onCreateHandlerReady?.(null);
+  }, [
+    canCreate,
+    canCreateAccount,
+    createOnly,
+    onCreateHandlerReady,
+    openCreate,
+  ]);
 
   const openItem = async (
     item: Record<string, unknown>,
@@ -1087,20 +1131,42 @@ export function UserManagementWorkspace({
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    const targets = bulkDeleteTargets ?? (deleteTarget ? [deleteTarget] : []);
+    if (targets.length === 0) return;
     setSaving(true);
     setError(null);
     try {
-      await apiFetch<void>(
-        `/${domain.apiResource}/${String(deleteTarget.id)}`,
-        {
-          method: "DELETE",
-        },
+      const results = await Promise.allSettled(
+        targets.map((target) =>
+          apiFetch<void>(`/${domain.apiResource}/${String(target.id)}`, {
+            method: "DELETE",
+          }),
+        ),
       );
-      setItems((current) =>
-        current.filter((item) => item.id !== deleteTarget.id),
+      const deletedIds = targets
+        .filter((_, index) => results[index].status === "fulfilled")
+        .map((target) => target.id);
+      const failedTargets = targets.filter(
+        (_, index) => results[index].status === "rejected",
       );
-      setDeleteTarget(null);
+      if (deletedIds.length > 0) {
+        setItems((current) =>
+          current.filter((item) => !deletedIds.includes(item.id)),
+        );
+      }
+      if (failedTargets.length > 0) {
+        const failure = results.find((result) => result.status === "rejected");
+        setError(
+          userFacingError(
+            failure?.status === "rejected" ? failure.reason : undefined,
+            `Não foi possível excluir ${failedTargets.length} registro(s).`,
+          ),
+        );
+        if (bulkDeleteTargets) setBulkDeleteTargets(failedTargets);
+      } else {
+        setBulkDeleteTargets(null);
+        setDeleteTarget(null);
+      }
     } catch (caught) {
       setError(userFacingError(caught));
     } finally {
@@ -1127,7 +1193,7 @@ export function UserManagementWorkspace({
                   id: "guardian",
                   title: "Responsável",
                   shortTitle: "Responsável",
-                icon: "supervisor_account",
+                  icon: "supervisor_account",
                 },
               ]
             : []),
@@ -1402,13 +1468,15 @@ export function UserManagementWorkspace({
             </div>
           ) : null}
           {!hideCreateAction && canCreate && canCreateAccount && (
-            <button
-              type="button"
-              className={`btn-primary min-h-11 ${createOnly && createButtonFullWidth ? "w-full" : ""} ${buttonMotion}`}
-              onClick={openCreate}
-            >
-              {createButtonLabel ?? "Novo cadastro"}
-            </button>
+            <div className="hidden min-[960px]:block">
+              <button
+                type="button"
+                className={`btn-primary min-h-11 ${createOnly && createButtonFullWidth ? "w-full" : ""} ${buttonMotion}`}
+                onClick={openCreate}
+              >
+                {createButtonLabel ?? "Novo cadastro"}
+              </button>
+            </div>
           )}
         </header>
 
@@ -1448,10 +1516,87 @@ export function UserManagementWorkspace({
                 emptyMessage={`Nenhum registro de ${domain.label.toLocaleLowerCase("pt-BR")} encontrado.`}
                 noResultsMessage="Nenhum registro corresponde à busca ou aos filtros."
                 getRowLabel={(row) => config.itemLabel(row)}
+                mobilePrimaryAction={
+                  mobilePrimaryAction ??
+                  (!hideCreateAction && canCreate && canCreateAccount ? (
+                    <button
+                      type="button"
+                      className={"btn-primary min-h-11 w-full " + buttonMotion}
+                      onClick={openCreate}
+                    >
+                      {createButtonLabel ?? "Novo cadastro"}
+                    </button>
+                  ) : undefined)
+                }
+                mobileSelectionEnabled={canDelete}
+                onDeleteSelected={(targets, clearSelection) => {
+                  if (!canDelete || targets.length === 0) return;
+                  const ownAccountId = String(user?.id ?? "");
+                  const ownAccountSelected =
+                    resource === "users" &&
+                    targets.some(
+                      (target) => String(target.id) === ownAccountId,
+                    );
+                  const deletableTargets =
+                    resource === "users"
+                      ? targets.filter(
+                          (target) => String(target.id) !== ownAccountId,
+                        )
+                      : targets;
+                  clearSelection();
+                  if (deletableTargets.length === 0) {
+                    setBulkDeleteTargets(null);
+                    setDeleteTarget(null);
+                    setError("Sua própria conta não pode ser excluída.");
+                    return;
+                  }
+                  setError(
+                    ownAccountSelected
+                      ? "Sua própria conta será ignorada na exclusão em lote."
+                      : null,
+                  );
+                  setBulkDeleteTargets(deletableTargets);
+                  setDeleteTarget(null);
+                }}
                 renderRowActions={renderRowActions}
                 renderMobileCardHeaderExtra={
                   resource === "users" ? renderMobileUserIncompleteIndicator : undefined
                 }
+                renderMobileRowActions={(row) => [
+                  ...(resource === "songs" && songHasScore(row)
+                    ? [
+                        {
+                          label: "Estudar",
+                          icon: "school",
+                          onSelect: () => {
+                            window.location.assign(`/study/${row.id}`);
+                          },
+                        },
+                      ]
+                    : []),
+                  ...(canUpdate
+                    ? [
+                        {
+                          label: "Editar",
+                          icon: "edit",
+                          onSelect: () => openItem(row, "edit"),
+                        },
+                      ]
+                    : []),
+                  ...(canDelete
+                    ? [
+                        {
+                          label: "Excluir",
+                          icon: "delete",
+                          danger: true,
+                          disabled:
+                            resource === "users" &&
+                            String(row.id) === String(user?.id),
+                          onSelect: () => setDeleteTarget(row),
+                        },
+                      ]
+                    : []),
+                ]}
                 toolbarLabels={{
                   section: `Controles de ${domain.label.toLocaleLowerCase("pt-BR")}`,
                 }}
@@ -1690,7 +1835,7 @@ export function UserManagementWorkspace({
         </EntityDialog>
       )}
 
-      {deleteTarget && (
+      {(deleteTarget || bulkDeleteTargets) && (
         <div
           className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50 p-4 sm:items-center"
           role="dialog"
@@ -1699,19 +1844,33 @@ export function UserManagementWorkspace({
         >
           <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl">
             <h2 id="delete-title" className="text-xl font-semibold">
-              Excluir {config.singular}
+              {bulkDeleteTargets
+                ? `Excluir ${bulkDeleteTargets.length} registro(s)`
+                : `Excluir ${config.singular}`}
             </h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              Confirma a exclusão de{" "}
-              <strong>{config.itemLabel(deleteTarget)}</strong>? Esta ação não
-              pode ser desfeita.
+              {bulkDeleteTargets ? (
+                <>
+                  Confirma a exclusão dos registros selecionados? Esta ação não
+                  pode ser desfeita.
+                </>
+              ) : (
+                <>
+                  Confirma a exclusão de{" "}
+                  <strong>{config.itemLabel(deleteTarget ?? {})}</strong>? Esta
+                  ação não pode ser desfeita.
+                </>
+              )}
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
                 className={`btn-ghost min-h-11 ${buttonMotion}`}
                 disabled={saving}
-                onClick={() => setDeleteTarget(null)}
+                onClick={() => {
+                  setDeleteTarget(null);
+                  setBulkDeleteTargets(null);
+                }}
               >
                 Cancelar
               </button>
