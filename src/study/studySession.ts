@@ -37,12 +37,27 @@ import {
   type StudySongMetadataInput,
 } from './enrichStudyMusicXml';
 import {
+  extractMarkedTempoBpmFromXml,
   extractTempoInfoFromXml,
   extractInstrumentsFromXml,
   filterXmlByPartIds,
+  mergeMusicXmlFetchedParts,
+  prepareMusicXmlForStudyPlayback,
   sanitizeMusicXmlPartList,
+  selectionIncludesPercussion,
+  selectionIsPercussionOnly,
   type InstrumentInfo,
 } from './studyUtils';
+import {
+  countDrumChannelNoteOns,
+  drumChannelPitchHistogram,
+  alignStudyPlaybackMidiToTimemap,
+  prepareStudyMidiBuffer,
+  reencodeSmfForPlayback,
+  resolveStudyPlaybackTempoBpm,
+  shouldReencodeSmfForPlayback,
+} from './studyMidiFix';
+import { composeStudyPlaybackMidi } from './studyPlaybackMidi';
 import { fetchFilteredXml, fetchPartMidi, selectionStorageKey } from './songParts';
 
 /**
@@ -131,6 +146,29 @@ function sameIdSet(left: string[], right: string[]) {
   return right.every((id) => ids.has(id));
 }
 
+/** Cabeçalho SMF (MThd). */
+function isValidStandardMidiBuffer(midi: ArrayBuffer): boolean {
+  if (midi.byteLength < 14) return false;
+  const view = new DataView(midi);
+  return view.getUint32(0) === 0x4d546864;
+}
+
+type StudyPlayerSequencer = {
+  loadNewSongList?: (songs: { binary: ArrayBuffer; fileName?: string }[]) => void;
+  isLoading?: boolean;
+  duration?: number;
+  currentTime?: number;
+  pause?: () => void;
+};
+
+type StudyPlayerInternals = {
+  _sequencer?: StudyPlayerSequencer;
+  _context?: AudioContext;
+  _duration?: number;
+  midi?: ArrayBuffer;
+  rewind?: () => void;
+};
+
 function isMobileView() {
   if (typeof window === 'undefined') return false;
   return window.matchMedia('(max-width: 600px)').matches;
@@ -172,6 +210,8 @@ export class StudySession {
   private ownerId: string | null = null;
   private loadToken = 0;
   private sourceXml: string | null = null;
+  /** XML integral da música (nunca substituído por recorte da API) — mapa MuseScore midi-unpitched. */
+  private musicXmlCatalog: string | null = null;
   private currentScoreId = 'local';
   private lastRenderedSelectionKey: string | null = null;
   private midiCache = new Map<string, ArrayBuffer>();
@@ -207,6 +247,12 @@ export class StudySession {
 
   private midiPrefetchScheduled = false;
   private midiWarmupScheduled = false;
+  /** MIDI do Verovio após Player.create (fallback se o worker falhar). */
+  private playerFallbackMidi: ArrayBuffer | null = null;
+  /** Chave do último MIDI do servidor aplicado no sequenciador SpessaSynth. */
+  private appliedServerMidiKey: string | null = null;
+  /** Verovio auxiliar — não reutiliza o converter do Player (reinit quebraria timemap/áudio). */
+  private auxiliaryVerovioConverter: VerovioConverter | null = null;
 
   /** UI fields mirrored in snapshot */
   private scoreLoading = false;
@@ -446,6 +492,7 @@ export class StudySession {
     const enrichedXml = enrichStudyMusicXml(xml, header);
     this.scoreHeader = header;
     this.currentScoreName = header.title;
+    this.musicXmlCatalog = xml;
     this.sourceXml = enrichedXml;
     this.mobileMeasuresOverride = null;
     this.lastRenderedSelectionKey = null;
@@ -453,12 +500,9 @@ export class StudySession {
     this.clearOsmdContainer();
 
     const tempoInfo = extractTempoInfoFromXml(enrichedXml);
-    this.baseBpm = tempoInfo?.bpm ?? 100;
     this.timeSignature = tempoInfo?.timeSignature ?? '4/4';
     this.beatsPerMeasure = tempoInfo?.beatsPerMeasure ?? 4;
-    this.bpm = this.baseBpm;
-    this.tempo = this.bpm / this.baseBpm;
-    this.updateBpmRange();
+    this.applyStudyTempoFromCatalog(tempoInfo?.bpm ?? 100);
     if (this.metronomeEnabled) this.restartMetronome();
 
     this.initializeInstrumentsFromXml(scoreId, enrichedXml, selection);
@@ -466,7 +510,7 @@ export class StudySession {
     this.emit();
 
     if (selection.fullScoreUrl) {
-      void this.adoptFullScore(selection.fullScoreUrl, token);
+      await this.adoptFullScore(selection.fullScoreUrl, token);
     }
     await this.applyInstrumentSelection(scoreId, token);
   }
@@ -478,6 +522,7 @@ export class StudySession {
     this.clearOsmdContainer();
     this.osmd = null;
     this.sourceXml = null;
+    this.musicXmlCatalog = null;
     this.lastRenderedSelectionKey = null;
     this.xmlLoaded = false;
     this.scoreLoading = false;
@@ -526,6 +571,7 @@ export class StudySession {
       if (!response.ok || token !== this.loadToken) return;
       const xml = await response.text();
       if (token !== this.loadToken || !xml.includes('<')) return;
+      this.musicXmlCatalog = xml;
       if (this.lastSongMetadata) {
         const header = buildStudyScoreHeader(xml, this.lastSongMetadata);
         this.scoreHeader = header;
@@ -553,6 +599,7 @@ export class StudySession {
           this.selectedMidiInstrumentIds = instruments.map((item) => item.id);
         }
       }
+      this.applyStudyTempoFromCatalog();
       this.emit();
       if (token === this.loadToken && this.xmlLoaded) {
         this.lastRenderedSelectionKey = null;
@@ -789,7 +836,11 @@ export class StudySession {
           try {
             const xml = await fetchFilteredXml(id, needed);
             if (token !== this.loadToken) return;
-            this.sourceXml = xml;
+            this.sourceXml = mergeMusicXmlFetchedParts(this.sourceXml ?? '', xml);
+            this.musicXmlCatalog = mergeMusicXmlFetchedParts(
+              this.musicXmlCatalog ?? this.sourceXml ?? '',
+              xml,
+            );
           } catch {
             /* segue com o XML que já está carregado */
           }
@@ -817,8 +868,10 @@ export class StudySession {
         const midiXml = shouldFilterMidi
           ? await this.resolveXmlForPartIds(id, midiSelectedIds)
           : this.sourceXml;
-        await this.initVerovioPlayerInHiddenContainer(sanitizeMusicXmlPartList(midiXml), id, token);
+        await this.initVerovioPlayerInHiddenContainer(prepareMusicXmlForStudyPlayback(midiXml), id, token);
         await serverMidi;
+        if (token !== this.loadToken) return;
+        await this.syncServerMidiIntoPlayer(id, midiSelectedIds, token);
         if (token !== this.loadToken) return;
         this.scheduleMidiPrefetch();
         this.scheduleMidiWarmup();
@@ -1101,8 +1154,8 @@ export class StudySession {
       }
       this.playerController.player = this.player;
       this.playerReady = true;
-      // Player.create converte o MusicXML filtrado e já prepara seu MIDI interno.
-      this.midiLoaded = true;
+      this.capturePlayerFallbackMidi();
+      // midiLoaded só após syncServerMidiIntoPlayer (MIDI do worker é assíncrono no worklet).
       this.applyTempo();
       this.applyLoop();
       this.applyAudioVolume();
@@ -1156,6 +1209,174 @@ export class StudySession {
     this.stopLoopMonitor();
     this.midiLoaded = false;
     this.midiLoading = false;
+    this.playerFallbackMidi = null;
+    this.appliedServerMidiKey = null;
+    this.auxiliaryVerovioConverter = null;
+  }
+
+  private getStudyPlayerInternals(): StudyPlayerInternals | null {
+    return this.player as StudyPlayerInternals | null;
+  }
+
+  private async waitForSequencerMidiReady(timeoutMs = 15_000): Promise<number> {
+    const seq = this.getStudyPlayerInternals()?._sequencer;
+    if (!seq) return 0;
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (!seq.isLoading) {
+        const dur = seq.duration ?? 0;
+        if (dur > 0) return dur;
+      }
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 25);
+      });
+    }
+    return seq.duration ?? 0;
+  }
+
+  private syncPlayerDurationFromSequencer(): void {
+    const player = this.getStudyPlayerInternals();
+    if (!player) return;
+    const timemap = readPlayerTimemap(this.player);
+    const timemapMs =
+      timemap?.reduce((total, entry) => total + Math.max(0, entry.duration ?? 0), 0) ?? 0;
+    const durSec = player._sequencer?.duration ?? 0;
+    const seqMs = durSec > 0 ? durSec * 1000 : 0;
+    if (timemapMs > 0) {
+      player._duration = timemapMs;
+      return;
+    }
+    if (seqMs > 0) player._duration = seqMs;
+  }
+
+  private capturePlayerFallbackMidi(): void {
+    this.playerFallbackMidi = null;
+    try {
+      const midi = this.getStudyPlayerInternals()?.midi;
+      if (midi && isValidStandardMidiBuffer(midi)) {
+        this.playerFallbackMidi = midi.slice(0);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private sequencerHasAudibleMidi(): boolean {
+    return (this.getStudyPlayerInternals()?._sequencer?.duration ?? 0) > 0;
+  }
+
+  private async resolvePreparedMidiXml(songId: string, partIds: string[]): Promise<string | null> {
+    if (!this.sourceXml) return null;
+    const available = this.availableInstruments;
+    const shouldFilter =
+      available.length > 0 && partIds.length > 0 && partIds.length < available.length;
+    const xml = shouldFilter
+      ? await this.resolveXmlForPartIds(songId, partIds)
+      : this.sourceXml;
+    return prepareMusicXmlForStudyPlayback(xml);
+  }
+
+  private async resolveClientMidiFromConverter(
+    preparedXml: string,
+    token: number,
+  ): Promise<ArrayBuffer | null> {
+    if (token !== this.loadToken) return null;
+    const playerOptions = (this.player as { _options?: Record<string, unknown> })?._options;
+    if (!playerOptions) return null;
+    if (!this.auxiliaryVerovioConverter) {
+      this.auxiliaryVerovioConverter = new VerovioConverter();
+    }
+    try {
+      await this.withoutVerovioFontNoise(async () => {
+        await this.auxiliaryVerovioConverter!.initialize(
+          preparedXml,
+          playerOptions as never,
+        );
+      });
+      if (token !== this.loadToken) return null;
+      const raw = this.auxiliaryVerovioConverter.midi;
+      if (!raw || !isValidStandardMidiBuffer(raw)) return null;
+      return prepareStudyMidiBuffer(raw, {
+        percussionOnly: this.sourceXml
+          ? selectionIsPercussionOnly(this.sourceXml, this.selectedMidiInstrumentIds)
+          : false,
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  private async resolvePlaybackMidiBuffer(
+    songId: string,
+    partIds: string[],
+    serverMidi: ArrayBuffer | null,
+    token: number,
+  ): Promise<ArrayBuffer | null> {
+    const xml = this.sourceXml;
+    const includesPercussion = xml ? selectionIncludesPercussion(xml, partIds) : false;
+    const tempo = resolveStudyPlaybackTempoBpm({
+      xml: this.musicXmlCatalog ?? xml,
+      midi: serverMidi,
+      referenceMidi: this.playerFallbackMidi,
+    });
+
+    if (xml && includesPercussion) {
+      const catalogXml = this.musicXmlCatalog ?? xml;
+      const composed = await composeStudyPlaybackMidi({
+        catalogXml,
+        songId,
+        partIds,
+        tempoBpm: tempo,
+        fetchPartMidi: async (sid, ids) => {
+          const key = this.midiCacheKey(sid, ids);
+          let buf = this.midiCache.get(key) ?? null;
+          if (!buf) {
+            buf = await fetchPartMidi(sid, ids);
+            if (buf) this.midiCache.set(key, buf);
+          }
+          return buf;
+        },
+        resolvePartXml: async (ids) => {
+          if (ids.length === partIds.length) {
+            return (await this.resolvePreparedMidiXml(songId, partIds)) ?? '';
+          }
+          return this.resolveXmlForPartIds(songId, ids);
+        },
+      });
+      if (token !== this.loadToken) return null;
+      if (composed) {
+        if (process.env.NODE_ENV === 'development') {
+          (window as unknown as { __studyPlaybackMidiStats?: unknown }).__studyPlaybackMidiStats = {
+            partIds,
+            drumNoteOns: countDrumChannelNoteOns(composed),
+            drumPitches: drumChannelPitchHistogram(composed),
+            bytes: composed.byteLength,
+            catalogHasUnpitched: (this.musicXmlCatalog ?? xml).includes('midi-unpitched'),
+          };
+        }
+        return composed;
+      }
+      return null;
+    }
+
+    if (serverMidi) {
+      return prepareStudyMidiBuffer(serverMidi, {
+        percussionOnly: xml ? selectionIsPercussionOnly(xml, partIds) : false,
+      });
+    }
+    if (this.playerFallbackMidi) {
+      return prepareStudyMidiBuffer(this.playerFallbackMidi, { percussionOnly: false });
+    }
+    return null;
+  }
+
+  private configureSequencerForStudyPlayback(): void {
+    const seq = this.getStudyPlayerInternals()?._sequencer as
+      | { skipToFirstNoteOn?: boolean }
+      | undefined;
+    if (seq && 'skipToFirstNoteOn' in seq) {
+      seq.skipToFirstNoteOn = false;
+    }
   }
 
   /** Esconde só as queixas de fonte do Verovio, e só enquanto o toolkit é criado. */
@@ -1218,7 +1439,10 @@ export class StudySession {
   private updateBpmRange() {
     const base = Math.max(30, this.baseBpm);
     const min = Math.max(30, Math.round(base * 0.5));
-    const max = Math.max(min + 10, Math.round(base * 2));
+    const xmlForMarked = this.musicXmlCatalog ?? this.sourceXml;
+    const marked =
+      (xmlForMarked ? extractMarkedTempoBpmFromXml(xmlForMarked) : null) ?? this.bpm;
+    const max = Math.max(min + 10, Math.round(base * 2), Math.round(marked), 320);
     this.bpmMin = min;
     this.bpmMax = max;
   }
@@ -1228,6 +1452,36 @@ export class StudySession {
     const p = this.player as { velocity?: number };
     if ('velocity' in p) p.velocity = this.tempo;
     if (this.metronomeEnabled && this.isPlaying) this.restartMetronome();
+  }
+
+  /**
+   * `intrinsicBpm`: relógio do MIDI/Verovio (velocity = 1).
+   * Andamento de prática: maior marcação no catálogo (ex.: ♩ = 284).
+   */
+  private applyStudyTempoFromCatalog(intrinsicBpm?: number) {
+    const catalogXml = this.musicXmlCatalog ?? this.sourceXml;
+    const xmlForFirstTempo = this.sourceXml ?? catalogXml;
+    const firstMeasure =
+      (xmlForFirstTempo ? extractTempoInfoFromXml(xmlForFirstTempo)?.bpm : null) ??
+      intrinsicBpm ??
+      this.baseBpm;
+    const intrinsic = Math.max(
+      30,
+      intrinsicBpm ?? firstMeasure ?? this.baseBpm ?? 120,
+    );
+    const marked =
+      (catalogXml ? extractMarkedTempoBpmFromXml(catalogXml) : null) ?? intrinsic;
+    const targetBpm = Math.max(intrinsic, Math.round(marked));
+
+    this.baseBpm = intrinsic;
+    this.bpm = targetBpm;
+    this.tempo = this.bpm / this.baseBpm;
+    this.updateBpmRange();
+    this.applyTempo();
+    if (this.scoreHeader) {
+      this.scoreHeader = { ...this.scoreHeader, bpm: targetBpm };
+    }
+    this.emit();
   }
 
   private applyAudioVolume() {
@@ -1414,6 +1668,7 @@ export class StudySession {
   async play() {
     if (this.isPlaying) return;
     const token = this.loadToken;
+    await this.ensureStudyPlaybackMidi(token);
     await this.prepareMidiForPlayer(token);
     if (token !== this.loadToken || !this.midiLoaded) return;
 
@@ -1427,7 +1682,11 @@ export class StudySession {
         rewind?: () => void;
         duration?: number;
         position?: number;
+        _context?: AudioContext;
       };
+      this.configureSequencerForStudyPlayback();
+      void pl._context?.resume();
+      this.applyAudioVolume();
       this.isPlaying = true;
       if (moveTo && pl.moveTo) {
         pl.moveTo(moveTo.measureIndex, moveTo.measureStartMs, moveTo.measureOffsetMs);
@@ -1487,17 +1746,123 @@ export class StudySession {
     }
   }
 
+  /** musicxml-player não expõe loadMIDI; o sequenciador SpessaSynth aceita o binário do worker. */
+  private async applyMidiBufferToPlayer(midi: ArrayBuffer): Promise<boolean> {
+    if (!isValidStandardMidiBuffer(midi)) return false;
+    const p = this.getStudyPlayerInternals();
+    const load = p?._sequencer?.loadNewSongList;
+    if (!load) return false;
+    const tempoBpm = resolveStudyPlaybackTempoBpm({
+      xml: this.musicXmlCatalog ?? this.sourceXml,
+      midi,
+      referenceMidi: this.playerFallbackMidi,
+    });
+    let playbackBinary = shouldReencodeSmfForPlayback(midi)
+      ? reencodeSmfForPlayback(midi, tempoBpm)
+      : midi;
+    const timemap = readPlayerTimemap(this.player);
+    if (timemap && timemap.length > 0) {
+      playbackBinary = alignStudyPlaybackMidiToTimemap(
+        playbackBinary,
+        timemap,
+        tempoBpm,
+      );
+    }
+    load.call(p._sequencer, [{ binary: playbackBinary, fileName: 'study.mid' }]);
+    this.configureSequencerForStudyPlayback();
+    void p._context?.resume();
+    const durSec = await this.waitForSequencerMidiReady();
+    if (durSec <= 0) return false;
+    this.applyStudyTempoFromCatalog(tempoBpm);
+    this.syncPlayerDurationFromSequencer();
+    p._sequencer?.pause?.();
+    if (p._sequencer && 'currentTime' in p._sequencer) {
+      p._sequencer.currentTime = 0;
+    }
+    p.rewind?.();
+    return true;
+  }
+
+  /** Garante MIDI do servidor no sequenciador antes do play (loadNewSongList é assíncrono). */
+  private async ensureStudyPlaybackMidi(token: number): Promise<void> {
+    if (token !== this.loadToken || !this.player || !this.playerReady) return;
+    if (!/^\d+$/.test(this.currentScoreId)) return;
+    const partIds = this.selectedMidiInstrumentIds;
+    if (partIds.length === 0) return;
+    const key = this.midiCacheKey(this.currentScoreId, partIds);
+    if (this.appliedServerMidiKey === key && this.sequencerHasAudibleMidi()) return;
+    await this.syncServerMidiIntoPlayer(this.currentScoreId, partIds, token);
+  }
+
+  /** Substitui o MIDI do Verovio pelo gerado no servidor (inclui percussão). */
+  private async syncServerMidiIntoPlayer(
+    songId: string,
+    partIds: string[],
+    token: number,
+  ): Promise<void> {
+    if (!/^\d+$/.test(songId) || partIds.length === 0 || !this.player) {
+      if (token === this.loadToken && this.playerReady && this.sequencerHasAudibleMidi()) {
+        this.midiLoaded = true;
+      }
+      return;
+    }
+    const key = this.midiCacheKey(songId, partIds);
+    let midi = this.midiCache.get(key) ?? null;
+    if (!midi) {
+      midi = await fetchPartMidi(songId, partIds);
+      if (midi) this.midiCache.set(key, midi);
+    }
+    if (token !== this.loadToken) return;
+
+    let applied = false;
+    const playbackMidi = await this.resolvePlaybackMidiBuffer(songId, partIds, midi, token);
+    if (token !== this.loadToken) return;
+    if (playbackMidi && isValidStandardMidiBuffer(playbackMidi)) {
+      applied = await this.applyMidiBufferToPlayer(playbackMidi);
+      if (applied) this.appliedServerMidiKey = key;
+    }
+    if (!applied) {
+      const durSec = await this.waitForSequencerMidiReady(3_000);
+      applied = durSec > 0;
+      if (!applied) {
+        console.warn('Study: nenhum MIDI audível para percussão/instrumentos selecionados.');
+      }
+    }
+
+    if (token === this.loadToken) {
+      this.midiLoaded = applied;
+      if (applied) {
+        this.playerError = null;
+        this.applyTempo();
+        this.applyAudioVolume();
+        this.applyLoop();
+      } else {
+        this.playerError = failureMessage(
+          undefined,
+          'Não foi possível carregar o áudio desta seleção de instrumentos.',
+        );
+      }
+    }
+  }
+
   private async loadMidiForCurrentScore(token: number) {
+    if (token !== this.loadToken) return;
+    if (/^\d+$/.test(this.currentScoreId)) {
+      await this.syncServerMidiIntoPlayer(
+        this.currentScoreId,
+        this.selectedMidiInstrumentIds,
+        token,
+      );
+      return;
+    }
     this.midiLoaded = false;
     const midi = await this.getMidiBufferForCurrentScore();
-    if (!midi || token !== this.loadToken) return;
-    const p = this.player as { loadMIDI?: (b: ArrayBuffer) => void; loadMidi?: (b: ArrayBuffer) => void; setMidi?: (b: ArrayBuffer) => void } | null;
-    if (p) {
-      if (p.loadMIDI) p.loadMIDI(midi);
-      else if (p.loadMidi) p.loadMidi(midi);
-      else if (p.setMidi) p.setMidi(midi);
+    if (!midi || token !== this.loadToken) {
+      if (token === this.loadToken && this.player) this.midiLoaded = true;
+      return;
     }
-    this.midiLoaded = true;
+    const applied = await this.applyMidiBufferToPlayer(midi);
+    this.midiLoaded = applied;
   }
 
   private async getMidiBufferForCurrentScore(): Promise<ArrayBuffer | null> {
