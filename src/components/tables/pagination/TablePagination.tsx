@@ -42,7 +42,7 @@ export function TablePagination({
 }: TablePaginationProps) {
   return (
     <nav aria-label="Paginação da tabela" className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex w-full shrink-0 items-center justify-center gap-2 min-[960px]:w-auto min-[960px]:justify-start">
         <TableActionButton onClick={onFirstPage} disabled={!canGoToPreviousPage} ariaLabel="Primeira página">
           <span className={`material-icons text-base ${tableIconMotion}`} aria-hidden="true">
             first_page
@@ -63,10 +63,10 @@ export function TablePagination({
             last_page
           </span>
         </TableActionButton>
-        <span className="whitespace-nowrap text-sm">
-          Página {currentPage} de {pageCount}
-        </span>
       </div>
+      <span className="basis-full whitespace-nowrap text-center text-sm min-[960px]:basis-auto min-[960px]:text-left">
+        Página {currentPage} de {pageCount}
+      </span>
       <label className="flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap text-sm">
         Ir para página
         <input
