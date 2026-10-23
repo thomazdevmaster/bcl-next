@@ -1104,8 +1104,8 @@ export class StudySession {
       }
       this.playerController.player = this.player;
       this.playerReady = true;
-      // Player.create gera MIDI interno (fallback). Com API, preferimos o MIDI do worker.
-      this.midiLoaded = !/^\d+$/.test(_scoreId);
+      // MIDI interno do Verovio (fallback); API substitui via syncServerMidiIntoPlayer.
+      this.midiLoaded = true;
       this.applyTempo();
       this.applyLoop();
       this.applyAudioVolume();
@@ -1490,16 +1490,17 @@ export class StudySession {
     }
   }
 
-  private applyMidiBufferToPlayer(midi: ArrayBuffer) {
+  /** musicxml-player não expõe loadMIDI; o sequenciador SpessaSynth aceita o binário do worker. */
+  private applyMidiBufferToPlayer(midi: ArrayBuffer): boolean {
     const p = this.player as {
-      loadMIDI?: (b: ArrayBuffer) => void;
-      loadMidi?: (b: ArrayBuffer) => void;
-      setMidi?: (b: ArrayBuffer) => void;
+      _sequencer?: { loadNewSongList?: (songs: { binary: ArrayBuffer }[]) => void };
+      _context?: AudioContext;
     } | null;
-    if (!p) return;
-    if (p.loadMIDI) p.loadMIDI(midi);
-    else if (p.loadMidi) p.loadMidi(midi);
-    else if (p.setMidi) p.setMidi(midi);
+    const load = p?._sequencer?.loadNewSongList;
+    if (!load) return false;
+    load.call(p._sequencer, [{ binary: midi }]);
+    void p._context?.resume();
+    return true;
   }
 
   /** Substitui o MIDI do Verovio pelo gerado no servidor (inclui percussão). */
@@ -1519,7 +1520,9 @@ export class StudySession {
       if (midi) this.midiCache.set(key, midi);
     }
     if (token !== this.loadToken) return;
-    if (midi) this.applyMidiBufferToPlayer(midi);
+    if (midi && !this.applyMidiBufferToPlayer(midi)) {
+      console.warn('Study: não foi possível injetar MIDI do servidor no player.');
+    }
     this.midiLoaded = true;
     this.applyTempo();
     this.applyAudioVolume();
