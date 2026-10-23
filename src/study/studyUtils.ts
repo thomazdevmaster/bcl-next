@@ -134,6 +134,71 @@ export function sanitizeMusicXmlPartList(xml: string): string {
   return new XMLSerializer().serializeToString(doc);
 }
 
+function partUsesUnpitchedNotation(doc: Document, partId: string): boolean {
+  const partEl = doc.querySelector(`part[id="${partId}"]`);
+  if (!partEl) return false;
+  if (partEl.querySelector('unpitched')) return true;
+  const clefSign = partEl.querySelector('clef > sign')?.textContent?.trim().toLowerCase();
+  return clefSign === 'percussion';
+}
+
+function scorePartLooksPercussive(scorePart: Element): boolean {
+  if (scorePart.querySelector('midi-unpitched')) return true;
+  const text = [
+    scorePart.querySelector('part-name')?.textContent,
+    scorePart.querySelector('part-abbreviation')?.textContent,
+    scorePart.querySelector('score-instrument > instrument-name')?.textContent,
+    scorePart.querySelector('score-instrument > instrument-sound')?.textContent,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return /bateria|percuss|drum|surdo|caixa|timpani|prato|pandeiro|triangulo|cymbal|snare|kit/.test(text);
+}
+
+/** Verovio/spessasynth exigem canal 10 (GM percussão) em naipes com notação unpitched. */
+export function normalizePercussionMidiInXml(xml: string): string {
+  const doc = parseXml(xml);
+  if (!doc) return xml;
+
+  const unpitchedPartIds = new Set<string>();
+  doc.querySelectorAll('part-list > score-part').forEach((scorePart) => {
+    const id = scorePart.getAttribute('id') || '';
+    if (!id) return;
+    if (partUsesUnpitchedNotation(doc, id) || scorePartLooksPercussive(scorePart)) {
+      unpitchedPartIds.add(id);
+    }
+  });
+
+  if (unpitchedPartIds.size === 0) return xml;
+
+  unpitchedPartIds.forEach((partId) => {
+    const scorePart = doc.querySelector(`part-list > score-part[id="${partId}"]`);
+    if (!scorePart) return;
+    scorePart.querySelectorAll('midi-instrument').forEach((midiInst) => {
+      let channel = midiInst.querySelector('midi-channel');
+      if (!channel) {
+        channel = doc.createElement('midi-channel');
+        midiInst.insertBefore(channel, midiInst.firstChild);
+      }
+      channel.textContent = '10';
+      let program = midiInst.querySelector('midi-program');
+      if (!program) {
+        program = doc.createElement('midi-program');
+        channel.insertAdjacentElement('afterend', program);
+      }
+      if (!program.textContent?.trim()) program.textContent = '1';
+    });
+  });
+
+  return new XMLSerializer().serializeToString(doc);
+}
+
+/** Sanitiza grupos MuseScore e corrige MIDI de bateria/percussão antes do player. */
+export function prepareMusicXmlForStudyPlayback(xml: string): string {
+  return normalizePercussionMidiInXml(sanitizeMusicXmlPartList(xml));
+}
+
 export const filterXmlByPartIds = (xml: string, selectedIds: string[]): string => {
   if (selectedIds.length === 0) return xml;
   const doc = parseXml(xml);

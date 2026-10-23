@@ -40,6 +40,7 @@ import {
   extractTempoInfoFromXml,
   extractInstrumentsFromXml,
   filterXmlByPartIds,
+  prepareMusicXmlForStudyPlayback,
   sanitizeMusicXmlPartList,
   type InstrumentInfo,
 } from './studyUtils';
@@ -817,8 +818,10 @@ export class StudySession {
         const midiXml = shouldFilterMidi
           ? await this.resolveXmlForPartIds(id, midiSelectedIds)
           : this.sourceXml;
-        await this.initVerovioPlayerInHiddenContainer(sanitizeMusicXmlPartList(midiXml), id, token);
+        await this.initVerovioPlayerInHiddenContainer(prepareMusicXmlForStudyPlayback(midiXml), id, token);
         await serverMidi;
+        if (token !== this.loadToken) return;
+        await this.syncServerMidiIntoPlayer(id, midiSelectedIds, token);
         if (token !== this.loadToken) return;
         this.scheduleMidiPrefetch();
         this.scheduleMidiWarmup();
@@ -1101,8 +1104,8 @@ export class StudySession {
       }
       this.playerController.player = this.player;
       this.playerReady = true;
-      // Player.create converte o MusicXML filtrado e já prepara seu MIDI interno.
-      this.midiLoaded = true;
+      // Player.create gera MIDI interno (fallback). Com API, preferimos o MIDI do worker.
+      this.midiLoaded = !/^\d+$/.test(_scoreId);
       this.applyTempo();
       this.applyLoop();
       this.applyAudioVolume();
@@ -1487,16 +1490,59 @@ export class StudySession {
     }
   }
 
+  private applyMidiBufferToPlayer(midi: ArrayBuffer) {
+    const p = this.player as {
+      loadMIDI?: (b: ArrayBuffer) => void;
+      loadMidi?: (b: ArrayBuffer) => void;
+      setMidi?: (b: ArrayBuffer) => void;
+    } | null;
+    if (!p) return;
+    if (p.loadMIDI) p.loadMIDI(midi);
+    else if (p.loadMidi) p.loadMidi(midi);
+    else if (p.setMidi) p.setMidi(midi);
+  }
+
+  /** Substitui o MIDI do Verovio pelo gerado no servidor (inclui percussão). */
+  private async syncServerMidiIntoPlayer(
+    songId: string,
+    partIds: string[],
+    token: number,
+  ): Promise<void> {
+    if (!/^\d+$/.test(songId) || partIds.length === 0 || !this.player) {
+      if (token === this.loadToken && this.playerReady) this.midiLoaded = true;
+      return;
+    }
+    const key = this.midiCacheKey(songId, partIds);
+    let midi = this.midiCache.get(key) ?? null;
+    if (!midi) {
+      midi = await fetchPartMidi(songId, partIds);
+      if (midi) this.midiCache.set(key, midi);
+    }
+    if (token !== this.loadToken) return;
+    if (midi) this.applyMidiBufferToPlayer(midi);
+    this.midiLoaded = true;
+    this.applyTempo();
+    this.applyAudioVolume();
+    this.applyLoop();
+  }
+
   private async loadMidiForCurrentScore(token: number) {
+    if (token !== this.loadToken) return;
+    if (/^\d+$/.test(this.currentScoreId)) {
+      await this.syncServerMidiIntoPlayer(
+        this.currentScoreId,
+        this.selectedMidiInstrumentIds,
+        token,
+      );
+      return;
+    }
     this.midiLoaded = false;
     const midi = await this.getMidiBufferForCurrentScore();
-    if (!midi || token !== this.loadToken) return;
-    const p = this.player as { loadMIDI?: (b: ArrayBuffer) => void; loadMidi?: (b: ArrayBuffer) => void; setMidi?: (b: ArrayBuffer) => void } | null;
-    if (p) {
-      if (p.loadMIDI) p.loadMIDI(midi);
-      else if (p.loadMidi) p.loadMidi(midi);
-      else if (p.setMidi) p.setMidi(midi);
+    if (!midi || token !== this.loadToken) {
+      if (token === this.loadToken && this.player) this.midiLoaded = true;
+      return;
     }
+    this.applyMidiBufferToPlayer(midi);
     this.midiLoaded = true;
   }
 
