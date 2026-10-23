@@ -1439,8 +1439,9 @@ export class StudySession {
   private updateBpmRange() {
     const base = Math.max(30, this.baseBpm);
     const min = Math.max(30, Math.round(base * 0.5));
+    const xmlForMarked = this.musicXmlCatalog ?? this.sourceXml;
     const marked =
-      extractMarkedTempoBpmFromXml(this.musicXmlCatalog ?? this.sourceXml) ?? this.bpm;
+      (xmlForMarked ? extractMarkedTempoBpmFromXml(xmlForMarked) : null) ?? this.bpm;
     const max = Math.max(min + 10, Math.round(base * 2), Math.round(marked), 320);
     this.bpmMin = min;
     this.bpmMax = max;
@@ -1459,13 +1460,17 @@ export class StudySession {
    */
   private applyStudyTempoFromCatalog(intrinsicBpm?: number) {
     const catalogXml = this.musicXmlCatalog ?? this.sourceXml;
+    const xmlForFirstTempo = this.sourceXml ?? catalogXml;
     const firstMeasure =
-      extractTempoInfoFromXml(this.sourceXml ?? catalogXml)?.bpm ?? intrinsicBpm ?? this.baseBpm;
+      (xmlForFirstTempo ? extractTempoInfoFromXml(xmlForFirstTempo)?.bpm : null) ??
+      intrinsicBpm ??
+      this.baseBpm;
     const intrinsic = Math.max(
       30,
       intrinsicBpm ?? firstMeasure ?? this.baseBpm ?? 120,
     );
-    const marked = extractMarkedTempoBpmFromXml(catalogXml) ?? intrinsic;
+    const marked =
+      (catalogXml ? extractMarkedTempoBpmFromXml(catalogXml) : null) ?? intrinsic;
     const targetBpm = Math.max(intrinsic, Math.round(marked));
 
     this.baseBpm = intrinsic;
