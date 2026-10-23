@@ -24,7 +24,7 @@ export const controlHeight: Record<StyledSize, string> = {
 };
 
 export const controlBase =
-  "w-full rounded-xl border border-[var(--border)] bg-[var(--input)] py-2 pl-3 pr-11 text-[var(--foreground)] outline-none transition-colors placeholder:text-[var(--muted)] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:border-[var(--ring)] focus-visible:ring-2 focus-visible:ring-[var(--ring)]/40 aria-invalid:!border-[var(--destructive)] aria-invalid:ring-2 aria-invalid:ring-[var(--destructive)]/20 aria-invalid:focus-visible:!border-[var(--destructive)] aria-invalid:focus-visible:!ring-[var(--destructive)]/30";
+  "w-full rounded-xl border border-[var(--border)] bg-[var(--input)] py-2 pl-3 pr-11 text-[var(--foreground)] outline-none transition-colors placeholder:text-[var(--muted)] disabled:cursor-not-allowed disabled:bg-[var(--input-disabled)] disabled:text-[var(--input-disabled-foreground)] disabled:[-webkit-text-fill-color:var(--input-disabled-foreground)] disabled:opacity-100 focus-visible:border-[var(--ring)] focus-visible:ring-2 focus-visible:ring-[var(--ring)]/40 aria-invalid:!border-[var(--destructive)] aria-invalid:ring-2 aria-invalid:ring-[var(--destructive)]/20 aria-invalid:focus-visible:!border-[var(--destructive)] aria-invalid:focus-visible:!ring-[var(--destructive)]/30";
 
 export const FIELD_STATUS: Record<
   ValidationState,

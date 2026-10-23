@@ -5,7 +5,9 @@
  */
 :root {
   color-scheme: light;
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans:
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
   --font-display: var(--font-sans);
   /* Títulos editoriais. A página que usa carrega a webfont e a põe na frente desta pilha. */
   --font-serif: "Iowan Old Style", Georgia, "Times New Roman", serif;
@@ -34,6 +36,8 @@
   --popover-foreground: var(--color-ink);
   --border: #d7e0e8;
   --input: var(--color-white);
+  --input-disabled: #eef3f7;
+  --input-disabled-foreground: var(--color-ink);
   --card: var(--color-white);
   --card-secondary: #eef3f7;
   --card-foreground: var(--color-ink);
@@ -85,6 +89,8 @@
   --popover-foreground: #e8f1f6;
   --border: #1c354a;
   --input: #0f2233;
+  --input-disabled: #243b4d;
+  --input-disabled-foreground: var(--color-white);
   --card: #0f2233;
   --card-secondary: #163044;
   --card-foreground: #e8f1f6;

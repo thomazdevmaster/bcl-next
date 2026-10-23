@@ -13,7 +13,10 @@ import { FormStageBlock } from "@/components/forms/FormStageBlock";
 import { FormStageField } from "@/components/forms/FormStageField";
 import { FormView } from "@/components/forms/core/FormView";
 import { postLoginRoute } from "@/core/auth/postLoginRoute";
-import { loginSchema, type LoginFormValues } from "@/domains/users/schemas/login.schema";
+import {
+  loginSchema,
+  type LoginFormValues,
+} from "@/domains/users/schemas/login.schema";
 import { userFacingError } from "@/lib/userMessages";
 
 const DEFAULT_VALUES: LoginFormValues = {
@@ -40,7 +43,11 @@ export default function LoginPage() {
     router.replace(auth.user ? postLoginRoute(auth.user) : "/");
   }, [auth.isHydrated, auth.isLoggedIn, auth.user, router]);
 
-  const onSubmit = async ({ identifier, password, keepLoggedIn }: LoginFormValues) => {
+  const onSubmit = async ({
+    identifier,
+    password,
+    keepLoggedIn,
+  }: LoginFormValues) => {
     setError(null);
     try {
       const session = await auth.login(identifier, password, keepLoggedIn);
@@ -54,8 +61,11 @@ export default function LoginPage() {
     setError(null);
     setGoogleBusy(true);
     try {
-      const session = await auth.loginWithGoogle(credential, form.getValues("keepLoggedIn"));
-      router.push(postLoginRoute(session));
+      const session = await auth.loginWithGoogle(
+        credential,
+        form.getValues("keepLoggedIn"),
+      );
+      router.replace(postLoginRoute(session));
     } catch (err) {
       setError(userFacingError(err));
     } finally {
@@ -157,10 +167,16 @@ export default function LoginPage() {
           />
 
           <div className="flex flex-wrap justify-between gap-3 text-sm">
-            <Link href="/esqueci-senha" className={`inline-flex min-h-11 items-center ${LINK_MOTION_CLASS}`}>
+            <Link
+              href="/esqueci-senha"
+              className={`inline-flex min-h-11 items-center ${LINK_MOTION_CLASS}`}
+            >
               Esqueci a senha
             </Link>
-            <Link href="/cadastro" className={`inline-flex min-h-11 items-center ${LINK_MOTION_CLASS}`}>
+            <Link
+              href="/cadastro"
+              className={`inline-flex min-h-11 items-center ${LINK_MOTION_CLASS}`}
+            >
               Criar cadastro
             </Link>
           </div>

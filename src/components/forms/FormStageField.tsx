@@ -1,7 +1,13 @@
 "use client";
 
-import { useState, type InputHTMLAttributes, type ReactNode } from "react";
-import { useController, useFormContext, type FieldPath, type FieldPathByValue, type FieldValues } from "react-hook-form";
+import { useEffect, useState, type InputHTMLAttributes, type ReactNode } from "react";
+import {
+  useController,
+  useFormContext,
+  type FieldPath,
+  type FieldPathByValue,
+  type FieldValues,
+} from "react-hook-form";
 import { FormFieldValidationShell } from "./validations/FormFieldValidationShell";
 
 export type FormStageFieldProps<TFieldValues extends FieldValues> = {
@@ -15,6 +21,7 @@ export type FormStageFieldProps<TFieldValues extends FieldValues> = {
   className?: string;
   infoMessage?: ReactNode;
   optionalMessage?: ReactNode;
+  initialValueWarning?: ReactNode;
   visibilityLabel?: string;
   inputMode?: InputHTMLAttributes<HTMLInputElement>["inputMode"];
   autoCapitalize?: string;
@@ -24,6 +31,7 @@ export type FormStageFieldProps<TFieldValues extends FieldValues> = {
   maxLength?: number;
   formatValue?: (value: string) => string;
   validateOnChange?: FieldPath<TFieldValues> | FieldPath<TFieldValues>[];
+  validateOnMount?: boolean;
   onEdit?: () => void;
 };
 
@@ -38,6 +46,7 @@ export function FormStageField<TFieldValues extends FieldValues>({
   className,
   infoMessage,
   optionalMessage,
+  initialValueWarning,
   visibilityLabel,
   inputMode,
   autoCapitalize,
@@ -47,25 +56,46 @@ export function FormStageField<TFieldValues extends FieldValues>({
   maxLength,
   formatValue,
   validateOnChange,
+  validateOnMount = false,
   onEdit,
 }: FormStageFieldProps<TFieldValues>) {
   const [passwordVisible, setPasswordVisible] = useState(false);
-  const { control, formState: { isSubmitted }, trigger } = useFormContext<TFieldValues>();
+  const [validatedOnMount, setValidatedOnMount] = useState(false);
+  const {
+    control,
+    formState: { isSubmitted },
+    trigger,
+  } = useFormContext<TFieldValues>();
   const { field, fieldState } = useController({ control, name });
   const value = field.value;
   const hasValue = value.trim().length > 0;
   const isPassword = type === "password";
   const inputType = isPassword && passwordVisible ? "text" : type;
+  const untouchedGeneratedValue =
+    !fieldState.isDirty && hasValue && initialValueWarning != null;
   const emptyOptionalField = !required && !hasValue;
+  useEffect(() => {
+    if (!validateOnMount || !hasValue) return;
+    void trigger(name).then(() => setValidatedOnMount(true));
+  }, [hasValue, name, trigger, validateOnMount]);
   const state = fieldState.error
     ? "invalid"
-    : emptyOptionalField && optionalMessage != null
+    : untouchedGeneratedValue
       ? "warning"
-      : (fieldState.isDirty || isSubmitted) && hasValue
-        ? "valid"
-        : "info";
-  const message = fieldState.error?.message
-    ?? (state === "warning" ? optionalMessage : state === "info" ? infoMessage : undefined);
+      : emptyOptionalField && optionalMessage != null
+        ? "warning"
+        : (fieldState.isDirty || fieldState.isTouched || isSubmitted || validatedOnMount) && hasValue
+          ? "valid"
+          : "info";
+  const message =
+    fieldState.error?.message ??
+    (state === "warning"
+      ? untouchedGeneratedValue
+        ? initialValueWarning
+        : optionalMessage
+      : state === "info"
+        ? infoMessage
+        : undefined);
 
   const handleChange = (rawValue: string) => {
     field.onChange(formatValue ? formatValue(rawValue) : rawValue);
@@ -73,7 +103,9 @@ export function FormStageField<TFieldValues extends FieldValues>({
     if (validateOnChange) void trigger(validateOnChange);
   };
 
-  const visibilityTarget = visibilityLabel ?? (typeof label === "string" ? label.toLowerCase() : "campo");
+  const visibilityTarget =
+    visibilityLabel ??
+    (typeof label === "string" ? label.toLowerCase() : "campo");
 
   return (
     <FormFieldValidationShell
@@ -97,23 +129,25 @@ export function FormStageField<TFieldValues extends FieldValues>({
       inputRef={field.ref}
       state={state}
       message={message}
-      endAdornment={isPassword ? (
-        <button
-          type="button"
-          aria-label={`${passwordVisible ? "Ocultar" : "Mostrar"} ${visibilityTarget}`}
-          aria-pressed={passwordVisible}
-          onClick={() => setPasswordVisible((visible) => !visible)}
-          className="inline-flex size-11 items-center justify-center rounded-r-xl text-[var(--muted)] transition-[color,transform] duration-150 ease-out hover:text-[var(--foreground)] active:scale-95 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] motion-reduce:transition-none motion-reduce:active:scale-100"
-        >
-          <span
-            key={passwordVisible ? "visible" : "hidden"}
-            aria-hidden="true"
-            className="material-icons text-xl transition-[opacity,transform] duration-150 ease-out starting:scale-90 starting:opacity-0 motion-reduce:transition-none motion-reduce:starting:scale-100 motion-reduce:starting:opacity-100"
+      endAdornment={
+        isPassword ? (
+          <button
+            type="button"
+            aria-label={`${passwordVisible ? "Ocultar" : "Mostrar"} ${visibilityTarget}`}
+            aria-pressed={passwordVisible}
+            onClick={() => setPasswordVisible((visible) => !visible)}
+            className="inline-flex size-11 items-center justify-center rounded-r-xl text-[var(--muted)] transition-[color,transform] duration-150 ease-out hover:text-[var(--foreground)] active:scale-95 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] motion-reduce:transition-none motion-reduce:active:scale-100"
           >
-            {passwordVisible ? "visibility_off" : "visibility"}
-          </span>
-        </button>
-      ) : undefined}
+            <span
+              key={passwordVisible ? "visible" : "hidden"}
+              aria-hidden="true"
+              className="material-icons text-xl transition-[opacity,transform] duration-150 ease-out starting:scale-90 starting:opacity-0 motion-reduce:transition-none motion-reduce:starting:scale-100 motion-reduce:starting:opacity-100"
+            >
+              {passwordVisible ? "visibility_off" : "visibility"}
+            </span>
+          </button>
+        ) : undefined
+      }
     />
   );
 }
