@@ -358,7 +358,6 @@ export function UserManagementWorkspace({
 
   useEffect(() => {
     // A listagem precisa iniciar quando o workspace monta.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchItems();
   }, [fetchItems, refreshKey]);
 
@@ -536,6 +535,26 @@ export function UserManagementWorkspace({
   const visibleTableColumns = userCompletionColumn
     ? [...tableColumns, userCompletionColumn]
     : tableColumns;
+
+  const renderMobileUserIncompleteIndicator = useCallback(
+    (row: Record<string, unknown>) => {
+      if (resource !== "users") return null;
+      const status = completionStatuses.get(String(row.id));
+      if (status !== "incomplete") return null;
+      return (
+        <span
+          className="inline-flex min-h-11 min-w-11 items-center justify-center text-[var(--warning)]"
+          title="Cadastro incompleto"
+          aria-label="Cadastro incompleto"
+        >
+          <span className="material-icons text-[1.75rem]" aria-hidden>
+            warning
+          </span>
+        </span>
+      );
+    },
+    [completionStatuses, resource],
+  );
 
   const openCreate = () => {
     setSelected(null);
@@ -1430,6 +1449,9 @@ export function UserManagementWorkspace({
                 noResultsMessage="Nenhum registro corresponde à busca ou aos filtros."
                 getRowLabel={(row) => config.itemLabel(row)}
                 renderRowActions={renderRowActions}
+                renderMobileCardHeaderExtra={
+                  resource === "users" ? renderMobileUserIncompleteIndicator : undefined
+                }
                 toolbarLabels={{
                   section: `Controles de ${domain.label.toLocaleLowerCase("pt-BR")}`,
                 }}
@@ -1451,6 +1473,7 @@ export function UserManagementWorkspace({
           }
           size="xl"
           placement="bottom"
+          closeOnBackdropClick={false}
           onClose={closeDialog}
         >
           {guardianError ? (

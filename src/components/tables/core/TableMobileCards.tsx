@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { ReactTable, Row, RowData } from "@tanstack/react-table";
 import { tableFeatures } from "./table-features";
 import type { TableState } from "./table-features";
@@ -19,11 +19,13 @@ export function TableMobileCards<TData extends RowData>({
   rows,
   noResults,
   noResultsMessage,
+  renderHeaderExtra,
 }: {
   table: TableInstance<TData>;
   rows: Row<typeof tableFeatures, TData>[];
   noResults: boolean;
   noResultsMessage: string;
+  renderHeaderExtra?: (row: Row<typeof tableFeatures, TData>) => ReactNode;
 }) {
   const [openIds, setOpenIds] = useState<Record<string, boolean>>({});
 
@@ -51,6 +53,7 @@ export function TableMobileCards<TData extends RowData>({
         const primaryLabel = primary
           ? columnLabel(primary.column.columnDef.header, primary.column.id)
           : "Registro";
+        const headerExtra = renderHeaderExtra?.(row);
 
         return (
           <li
@@ -58,11 +61,14 @@ export function TableMobileCards<TData extends RowData>({
             className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-soft)]"
           >
             <div className="flex flex-col gap-3 p-3">
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-[var(--muted)]">{primaryLabel}</p>
-                <div className="mt-1 break-words text-base font-semibold leading-snug text-[var(--foreground)]">
-                  {primary ? <table.FlexRender cell={primary} /> : row.id}
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-[var(--muted)]">{primaryLabel}</p>
+                  <div className="mt-1 break-words text-base font-semibold leading-snug text-[var(--foreground)]">
+                    {primary ? <table.FlexRender cell={primary} /> : row.id}
+                  </div>
                 </div>
+                {headerExtra ? <div className="shrink-0">{headerExtra}</div> : null}
               </div>
               {controls || actions ? (
                 <div className="flex flex-wrap items-center justify-between gap-2">
