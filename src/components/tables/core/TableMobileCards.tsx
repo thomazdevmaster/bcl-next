@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ReactTable, Row, RowData } from "@tanstack/react-table";
 import { EntityDialog } from "@/components/shared/EntityDialog";
 import { TableCheckbox } from "../toolbar/TableCheckbox";
+import { TableMobileIconAction } from "./TableMobileIconAction";
 import { tableFeatures } from "./table-features";
 import type { TableState } from "./table-features";
 
@@ -224,25 +225,21 @@ export function TableMobileCards<TData extends RowData>({
                     {primary ? <table.FlexRender cell={primary} /> : row.id}
                   </div>
                 </div>
-                {headerExtra ? <div className="shrink-0">{headerExtra}</div> : null}
-                {controls ||
+                {headerExtra ||
+                controls ||
                 rowPinningEnabled ||
                 actions.length > 0 ||
                 details.length > 0 ? (
                   <div className="flex min-w-0 items-start justify-end gap-1">
+                    {headerExtra}
                     {rowPinningEnabled && pinned ? (
-                      <span
-                        aria-label="Linha fixada"
-                        title="Linha fixada"
-                        className="inline-flex min-h-11 min-w-6 shrink-0 items-center justify-center text-[var(--color-brand-strong)]"
-                      >
-                        <span
-                          className="material-icons text-base"
-                          aria-hidden="true"
-                        >
-                          push_pin
-                        </span>
-                      </span>
+                      <TableMobileIconAction
+                        ariaLabel={`Desafixar ${rowLabel}`}
+                        icon="push_pin"
+                        onClick={() => row.pin(false)}
+                        disabled={!row.getCanPin()}
+                        className="text-[var(--color-brand-strong)]"
+                      />
                     ) : null}
                     <div
                       className="relative ml-auto shrink-0"
@@ -258,7 +255,7 @@ export function TableMobileCards<TData extends RowData>({
                         aria-haspopup="menu"
                         aria-expanded={menuOpen}
                         onClick={() => setOpenMenuId(menuOpen ? null : row.id)}
-                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-[var(--border)] text-[var(--info)] transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] motion-reduce:transition-none"
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-[var(--info)] transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] motion-reduce:transition-none"
                       >
                         <span
                           className="material-icons text-2xl"

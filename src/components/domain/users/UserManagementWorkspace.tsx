@@ -33,6 +33,7 @@ import { filterPeopleForRole } from "@/domains/people/visibility";
 import type { Person } from "@/domains/people/types";
 import { isPersonUnderage } from "@/domains/people/types";
 import { TableView } from "@/components/tables/core/TableView";
+import { TableMobileIconAction } from "@/components/tables/core/TableMobileIconAction";
 import { EntityDialog } from "@/components/shared/EntityDialog";
 import { IconSelect } from "@/components/shared/IconSelect";
 import { FormStageActions } from "@/components/forms/FormStageActions";
@@ -211,6 +212,11 @@ export function UserManagementWorkspace({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
+  const [incompleteUserNotice, setIncompleteUserNotice] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const incompleteUserEditTarget = useRef<Record<string, unknown> | null>(null);
   const [selected, setSelected] = useState<Record<string, unknown> | null>(
     null,
   );
@@ -551,26 +557,6 @@ export function UserManagementWorkspace({
     ? [...tableColumns, userCompletionColumn]
     : tableColumns;
 
-  const renderMobileUserIncompleteIndicator = useCallback(
-    (row: Record<string, unknown>) => {
-      if (resource !== "users") return null;
-      const status = completionStatuses.get(String(row.id));
-      if (status !== "incomplete") return null;
-      return (
-        <span
-          className="inline-flex min-h-11 min-w-11 items-center justify-center text-[var(--warning)]"
-          title="Cadastro incompleto"
-          aria-label="Cadastro incompleto"
-        >
-          <span className="material-icons text-[1.75rem]" aria-hidden>
-            warning
-          </span>
-        </span>
-      );
-    },
-    [completionStatuses, resource],
-  );
-
   const openCreate = useCallback(() => {
     const createConfig = getCrudConfig(resource);
     const createUserConfig = combinedUser ? getCrudConfig("users") : null;
@@ -655,6 +641,28 @@ export function UserManagementWorkspace({
     setActiveStage(0);
     setValidatedStageTitles([]);
     setDialogMode(mode);
+  };
+
+  const handleIncompleteUserNoticeClosed = () => {
+    const target = incompleteUserEditTarget.current;
+    incompleteUserEditTarget.current = null;
+    if (target) void openItem(target, "edit");
+  };
+
+  const renderMobileUserIncompleteIndicator = (
+    row: Record<string, unknown>,
+  ) => {
+    if (resource !== "users") return null;
+    const status = completionStatuses.get(String(row.id));
+    if (status !== "incomplete") return null;
+    return (
+      <TableMobileIconAction
+        ariaLabel={`Abrir aviso de cadastro incompleto para ${String(row.username ?? row.id)}`}
+        icon="warning"
+        onClick={() => setIncompleteUserNotice(row)}
+        className="text-[var(--warning)]"
+      />
+    );
   };
 
   const renderRowActions = (row: Record<string, unknown>) => (
@@ -1560,7 +1568,9 @@ export function UserManagementWorkspace({
                 }}
                 renderRowActions={renderRowActions}
                 renderMobileCardHeaderExtra={
-                  resource === "users" ? renderMobileUserIncompleteIndicator : undefined
+                  resource === "users"
+                    ? renderMobileUserIncompleteIndicator
+                    : undefined
                 }
                 renderMobileRowActions={(row) => [
                   ...(resource === "songs" && songHasScore(row)
@@ -1605,6 +1615,42 @@ export function UserManagementWorkspace({
           </article>
         )}
       </section>
+
+      <EntityDialog
+        open={Boolean(incompleteUserNotice)}
+        title="Cadastro incompleto"
+        description={`O cadastro de ${config.itemLabel(incompleteUserNotice ?? {})} está incompleto${canUpdate ? " e precisa ser atualizado." : " e precisa ser atualizado por alguém com permissão para editar."}`}
+        size="sm"
+        placement="center"
+        closeOnBackdropClick
+        onClose={() => setIncompleteUserNotice(null)}
+        onCloseComplete={handleIncompleteUserNoticeClosed}
+      >
+        <div className="p-4 sm:p-6">
+          <div className="mt-4 flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              className={`btn-ghost min-h-11 ${buttonMotion}`}
+              onClick={() => setIncompleteUserNotice(null)}
+            >
+              Agora não
+            </button>
+            {canUpdate ? (
+              <button
+                type="button"
+                className={`btn-primary min-h-11 ${buttonMotion}`}
+                onClick={() => {
+                  if (!incompleteUserNotice) return;
+                  incompleteUserEditTarget.current = incompleteUserNotice;
+                  setIncompleteUserNotice(null);
+                }}
+              >
+                Atualizar cadastro
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </EntityDialog>
 
       {dialogMode && (
         <EntityDialog

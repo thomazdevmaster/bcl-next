@@ -18,6 +18,7 @@ export interface EntityDialogProps {
    */
   closeOnBackdropClick?: boolean;
   onClose: () => void;
+  onCloseComplete?: () => void;
   children: ReactNode;
 }
 
@@ -54,11 +55,13 @@ export function EntityDialog({
   placement = "center",
   closeOnBackdropClick = false,
   onClose,
+  onCloseComplete,
   children,
 }: EntityDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onCloseRef = useRef(onClose);
+  const onCloseCompleteRef = useRef(onCloseComplete);
   const [renderOpen, setRenderOpen] = useState(open);
   const [closing, setClosing] = useState(false);
   const titleId = useId();
@@ -66,7 +69,8 @@ export function EntityDialog({
 
   useEffect(() => {
     onCloseRef.current = onClose;
-  }, [onClose]);
+    onCloseCompleteRef.current = onCloseComplete;
+  }, [onClose, onCloseComplete]);
 
   const clearCloseTimeout = useCallback(() => {
     if (closeTimeoutRef.current) {
@@ -80,6 +84,7 @@ export function EntityDialog({
     if (dialog?.open) dialog.close();
     setClosing(false);
     setRenderOpen(false);
+    onCloseCompleteRef.current?.();
   }, []);
 
   const requestClose = useCallback(
