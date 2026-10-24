@@ -15,7 +15,7 @@ import type { TableState } from "../core/table-features";
 import { getColumnPinningStyles } from "./tablePinningStyles";
 import { DEFAULT_COLUMN_PRESENTATION } from "../core/tableColumnPresentation";
 import type { TableColumnPresentation } from "../core/tableColumnPresentation";
-import { tableButtonMotion, tableIconMotion } from "../core/tableMotion";
+import { tableButtonMotion, tableIconMotion, tableSortableMotion } from "../core/tableMotion";
 
 type TableInstance<TData extends RowData> = ReactTable<typeof tableFeatures, TData, TableState>;
 
@@ -55,7 +55,6 @@ export function TableHeader<TData extends RowData>({
     background: undefined,
     opacity: isDragging ? 0.75 : 1,
     transform: CSS.Translate.toString(transform),
-    transition: "width transform 0.2s ease",
     whiteSpace: "nowrap",
     width: `calc(var(--header-${header.id}-size) * 1px)`,
     zIndex: isDragging ? 3 : pinningStyles.zIndex,
@@ -75,7 +74,7 @@ export function TableHeader<TData extends RowData>({
                 ? "ascending"
                 : "descending"
           }
-          className="relative border-b border-r border-[var(--border)] bg-[var(--table-header-bg)] p-3 text-left align-top text-xs font-semibold uppercase tracking-wide text-[var(--table-header-fg)]"
+          className={`relative border-b border-r border-[var(--border)] bg-[var(--table-header-bg)] p-3 text-left align-top text-xs font-semibold uppercase tracking-wide text-[var(--table-header-fg)] ${tableSortableMotion}`}
         >
           {header.isPlaceholder ? null : (
             <div className="min-w-32">
@@ -89,20 +88,31 @@ export function TableHeader<TData extends RowData>({
                     title="Arraste para reordenar"
                     className="inline-flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-[var(--radius)] text-[var(--table-header-fg)] hover:bg-[var(--accent)] active:cursor-grabbing"
                   >
-                    <span className="material-icons text-base" aria-hidden="true">drag_indicator</span>
+                    <span className="material-icons text-base" aria-hidden="true">
+                      drag_indicator
+                    </span>
                   </button>
                 )}
                 {column.getCanSort() ? (
                   <button
                     type="button"
                     aria-label={`Ordenar por ${columnLabel}`}
-                    title={column.getIsSorted() === "asc" ? "Ordem crescente" : column.getIsSorted() === "desc" ? "Ordem decrescente" : "Ordenar alfabeticamente"}
+                    title={
+                      column.getIsSorted() === "asc"
+                        ? "Ordem crescente"
+                        : column.getIsSorted() === "desc"
+                          ? "Ordem decrescente"
+                          : "Ordenar alfabeticamente"
+                    }
                     onClick={column.getToggleSortingHandler()}
                     className={`group min-h-11 min-w-0 cursor-pointer flex-1 text-left hover:text-[var(--color-brand-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${tableButtonMotion}`}
                   >
                     <table.FlexRender header={header} />
                     {column.getIsSorted() && (
-                      <span className={`material-icons ml-1 align-middle text-base ${tableIconMotion} ${column.getIsSorted() === "desc" ? "rotate-180" : ""}`} aria-hidden="true">
+                      <span
+                        className={`material-icons ml-1 align-middle text-base ${tableIconMotion} ${column.getIsSorted() === "desc" ? "rotate-180" : ""}`}
+                        aria-hidden="true"
+                      >
                         arrow_upward
                       </span>
                     )}
@@ -119,11 +129,18 @@ export function TableHeader<TData extends RowData>({
                     onClick={() => setOptionsOpen(true)}
                     className={`group inline-flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-[var(--radius)] text-[var(--table-header-fg)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${tableButtonMotion}`}
                   >
-                    <span className={`material-icons text-base group-hover:rotate-45 motion-reduce:group-hover:rotate-0 ${tableIconMotion}`} aria-hidden="true">settings</span>
+                    <span
+                      className={`material-icons text-base group-hover:rotate-45 motion-reduce:group-hover:rotate-0 ${tableIconMotion}`}
+                      aria-hidden="true"
+                    >
+                      settings
+                    </span>
                   </button>
                 )}
               </div>
-              {column.getCanFilter() && <TableColumnFilter column={column} columnLabel={columnLabel} resetKey={resetKey} />}
+              {column.getCanFilter() && (
+                <TableColumnFilter column={column} columnLabel={columnLabel} resetKey={resetKey} />
+              )}
             </div>
           )}
           {hasColumnOptions && (

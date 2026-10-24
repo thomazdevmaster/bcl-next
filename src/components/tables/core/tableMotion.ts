@@ -6,3 +6,6 @@ export const tableIconMotion =
 
 export const tableControlMotion =
   "transition-[border-color,background-color,box-shadow] duration-150 ease-out motion-reduce:transition-none";
+
+export const tableSortableMotion =
+  "transition-[transform,opacity,color,background-color,border-color] duration-200 ease-out motion-reduce:transition-none";

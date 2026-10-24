@@ -9,7 +9,6 @@ import { DndContext, closestCenter } from "@dnd-kit/core";
 import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { MusicLoader } from "@/components/MusicLoader";
-import { EntityDialog } from "@/components/shared/EntityDialog";
 import { TableCell } from "../cells/TableCell";
 import { TableAnimatedRow } from "../cells/TableAnimatedRow";
 import { tableButtonMotion, tableIconMotion } from "./tableMotion";
@@ -19,6 +18,7 @@ import { TableHeader } from "../columns/TableHeader";
 import { useTableColumnDnd } from "../columns/useTableColumnDnd";
 import { TablePagination } from "../pagination/TablePagination";
 import { TableActionButton } from "../toolbar/TableActionButton";
+import { TableSelectionToolbar } from "../toolbar/TableSelectionToolbar";
 import { TableCheckbox } from "../toolbar/TableCheckbox";
 import { TableMobileCards } from "./TableMobileCards";
 import type { MobileTableAction } from "./TableMobileCards";
@@ -377,7 +377,6 @@ export function TableView<TData extends RowData>({
   });
   const [resetKey, setResetKey] = useState(0);
   const [resetConfirmationOpen, setResetConfirmationOpen] = useState(false);
-  const [clearSelectionConfirmationOpen, setClearSelectionConfirmationOpen] = useState(false);
   const [availableTableWidth, setAvailableTableWidth] = useState(0);
   const [columnPresentations, setColumnPresentations] = useState<Record<string, TableColumnPresentation>>({});
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
@@ -565,6 +564,8 @@ export function TableView<TData extends RowData>({
   const totalRowCount = table.getCoreRowModel().flatRows.length;
   const selectedRows = table.getSelectedRowModel().flatRows;
   const selectedRowCount = selectedRows.length;
+  const selectionToolbarEnabled = mobileSelectionEnabled && rowSelectionEnabled && Boolean(onDeleteSelected);
+  const selectionToolbarVisible = selectionToolbarEnabled && (mobileSelectionMode || selectedRowCount > 0);
   const selectableFilteredRows = table.getFilteredRowModel().flatRows.filter((row) => row.getCanSelect());
   const allFilteredRowsSelected =
     selectableFilteredRows.length > 0 && selectableFilteredRows.every((row) => row.getIsSelected());
@@ -630,40 +631,6 @@ export function TableView<TData extends RowData>({
           if (cellSelectionEnabled) table.resetCellSelection(true);
         }}
       />
-      <EntityDialog
-        open={clearSelectionConfirmationOpen}
-        title="Limpar seleção?"
-        size="sm"
-        closeOnBackdropClick
-        onClose={() => setClearSelectionConfirmationOpen(false)}
-      >
-        <div className="flex flex-col gap-3 p-5">
-          <p className="text-sm leading-relaxed text-[var(--muted)]">
-            Os {selectedRowCount} registros selecionados serão desmarcados.
-          </p>
-        </div>
-        <div className="flex flex-col-reverse justify-end gap-2 border-t border-[var(--border)] p-4 sm:flex-row">
-          <button
-            type="button"
-            onClick={() => setClearSelectionConfirmationOpen(false)}
-            className="min-h-11 rounded-[var(--radius)] border border-[var(--border)] px-4 text-sm font-medium hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              table.resetRowSelection(true);
-              setMobileSelectionMode(false);
-              setClearSelectionConfirmationOpen(false);
-            }}
-            className="min-h-11 rounded-[var(--radius)] bg-[var(--info)] px-4 text-sm font-medium text-[var(--info-foreground)] hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
-          >
-            Limpar seleção
-          </button>
-        </div>
-      </EntityDialog>
-
       {loading && (
         <MusicLoader
           label="Carregando registros…"
@@ -686,14 +653,19 @@ export function TableView<TData extends RowData>({
       )}
 
       <div className="hidden flex-col gap-2 max-[959px]:flex">
-        {mobileSelectionEnabled &&
-        rowSelectionEnabled &&
-        onDeleteSelected &&
-        (mobileSelectionMode || selectedRowCount > 0) ? (
-          <div className="flex flex-col gap-1 rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] px-3 py-2">
-            <div className="flex items-center justify-between gap-2">
-              <TableActionButton
-                onClick={() => {
+        {selectionToolbarEnabled && onDeleteSelected ? (
+          <div
+            aria-hidden={!selectionToolbarVisible}
+            inert={!selectionToolbarVisible}
+            className={`grid transition-[grid-template-rows] duration-150 ease-out motion-reduce:transition-none ${selectionToolbarVisible ? "grid-rows-[1fr]" : "-my-1 grid-rows-[0fr]"}`}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <TableSelectionToolbar
+                visible={selectionToolbarVisible}
+                selectedCount={selectedRowCount}
+                totalCount={totalRowCount}
+                allSelected={allFilteredRowsSelected}
+                onToggleAll={() => {
                   if (allFilteredRowsSelected) {
                     table.resetRowSelection(true);
                     setMobileSelectionMode(false);
@@ -703,46 +675,17 @@ export function TableView<TData extends RowData>({
                   selectableFilteredRows.forEach((row) => (next[row.id] = true));
                   table.setRowSelection(next);
                 }}
-                ariaLabel={
-                  allFilteredRowsSelected ? "Limpar seleção de todos os registros" : "Selecionar todos os registros"
+                onDelete={() =>
+                  onDeleteSelected(
+                    selectedRows.map((row) => row.original),
+                    () => {
+                      table.resetRowSelection(true);
+                      setMobileSelectionMode(false);
+                    },
+                  )
                 }
-              >
-                <span className="material-icons" aria-hidden="true">
-                  {allFilteredRowsSelected ? "deselect" : "select_all"}
-                </span>
-              </TableActionButton>
-              <div className="flex items-center gap-2">
-                <TableActionButton onClick={() => setClearSelectionConfirmationOpen(true)} ariaLabel="Limpar seleção">
-                  <span className="material-icons" aria-hidden="true">
-                    cleaning_services
-                  </span>
-                </TableActionButton>
-                {selectedRowCount > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onDeleteSelected(
-                        selectedRows.map((row) => row.original),
-                        () => {
-                          table.resetRowSelection(true);
-                          setMobileSelectionMode(false);
-                        },
-                      )
-                    }
-                    aria-label={`Excluir ${selectedRowCount} registros selecionados`}
-                    title="Excluir selecionados"
-                    className="btn-danger inline-flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius)]"
-                  >
-                    <span className="material-icons text-base" aria-hidden="true">
-                      delete
-                    </span>
-                  </button>
-                ) : null}
-              </div>
+              />
             </div>
-            <p className="text-center text-lg font-semibold tabular-nums text-[var(--foreground)]" role="status">
-              {selectedRowCount.toLocaleString("pt-BR")}/{totalRowCount.toLocaleString("pt-BR")} selecionados
-            </p>
           </div>
         ) : null}
         <TableMobileCards

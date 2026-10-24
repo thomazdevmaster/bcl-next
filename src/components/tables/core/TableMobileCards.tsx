@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { ReactTable, Row, RowData } from "@tanstack/react-table";
 import { EntityDialog } from "@/components/shared/EntityDialog";
 import { TableCheckbox } from "../toolbar/TableCheckbox";
@@ -59,22 +59,48 @@ export function TableMobileCards<TData extends RowData>({
   selectedRowCount: number;
 }) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [closingMenuId, setClosingMenuId] = useState<string | null>(null);
   const [viewingRowId, setViewingRowId] = useState<string | null>(null);
+  const menuCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggered = useRef(false);
   const pointerSelectionTarget = useRef<string | null>(null);
   const suppressPointerClick = useRef(false);
   const viewingRow = rows.find((row) => row.id === viewingRowId);
 
+  const closeMenu = useCallback(() => {
+    if (!openMenuId || closingMenuId) return;
+    setClosingMenuId(openMenuId);
+    menuCloseTimer.current = setTimeout(() => {
+      setOpenMenuId((current) => (current === openMenuId ? null : current));
+      setClosingMenuId((current) => (current === openMenuId ? null : current));
+      menuCloseTimer.current = null;
+    }, 150);
+  }, [closingMenuId, openMenuId]);
+
+  const openMenu = (rowId: string) => {
+    if (menuCloseTimer.current) clearTimeout(menuCloseTimer.current);
+    menuCloseTimer.current = null;
+    setClosingMenuId(null);
+    setOpenMenuId(rowId);
+  };
+
   useEffect(() => {
-    if (!openMenuId) return;
+    if (!openMenuId || closingMenuId) return;
     const closeOnOutsidePointer = (event: PointerEvent) => {
       if (event.target instanceof Element && event.target.closest('[data-row-action-menu][data-open="true"]')) return;
-      setOpenMenuId(null);
+      closeMenu();
     };
     document.addEventListener("pointerdown", closeOnOutsidePointer, true);
     return () => document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
-  }, [openMenuId]);
+  }, [closeMenu, openMenuId, closingMenuId]);
+
+  useEffect(
+    () => () => {
+      if (menuCloseTimer.current) clearTimeout(menuCloseTimer.current);
+    },
+    [],
+  );
 
   const clearLongPress = () => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
@@ -105,7 +131,9 @@ export function TableMobileCards<TData extends RowData>({
             (primary ? columnLabel(primary.column.columnDef.header, primary.column.id) : "Registro");
           const pinned = row.getIsPinned() === "top";
           const actions = renderRowActions?.(row.original) ?? [];
-          const menuOpen = openMenuId === row.id;
+          const menuVisible = openMenuId === row.id;
+          const menuClosing = closingMenuId === row.id;
+          const menuOpen = menuVisible && !menuClosing;
           const selectionActive = selectionMode || selectedRowCount > 0;
           const headerExtra = renderHeaderExtra?.(row);
           const toggleRowSelection = () => {
@@ -152,7 +180,7 @@ export function TableMobileCards<TData extends RowData>({
                   pointerSelectionTarget.current = null;
                   onSelectionModeChange(true);
                   row.toggleSelected(true);
-                  setOpenMenuId(null);
+                  closeMenu();
                 }, 550);
               }}
               onPointerUp={() => {
@@ -216,15 +244,15 @@ export function TableMobileCards<TData extends RowData>({
                       icon="visibility"
                       onClick={() => {
                         setViewingRowId(row.id);
-                        setOpenMenuId(null);
+                        closeMenu();
                       }}
                     />
                     <div
                       className="relative ml-auto shrink-0"
                       data-row-action-menu
-                      data-open={menuOpen ? "true" : undefined}
+                      data-open={menuVisible ? "true" : undefined}
                       onKeyDown={(event) => {
-                        if (event.key === "Escape") setOpenMenuId(null);
+                        if (event.key === "Escape") closeMenu();
                       }}
                     >
                       <button
@@ -232,18 +260,20 @@ export function TableMobileCards<TData extends RowData>({
                         aria-label={`Mais opções para ${rowLabel}`}
                         aria-haspopup="menu"
                         aria-expanded={menuOpen}
-                        onClick={() => setOpenMenuId(menuOpen ? null : row.id)}
+                        onClick={() => (menuOpen ? closeMenu() : openMenu(row.id))}
                         className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-[var(--info)] transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] motion-reduce:transition-none"
                       >
                         <span className="material-icons text-2xl" aria-hidden="true">
                           more_horiz
                         </span>
                       </button>
-                      {menuOpen ? (
+                      {menuVisible ? (
                         <div
                           role="menu"
                           aria-label={`Opções para ${rowLabel}`}
-                          className="absolute right-0 top-full z-30 mt-2 w-[min(18rem,calc(100vw-2rem))] origin-top-right rounded-xl border border-[var(--border)] bg-[var(--card)] p-1 shadow-[var(--shadow-soft)] opacity-100 transition-[opacity,transform,display] transition-discrete duration-150 ease-[cubic-bezier(0.2,0,0,1)] starting:-translate-y-1 starting:opacity-0 motion-reduce:transition-none"
+                          aria-hidden={menuClosing}
+                          inert={menuClosing}
+                          className={`absolute right-0 top-full z-30 mt-2 w-[min(18rem,calc(100vw-2rem))] origin-top-right rounded-xl border border-[var(--border)] bg-[var(--card)] p-1 shadow-[var(--shadow-soft)] transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none starting:-translate-y-1 starting:opacity-0 ${menuClosing ? "pointer-events-none -translate-y-1 opacity-0" : "translate-y-0 opacity-100"}`}
                         >
                           {mobileSelectionEnabled ? (
                             <button
@@ -253,7 +283,7 @@ export function TableMobileCards<TData extends RowData>({
                               onClick={() => {
                                 onSelectionModeChange(true);
                                 toggleRowSelection();
-                                setOpenMenuId(null);
+                                closeMenu();
                               }}
                               className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold text-[var(--foreground)] transition-colors duration-150 hover:bg-[var(--card-secondary)] focus-visible:outline-2 focus-visible:outline-[var(--ring)] disabled:opacity-50 motion-reduce:transition-none"
                             >
@@ -268,7 +298,7 @@ export function TableMobileCards<TData extends RowData>({
                             role="menuitem"
                             onClick={() => {
                               setViewingRowId(row.id);
-                              setOpenMenuId(null);
+                              closeMenu();
                             }}
                             className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold text-[var(--foreground)] transition-colors duration-150 hover:bg-[var(--card-secondary)] focus-visible:outline-2 focus-visible:outline-[var(--ring)] motion-reduce:transition-none"
                           >
@@ -284,7 +314,7 @@ export function TableMobileCards<TData extends RowData>({
                               disabled={!row.getCanPin()}
                               onClick={() => {
                                 row.pin(pinned ? false : "top");
-                                setOpenMenuId(null);
+                                closeMenu();
                               }}
                               className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold text-[var(--foreground)] transition-colors duration-150 hover:bg-[var(--card-secondary)] focus-visible:outline-2 focus-visible:outline-[var(--ring)] disabled:opacity-50 motion-reduce:transition-none"
                             >
@@ -302,7 +332,7 @@ export function TableMobileCards<TData extends RowData>({
                               disabled={action.disabled}
                               onClick={() => {
                                 action.onSelect();
-                                setOpenMenuId(null);
+                                closeMenu();
                               }}
                               className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold transition-colors duration-150 hover:bg-[var(--card-secondary)] focus-visible:outline-2 focus-visible:outline-[var(--ring)] disabled:opacity-50 motion-reduce:transition-none ${action.danger ? "text-[var(--destructive)]" : "text-[var(--foreground)]"}`}
                             >
