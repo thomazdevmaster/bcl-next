@@ -34,26 +34,26 @@ Perfis autenticados: `aluno`, `musico`, `maestro`, `admin`. Conta tem `roles[]`.
 
 Fluxo oficial: **App Router** (`src/app/**`).
 
-| Pasta                                | Uso                                                                   |
-| ------------------------------------ | --------------------------------------------------------------------- |
-| `src/app/`                           | Rotas                                                                 |
-| `src/domains/`                       | Entidades, catálogo, CRUD config, seed                                |
-| `src/core/auth/`                     | Papéis, permissões, máscara                                           |
-| `src/core/theme/tokens.css`          | Cores, tipo, raios — não espalhar hex solto                           |
-| `src/components/domain/`             | Workspace genérico de gestão                                          |
-| `src/study/` (incl. `StudyPage.tsx`) | Sessão de estudo (client-only; OSMD/player usam `window`)             |
-| `src/lib/api.ts`                     | HTTP da API (`NEXT_PUBLIC_API_URL`, fallback `http://localhost:3001`) |
+| Pasta                                | Uso                                                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `src/app/`                           | Rotas                                                                                                  |
+| `src/domains/`                       | Entidades, catálogo, CRUD config, seed                                                                 |
+| `src/core/auth/`                     | Papéis, permissões, máscara                                                                            |
+| `src/core/theme/tokens.css`          | Cores, tipo, raios — não espalhar hex solto                                                            |
+| `src/components/domain/`             | Workspace genérico de gestão                                                                           |
+| `src/study/` (incl. `StudyPage.tsx`) | Sessão de estudo (client-only; OSMD/player usam `window`)                                              |
+| `src/lib/api.ts`                     | HTTP para o backend externo `bcl-api` (`NEXT_PUBLIC_API_URL`, local Docker em `http://localhost:8080`) |
 
 Não recriar `/students`, `src/legacy-pages` nem CRUD paralelo. IDs de registro: **só a API** (não `crypto.randomUUID()` no POST).
 
-Novo domínio: tipos em `src/domains/<nome>/` → `catalog.ts` → `permissions.ts` → `crudConfig.ts` → rota em `src/app/gestao/` → seed em `db.json`.
+Novo domínio: tipos em `src/domains/<nome>/` → `catalog.ts` → `permissions.ts` → `crudConfig.ts` → rota em `src/app/gestao/`. Persistência, seeds e endpoints pertencem ao repositório [`bcl-api`](https://github.com/thomazdevmaster/bcl-api); não criar mock de API nem seed JSON no frontend.
 
 ## Boas práticas (obrigatório)
 
 - **Estilização de UI: usar Tailwind CSS em 100% dos componentes e páginas novos ou alterados.** Escreva os estilos nas classes utilitárias do Tailwind; não crie arquivos CSS/SCSS por componente, módulos CSS/SCSS ou folhas separadas para implementar layout, cores, espaçamento, tipografia ou responsividade. Use folhas globais existentes somente para a importação/configuração do Tailwind, tokens do tema e estilos base realmente globais; mantenha CSS de terceiros apenas quando uma dependência exigir sua folha própria.
 - TypeScript estrito: sem `any` novo; tipos de domínio explícitos.
 - Client vs server: `'use client'` só quando houver estado, eventos ou APIs de browser. Não hidratar sessão do `localStorage` no SSR (usar o padrão já em `AuthContext`).
-- Permissões no **cliente e, no futuro, no servidor**. UI que esconde botão não é segurança.
+- Permissões no **cliente e no servidor `bcl-api`**. UI que esconde botão não é segurança.
 - Formulários: validar no cliente; telefone com máscara; menor de idade exige responsável; e-mail/documento únicos onde já existir regra.
 - Acessibilidade: `label`, `aria-*` em diálogos, foco e teclado. Ícones Material com `aria-label` quando não houver texto.
 - Performance: listas virtuais só se necessário; imagens com `next/image`; MusicXML/MIDI grandes não devem ser convertidos de novo no React quando o backend existir (ver arquitetura).
@@ -86,22 +86,24 @@ Checklist:
 1. **Toque:** alvos ≥ 44px; não depender de hover. Botões de play/pausa/estudo usáveis com o polegar.
 2. **Layout:** tabela de gestão/estudo com scroll horizontal se preciso; em mobile, preferir cartão ou ações no final da linha, não oito colunas apertadas.
 3. **Modais:** caber na viewport (`max-h` + scroll interno); teclado virtual não esconder Salvar/Continuar.
-4. **Rede:** não baixar partitura completa de 16 naipes duas vezes sem necessidade; estados de loading/erro visíveis; falha de API mock não quebrar a página.
+4. **Rede:** não baixar partitura completa de 16 naipes duas vezes sem necessidade; estados de loading/erro visíveis quando a API externa não estiver acessível.
 5. **Estudo:** partitura rolável; player fixo ou acessível sem cobrir o XML inteiro; fullscreen no móvel já existente deve continuar usável; pause ao trocar de aba.
 6. **Gestos:** evitar `position: fixed` que brigue com a barra de endereço do iOS sem `dvh` / safe-area.
 7. **Verificar** o fluxo no browser em desktop **e** largura mobile antes de encerrar tarefa de UI (não só screenshot).
 
 Não assumir mouse, tela larga ou Wi-Fi estável.
 
-## API e backend (ainda mock)
+## API e backend
 
-Hoje: `json-server` + `db.json`. Contrato a preservar: `roles[]`, IDs no servidor, `songs.scores[].url`.
+O backend oficial é o projeto separado [`bcl-api`](https://github.com/thomazdevmaster/bcl-api). A API completa (Spring, Postgres e MinIO) roda em Docker Compose. Em desenvolvimento, configure `NEXT_PUBLIC_API_URL=http://localhost:8080`; em produção, use a URL HTTPS publicada pelo backend. Os detalhes de operação e contrato pertencem ao README do `bcl-api`.
 
-Alvo (não implementar sozinho): um monólito (Python ou Java) + PostgreSQL + bucket S3/MinIO; MIDI gerado em worker/job, não no request de CRUD e não no celular. Detalhe em `docs/arquitetura-backend.md`.
+O frontend não inclui servidor de API, `json-server` ou rotas mock. `src/lib/api.ts` chama `bcl-api`; o único rewrite local `/dev-api` encaminha ao backend Dockerizado para permitir acesso por celular na rede.
+
+Contrato a preservar: `roles[]`, IDs gerados pela API, `songs.scores[].url` e autenticação definida no `bcl-api`. A integração do frontend está em `docs/arquitetura-backend.md`.
 
 ## Como rodar
 
-Dois processos: `npm run api:server` (3001) e `npm run dev` (3000). Contas demo no README.
+Desenvolvimento: iniciar primeiro a API completa no repositório `bcl-api` com `docker compose --profile api up -d --build`; depois iniciar o frontend com `npm run dev` (3000). Contas de demonstração são dados do seed do backend, documentadas no README do `bcl-api`.
 
 ## Issues no GitHub (`bcl-next`)
 

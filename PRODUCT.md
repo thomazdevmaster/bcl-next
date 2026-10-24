@@ -27,7 +27,7 @@ O produto reúne comunicação pública, gestão da associação e estudo de mú
 
 - O idioma da interface é pt-BR.
 - O visitante usa as rotas públicas sem autenticação. Após login, acessa `/gestao` e os módulos permitidos pelos papéis da conta.
-- O login atual é simulado. A sessão pode ser mantida em `localStorage` quando a pessoa escolhe “Manter conectado”; a hidratação da sessão segue o padrão de `AuthContext` para não depender de `localStorage` no SSR.
+- O login usa a API oficial `bcl-api`. A sessão pode ser mantida em `localStorage` quando a pessoa escolhe “Manter conectado”; a hidratação da sessão segue o padrão de `AuthContext` para não depender de `localStorage` no SSR.
 - Alunos e músicos estudam frequentemente no telefone, em tela estreita, com uma mão e conexão 4G. A interface precisa funcionar em cerca de 360 px e em desktop a partir de cerca de 960 px; o modo de estudo também atende tela cheia móvel em cerca de 600 px.
 - Não assumir mouse, tela larga nem Wi-Fi estável.
 
@@ -46,7 +46,7 @@ O produto reúne comunicação pública, gestão da associação e estudo de mú
 - Perfis autenticados: `aluno`, `musico`, `maestro` e `admin`. A conta guarda `roles[]`; permissões são a união de todos os papéis, e o mais permissivo determina as ações disponíveis.
 - Maestro pode gerir perfis, mas não atribuir `admin`. Admin pode promover outra conta a admin.
 - Aluno e músico veem mascarados e-mail, telefone, endereço, data de nascimento, documento e dados do responsável. Maestro e admin veem esses dados sem máscara.
-- Permissões são aplicadas no cliente e precisam ser repetidas no servidor quando a API real for usada; esconder controles na interface não substitui autorização no backend.
+- Permissões são aplicadas no cliente e precisam ser repetidas no servidor `bcl-api`; esconder controles na interface não substitui autorização no backend.
 
 ### Estudo musical
 
@@ -54,17 +54,17 @@ O produto reúne comunicação pública, gestão da associação e estudo de mú
 - A pessoa escolhe separadamente quais instrumentos aparecem na partitura e quais instrumentos são reproduzidos pelo áudio.
 - OSMD e o player dependem de APIs do navegador; a sessão de estudo é client-side.
 - A partitura deve permanecer rolável. O player deve continuar acessível sem cobrir a partitura; a sessão deve pausar ao trocar de aba. O fullscreen móvel existente deve continuar utilizável.
-- Mostrar estados claros de carregamento e erro; falha do mock não deve deixar a página inutilizável.
-- Evitar baixar a mesma partitura completa de muitos naipes mais de uma vez sem necessidade. Quando houver backend com worker, não repetir conversões pesadas de MusicXML/MIDI no React nem gerar MIDI sincronamente no clique de início.
+- Mostrar estados claros de carregamento e erro quando a API externa estiver indisponível.
+- Evitar baixar a mesma partitura completa de muitos naipes mais de uma vez sem necessidade. A geração de MIDI pertence ao worker do `bcl-api`; não repetir conversões pesadas no React nem gerar MIDI sincronamente no clique de início.
 
 ### Plataforma e arquitetura
 
 - Frontend existente: Next.js 16, React 19, TypeScript, Sass e Tailwind CSS. O fluxo oficial de rotas é o App Router em `src/app/**`.
 - Domínios vivem em `src/domains/`; autenticação, papéis, permissões e máscara em `src/core/auth/`; tokens de tema em `src/core/theme/tokens.css`; workspace genérico em `src/components/domain/`; sessão de estudo em `src/study/`; cliente HTTP em `src/lib/api.ts`.
-- API mock local disponível: rotas do Next em `/bcl-api`, alimentadas por `src/domains/seed/mock-api.json`; `db.json` também pode ser usado pelo `json-server` legado na porta 3001. A URL é configurada por `NEXT_PUBLIC_API_URL`.
-- Publicação prevista: Next na Vercel falando com a API Spring na VM (Oracle), via `NEXT_PUBLIC_USE_REMOTE_API=true` e `NEXT_PUBLIC_API_URL` HTTPS. Localmente o mock `/bcl-api` continua disponível. A arquitetura backend detalhada está em `docs/arquitetura-backend.md`.
+- Backend oficial: [`bcl-api`](https://github.com/thomazdevmaster/bcl-api), um projeto separado cuja API completa roda em Docker Compose. O frontend configura a origem com `NEXT_PUBLIC_API_URL`; detalhes de operação ficam no README do backend e a integração do frontend em `docs/arquitetura-backend.md`.
+- Desenvolvimento local exige a API Dockerizada em `localhost:8080`; não há servidor de API nem mock no frontend.
 - Contrato a preservar: contas com `roles[]`, IDs gerados pela API, e partituras em `songs.scores[].url`. O frontend não envia IDs gerados localmente em POST.
-- O backend alvo descrito em `docs/arquitetura-backend.md` é um monólito modular com PostgreSQL, object storage S3/MinIO e geração de MIDI em worker/job. Não implementar essa arquitetura sem solicitação própria.
+- `docs/arquitetura-backend.md` descreve como este frontend integra com o monólito `bcl-api`; detalhes operacionais e internos ficam no README desse repositório.
 - Não recriar `/students`, `src/legacy-pages`, CRUD paralelo ou um segundo CRUD para estudo. Não introduzir microserviços ou BFF adicional sem decisão explícita.
 - TypeScript estrito: não adicionar `any`; declarar tipos de domínio. Usar `'use client'` apenas quando necessário por estado, eventos ou APIs do navegador.
 - Imagens devem usar `next/image`. Não versionar XML/MIDI de produção em `public/` como fonte da verdade e não commitar segredos.
@@ -84,7 +84,7 @@ O produto reúne comunicação pública, gestão da associação e estudo de mú
 
 - Nome institucional: Banda Carmelitana Luminarense (BCL); interface e conteúdo em português brasileiro.
 - A memória institucional não deve ser inventada nem completada com fontes turísticas, Wikipedia ou conhecimento geral.
-- A fonte primária é *A Presença da Música na História Luminarense (1894 a 1978)*, de Hugo Nicodemos Biavati, em `src/assets/A PRESENÇA DA MÚSICA NA HISTÓRIA LUMINARENSE (2023).pdf`. `docs/historia-banda.md` é a síntese obrigatória e fonte de trabalho para agentes; em conflito com copy antiga ou outras fontes, prevalece o livro.
+- A fonte primária é _A Presença da Música na História Luminarense (1894 a 1978)_, de Hugo Nicodemos Biavati, em `src/assets/A PRESENÇA DA MÚSICA NA HISTÓRIA LUMINARENSE (2023).pdf`. `docs/historia-banda.md` é a síntese obrigatória e fonte de trabalho para agentes; em conflito com copy antiga ou outras fontes, prevalece o livro.
 - Distinguir BCL (fundada em 1894 por Américo José da Costa), Banda dos Vitorinos / Crioulos do Mata-Boi e Euterpe Aparecida (1925). O primeiro estatuto da BCL é de 1912. Não apresentar 1910 como fundação da associação nem usar a narrativa de músicos solitários nas montanhas como fato fundador.
 - O livro cobre 1894–1978. Depois desse recorte, só incluir fatos que o próprio livro registra ou dados atuais já mantidos pelo produto, como contato, CNPJ e sede.
 - Em conteúdo histórico, ler `docs/historia-banda.md` antes de alterar Sobre, início, blog, legendas ou textos de seed.
@@ -93,7 +93,7 @@ O produto reúne comunicação pública, gestão da associação e estudo de mú
 
 - `AGENTS.md`: regras de produto, papéis, mobile, acessibilidade, arquitetura e limites para agentes.
 - `README.md`: visão geral, funcionalidades, stack, rotas, contas demo, domínios e fluxos atuais.
-- `docs/arquitetura-backend.md`: contrato atual e arquitetura alvo do backend.
+- `docs/arquitetura-backend.md`: integração atual do frontend com o backend `bcl-api`.
 - `docs/historia-banda.md`: base factual obrigatória para conteúdo histórico.
 - `src/assets/A PRESENÇA DA MÚSICA NA HISTÓRIA LUMINARENSE (2023).pdf`: fonte histórica primária.
 - `src/core/theme/tokens.css`: tokens de tema existentes; novas interfaces devem usar os tokens em vez de espalhar cores literais.
@@ -106,6 +106,6 @@ O produto reúne comunicação pública, gestão da associação e estudo de mú
 - Manter portal, gestão e estudo coerentes com os fluxos reais da banda.
 - Aplicar permissões e proteção de dados conforme a união de papéis da conta.
 - Fazer os fluxos de estudo funcionarem em celular, com rede móvel e controles acessíveis.
-- Preservar os contratos da API e a separação entre mock atual e backend alvo.
+- Preservar os contratos com a API mantida no repositório `bcl-api`.
 - Tratar o livro como fonte de verdade para história institucional e distinguir as três corporações.
 - Priorizar interfaces compreensíveis, acessíveis e operáveis por teclado, toque e viewport estreita.

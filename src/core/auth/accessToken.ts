@@ -1,7 +1,3 @@
-import { usesRemoteApi } from '@/config/environment';
-
-export { usesRemoteApi };
-
 export const TOKEN_KEY = 'app.auth.token';
 
 let memoryToken: string | null = null;
