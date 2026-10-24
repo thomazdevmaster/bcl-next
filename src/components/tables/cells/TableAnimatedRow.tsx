@@ -19,39 +19,26 @@ export function TableAnimatedRow({ children, index }: TableAnimatedRowProps) {
     const rowAnimation = row.animate(
       [
         {
-          opacity: 0.35,
-          transform: "translateY(7px)",
-          filter: "drop-shadow(0 3px 5px color-mix(in srgb, var(--primary) 16%, transparent))",
+          opacity: 0.86,
+          transform: "translateY(3px)",
         },
-        { opacity: 1, transform: "translateY(0)", filter: "drop-shadow(0 0 0 transparent)" },
+        { opacity: 1, transform: "translateY(0)" },
       ],
       {
-        duration: 220,
-        delay: Math.min(initialIndex.current * 12, 240),
+        duration: 160,
+        delay: Math.min(initialIndex.current * 8, 96),
         easing: "cubic-bezier(0.2, 0, 0, 1)",
       },
     );
 
-    const cellAnimations = Array.from(row.cells, (cell) => {
-      const background = window.getComputedStyle(cell).backgroundColor;
-      return cell.animate(
-        [
-          { backgroundColor: "color-mix(in srgb, var(--primary) 12%, var(--card))" },
-          { backgroundColor: background },
-        ],
-        {
-          duration: 360,
-          delay: Math.min(initialIndex.current * 12, 240) + 30,
-          easing: "cubic-bezier(0.2, 0, 0, 1)",
-        },
-      );
-    });
-
     return () => {
       rowAnimation.cancel();
-      cellAnimations.forEach((animation) => animation.cancel());
     };
   }, []);
 
-  return <tr ref={rowRef} className="group">{children}</tr>;
+  return (
+    <tr ref={rowRef} className="group">
+      {children}
+    </tr>
+  );
 }
