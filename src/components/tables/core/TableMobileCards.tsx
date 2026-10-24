@@ -19,11 +19,7 @@ export type MobileTableAction = {
   danger?: boolean;
 };
 
-type TableInstance<TData extends RowData> = ReactTable<
-  typeof tableFeatures,
-  TData,
-  TableState
->;
+type TableInstance<TData extends RowData> = ReactTable<typeof tableFeatures, TData, TableState>;
 
 function columnLabel(header: unknown, id: string) {
   return typeof header === "string" ? header : id;
@@ -73,16 +69,11 @@ export function TableMobileCards<TData extends RowData>({
   useEffect(() => {
     if (!openMenuId) return;
     const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (
-        event.target instanceof Element &&
-        event.target.closest('[data-row-action-menu][data-open="true"]')
-      )
-        return;
+      if (event.target instanceof Element && event.target.closest('[data-row-action-menu][data-open="true"]')) return;
       setOpenMenuId(null);
     };
     document.addEventListener("pointerdown", closeOnOutsidePointer, true);
-    return () =>
-      document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
   }, [openMenuId]);
 
   const clearLongPress = () => {
@@ -103,19 +94,10 @@ export function TableMobileCards<TData extends RowData>({
       <ul className="hidden flex-col gap-3 max-[959px]:flex">
         {rows.map((row) => {
           const cells = row.getVisibleCells();
-          const controls = cells.find(
-            (cell) => cell.column.id === ROW_CONTROLS_ID,
-          );
-          const primary = cells.find(
-            (cell) =>
-              cell.column.id !== ROW_CONTROLS_ID &&
-              cell.column.id !== ROW_ACTIONS_ID,
-          );
+          const controls = cells.find((cell) => cell.column.id === ROW_CONTROLS_ID);
+          const primary = cells.find((cell) => cell.column.id !== ROW_CONTROLS_ID && cell.column.id !== ROW_ACTIONS_ID);
           const details = cells.filter(
-            (cell) =>
-              cell !== primary &&
-              cell !== controls &&
-              cell.column.id !== ROW_ACTIONS_ID,
+            (cell) => cell !== primary && cell !== controls && cell.column.id !== ROW_ACTIONS_ID,
           );
           const rowLabel = getRowLabel?.(row.original) ?? row.id;
           const primaryLabel =
@@ -127,8 +109,7 @@ export function TableMobileCards<TData extends RowData>({
           const selectionActive = selectionMode || selectedRowCount > 0;
           const headerExtra = renderHeaderExtra?.(row);
           const toggleRowSelection = () => {
-            const clearingOnlySelectedRow =
-              row.getIsSelected() && selectedRowCount === 1;
+            const clearingOnlySelectedRow = row.getIsSelected() && selectedRowCount === 1;
             row.toggleSelected();
             if (clearingOnlySelectedRow) onSelectionModeChange(false);
           };
@@ -149,9 +130,7 @@ export function TableMobileCards<TData extends RowData>({
                 if (!mobileSelectionEnabled || !selectionActive) return;
                 if (
                   event.target instanceof Element &&
-                  event.target.closest(
-                    "[data-row-action-menu], [data-mobile-row-select], button, a, input",
-                  )
+                  event.target.closest("[data-row-action-menu], [data-mobile-row-select], button, a, input")
                 )
                   return;
                 if (row.getCanSelect()) toggleRowSelection();
@@ -162,24 +141,11 @@ export function TableMobileCards<TData extends RowData>({
                 pointerSelectionTarget.current = null;
                 const interactiveTarget =
                   event.target instanceof Element &&
-                  event.target.closest(
-                    "[data-row-action-menu], [data-mobile-row-select], button, a, input",
-                  );
-                if (
-                  mobileSelectionEnabled &&
-                  selectionActive &&
-                  !interactiveTarget &&
-                  row.getCanSelect()
-                ) {
+                  event.target.closest("[data-row-action-menu], [data-mobile-row-select], button, a, input");
+                if (mobileSelectionEnabled && selectionActive && !interactiveTarget && row.getCanSelect()) {
                   pointerSelectionTarget.current = row.id;
                 }
-                if (
-                  !mobileSelectionEnabled ||
-                  selectionActive ||
-                  !row.getCanSelect() ||
-                  interactiveTarget
-                )
-                  return;
+                if (!mobileSelectionEnabled || selectionActive || !row.getCanSelect() || interactiveTarget) return;
                 clearLongPress();
                 longPressTimer.current = setTimeout(() => {
                   longPressTriggered.current = true;
@@ -191,11 +157,7 @@ export function TableMobileCards<TData extends RowData>({
               }}
               onPointerUp={() => {
                 clearLongPress();
-                if (
-                  selectionActive &&
-                  pointerSelectionTarget.current === row.id &&
-                  row.getCanSelect()
-                ) {
+                if (selectionActive && pointerSelectionTarget.current === row.id && row.getCanSelect()) {
                   toggleRowSelection();
                   suppressPointerClick.current = true;
                 }
@@ -237,11 +199,7 @@ export function TableMobileCards<TData extends RowData>({
                     )}
                   </div>
                 </div>
-                {headerExtra ||
-                controls ||
-                rowPinningEnabled ||
-                actions.length > 0 ||
-                details.length > 0 ? (
+                {headerExtra || controls || rowPinningEnabled || actions.length > 0 || details.length > 0 ? (
                   <div className="flex min-w-0 items-start justify-end gap-1">
                     {headerExtra}
                     {rowPinningEnabled && pinned ? (
@@ -253,6 +211,14 @@ export function TableMobileCards<TData extends RowData>({
                         className="text-[var(--color-brand-strong)]"
                       />
                     ) : null}
+                    <TableMobileIconAction
+                      ariaLabel={`Visualizar ${rowLabel}`}
+                      icon="visibility"
+                      onClick={() => {
+                        setViewingRowId(row.id);
+                        setOpenMenuId(null);
+                      }}
+                    />
                     <div
                       className="relative ml-auto shrink-0"
                       data-row-action-menu
@@ -269,10 +235,7 @@ export function TableMobileCards<TData extends RowData>({
                         onClick={() => setOpenMenuId(menuOpen ? null : row.id)}
                         className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-[var(--info)] transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] motion-reduce:transition-none"
                       >
-                        <span
-                          className="material-icons text-2xl"
-                          aria-hidden="true"
-                        >
+                        <span className="material-icons text-2xl" aria-hidden="true">
                           more_horiz
                         </span>
                       </button>
@@ -294,17 +257,10 @@ export function TableMobileCards<TData extends RowData>({
                               }}
                               className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold text-[var(--foreground)] transition-colors duration-150 hover:bg-[var(--card-secondary)] focus-visible:outline-2 focus-visible:outline-[var(--ring)] disabled:opacity-50 motion-reduce:transition-none"
                             >
-                              <span
-                                className="material-icons text-lg"
-                                aria-hidden="true"
-                              >
-                                {row.getIsSelected()
-                                  ? "check_box"
-                                  : "check_box_outline_blank"}
+                              <span className="material-icons text-lg" aria-hidden="true">
+                                {row.getIsSelected() ? "check_box" : "check_box_outline_blank"}
                               </span>
-                              {row.getIsSelected()
-                                ? "Desmarcar seleção"
-                                : "Selecionar"}
+                              {row.getIsSelected() ? "Desmarcar seleção" : "Selecionar"}
                             </button>
                           ) : null}
                           <button
@@ -316,10 +272,7 @@ export function TableMobileCards<TData extends RowData>({
                             }}
                             className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold text-[var(--foreground)] transition-colors duration-150 hover:bg-[var(--card-secondary)] focus-visible:outline-2 focus-visible:outline-[var(--ring)] motion-reduce:transition-none"
                           >
-                            <span
-                              className="material-icons text-lg"
-                              aria-hidden="true"
-                            >
+                            <span className="material-icons text-lg" aria-hidden="true">
                               visibility
                             </span>
                             Visualizar
@@ -335,10 +288,7 @@ export function TableMobileCards<TData extends RowData>({
                               }}
                               className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold text-[var(--foreground)] transition-colors duration-150 hover:bg-[var(--card-secondary)] focus-visible:outline-2 focus-visible:outline-[var(--ring)] disabled:opacity-50 motion-reduce:transition-none"
                             >
-                              <span
-                                className="material-icons text-lg"
-                                aria-hidden="true"
-                              >
+                              <span className="material-icons text-lg" aria-hidden="true">
                                 push_pin
                               </span>
                               {pinned ? "Desafixar linha" : "Fixar linha"}
@@ -356,10 +306,7 @@ export function TableMobileCards<TData extends RowData>({
                               }}
                               className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold transition-colors duration-150 hover:bg-[var(--card-secondary)] focus-visible:outline-2 focus-visible:outline-[var(--ring)] disabled:opacity-50 motion-reduce:transition-none ${action.danger ? "text-[var(--destructive)]" : "text-[var(--foreground)]"}`}
                             >
-                              <span
-                                className="material-icons text-lg"
-                                aria-hidden="true"
-                              >
+                              <span className="material-icons text-lg" aria-hidden="true">
                                 {action.icon}
                               </span>
                               {action.label}
@@ -377,24 +324,17 @@ export function TableMobileCards<TData extends RowData>({
       </ul>
       <EntityDialog
         open={Boolean(viewingRow)}
-        title={
-          viewingRow
-            ? (getRowLabel?.(viewingRow.original) ?? "Detalhes do registro")
-            : "Detalhes do registro"
-        }
+        title={viewingRow ? (getRowLabel?.(viewingRow.original) ?? "Detalhes do registro") : "Detalhes do registro"}
         size="md"
         placement="bottom"
+        closeOnBackdropClick
         onClose={() => setViewingRowId(null)}
       >
         {viewingRow ? (
           <dl className="px-4 py-1 sm:px-6">
             {viewingRow
               .getVisibleCells()
-              .filter(
-                (cell) =>
-                  cell.column.id !== ROW_CONTROLS_ID &&
-                  cell.column.id !== ROW_ACTIONS_ID,
-              )
+              .filter((cell) => cell.column.id !== ROW_CONTROLS_ID && cell.column.id !== ROW_ACTIONS_ID)
               .map((cell) => (
                 <div
                   key={cell.id}

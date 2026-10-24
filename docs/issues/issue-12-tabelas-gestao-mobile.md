@@ -2,8 +2,8 @@
 
 - Issue: [#12](https://github.com/thomazdevmaster/bcl-next/issues/12)
 - SPEC: [issue-12-tabelas-gestao-mobile.md](../specs/issue-12-tabelas-gestao-mobile.md)
-- Estado no GitHub: **Aberta**, observado em 2026-10-23
-- Status real do código: **Implementação em andamento**
+- Estado no GitHub: **Aberta**, última observação local em 2026-10-23; não foi possível atualizar via GitHub nesta verificação porque `gh auth status` retornou token inválido
+- Status real do código: **Parcial**
 - Última verificação: 2026-10-23
 - Prioridade explícita: **P1**
 - Estimativa explícita: PERT O=2, M=4, P=8 dias; Te=4,33 pessoa-dias
@@ -12,19 +12,20 @@ O status SPEC em revisão descreve o rastreamento local. A issue segue aberta no
 
 ## Matriz de requisitos
 
-| Requisito original (citação curta ou referência ao trecho)     | Status                  | Evidência no código ou pendência                                                                                                                                                                                                                                            |
-| -------------------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| “~360px: sem checkbox de seleção nas tabelas de gestão.”       | Ajustado por feedback posterior | Checkboxes ficam ocultos inicialmente e surgem à esquerda dos cartões quando uma linha é selecionada pelo ⋯ ou por toque prolongado. |
-| “Mobile: só busca global + ação primária; ocultar toolbar secundária (export, colunas extras).” | Pendente | TableToolbar mostra atualizar, redefinir, seleção em massa, imprimir e visibilidade de colunas. A criação fica no cabeçalho de DomainWorkspace e UserManagementWorkspace. Não há ação de exportação na toolbar atual. |
-| “Preferir cartão ou menu ⋯ por linha.”                         | Verificado em Usuários | Menu ⋯ e seleção por opção foram exercitados no navegador móvel; matriz das demais áreas ainda pendente.                                                                                                                                                              |
-| “Desktop: manter comportamento atual salvo decisão contrária.” | Verificado em Usuários | Em 1024px, tabela e ação do cabeçalho permanecem visíveis; gatilhos móveis ficam ocultos e não há overflow horizontal.                                                                                                                                                                           |
-| “Toque ≥ 44px; modais com teclado virtual.”                    | Parcial                 | Checkboxes, ⋯, Limpar e Excluir têm alvos mínimos de 44px. A confirmação de exclusão abriu no teste móvel; falta conferir teclado virtual em outras áreas.                                               |
-| “Teste: pessoas, usuários, patrimônio, músicas, mídias.”       | Pendente                | Verificação browser ainda pendente. Mídias usa lista própria e será verificada sem redesign.                                                                                                                                                                                |
-| “Permissões can() inalteradas.”                                | Atendido                | Botões de criação e ações do CRUD são condicionados por can() em DomainWorkspace e UserManagementWorkspace. Reavaliar após implementar.                                                                                                                                     |
-| “~360px; busca com label; ⋯ acessível.” | Parcial | O cartão móvel já é exibido até 959px e a busca global tem aria-label. O checklist da issue está marcado [x], mas o código atual não tem gatilho ⋯; implementar e validar rótulo, teclado e alvo ≥44px. |
-| Feedback de implementação: fixar dentro de ⋯; Visualizar em modal; remover Ver mais/Recolher; indicar visualmente o pin. | Parcial | Cartões fixados exibem só o ícone de alfinete ao lado de ⋯; Visualizar apresenta os valores no EntityDialog. A matriz de áreas ainda falta. |
-| Feedback: selecionar pelo ⋯ ou toque prolongado, selecionar linha tocando no cartão, fechar menu fora dele e exibir Excluir junto à tabela. | Verificado em Usuários | Toque real em “Selecionar” marcou uma linha; toques na terceira linha alternaram a seleção 1→2→1; tocar fora fechou o menu. Cada linha elegível recebe o mesmo menu. O bloco fica junto aos cartões, separado da busca e criação. |
-| “Fora de escopo: virtualização; redesign desktop completo.”    | Fora do escopo acordado | A SPEC não inclui virtualização nem redesign desktop.                                                                                                                                                                                                                       |
+| Requisito original (citação curta ou referência ao trecho)                                                   | Status                                                | Evidência no código ou pendência                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| “~360px: sem checkbox de seleção nas tabelas de gestão.” (ajustado por feedback)                             | Atendido no código; browser pendente nas demais áreas | `TableMobileCards.tsx` só mostra checkbox em modo de seleção, iniciado pelo menu ou toque prolongado. Evidência browser documentada para Usuários; falta exercitar Pessoas, Patrimônio e Estudo. |
+| “Mobile: só busca global + ação primária; ocultar toolbar secundária.”                                       | Atendido no código                                    | `TableToolbar.tsx` exibe busca e ação principal no mobile. Refresh, reset, seleção em massa, impressão e visibilidade ficam em bloco `hidden` até 960px. Busca tem `aria-label`.                 |
+| “Preferir cartão ou menu ⋯ por linha.”                                                                       | Parcial (verificação)                                 | Cartões e menu ⋯ existem em `TableMobileCards.tsx`; verificação browser ampla pendente para Pessoas, Usuários, Patrimônio, Músicas e Estudo.                                                     |
+| “Desktop: manter comportamento atual salvo decisão contrária.”                                               | Parcial (verificação)                                 | Tabela e toolbar desktop continuam no código a partir de 960px. Verificação browser documentada apenas para Usuários.                                                                            |
+| “Toque ≥ 44px; modais com teclado virtual.”                                                                  | Parcial                                               | Menu e ações usam alvos `min-h-11`/`min-w-11`; Visualizar abre EntityDialog. Falta conferir diálogos e teclado virtual nas áreas acordadas.                                                      |
+| “Teste: pessoas, usuários, patrimônio, músicas, mídias.”                                                     | Pendente                                              | Falta evidência browser para o conjunto completo. Mídias é lista própria em `src/app/gestao/midias/page.tsx`; precisa ser conferida em 360px e desktop, sem redesign.                            |
+| “Permissões `can()` inalteradas.”                                                                            | Atendido no código                                    | Criação e ações são condicionadas por `canCreate`, `canUpdate`, `canDelete` em `DomainWorkspace.tsx` e `UserManagementWorkspace.tsx`; exclusão em lote também passa por callbacks condicionados. |
+| “~360px; busca com label; ⋯ acessível.”                                                                      | Parcial (verificação)                                 | Busca rotulada, gatilho nomeado por linha e alvo 44px; Escape e clique externo fecham o menu em `TableMobileCards.tsx`. Falta exercício de teclado/browser nas demais telas.                     |
+| Feedback: fixar no menu; Visualizar em modal; remover Ver mais/Recolher; indicar pin.                        | Atendido no código; browser pendente                  | Menu oferece Visualizar e Fixar/Desafixar; cartões fixados mostram pin. Visualizar usa EntityDialog em linhas rótulo/valor. Conferir nas telas restantes.                                        |
+| Feedback: seleção pelo ⋯/toque prolongado, seleção tocando cartão, fechar menu fora, excluir junto à tabela. | Parcial (verificação)                                 | Handlers e bloco de exclusão estão em `TableView.tsx`/`TableMobileCards.tsx`; teste documentado em Usuários. Faltam as outras tabelas e confirmação nos domínios.                                |
+| “Fora de escopo: virtualização; redesign desktop completo.”                                                  | Fora do escopo acordado                               | SPEC não inclui esses itens.                                                                                                                                                                     |
+| Decisão: Estudo põe “Iniciar estudo” e “Vídeo” no ⋯.                                                         | Atendido no código; browser pendente                  | `StudySongCatalog.tsx` fornece essas ações; falta exercitar o menu e confirmar que a seleção de instrumentos do modal permanece funcional.                                                       |
 
 ## Decisões aprovadas na entrevista
 
@@ -39,6 +40,12 @@ O status SPEC em revisão descreve o rastreamento local. A issue segue aberta no
 - Mídias usa lista própria fora de TableView; verificar o fluxo, sem redesenhá-la nesta issue.
 - Em Estudo, colocar “Iniciar estudo” e “Vídeo” no disclosure móvel; seleção de instrumentos do modal fica inalterada.
 
-## Próxima atualização
+## O que falta para fechar
 
-SPEC aprovada; implementação em andamento. Lint e TypeScript passaram. Usuários foi exercitado a 360px e 1024px; a matriz restante de Gestão, Estudo e Mídias continua pendente.
+- Exercitar no browser em 360px e desktop ≥960px: Gestão de Pessoas, Usuários, Patrimônio, Músicas e Estudo; conferir busca, menu, seleção, criação conforme permissão, Visualizar, edição/exclusão e diálogos.
+- No Estudo, confirmar “Iniciar estudo”/“Vídeo” no menu e que a seleção de instrumentos continua funcional.
+- Conferir Mídias em mobile e desktop, mantendo a lista atual.
+- Verificar diálogos com teclado virtual e navegação por teclado nos fluxos acordados. Usuários tem evidência parcial registrada.
+- Reautenticar `gh` para confirmar que issue, critérios e comentários não mudaram desde 2026-10-23.
+
+Os comportamentos principais aparecem implementados no código; a issue permanece **Parcial** até concluir essa validação e confirmar o estado remoto. Lint e TypeScript passaram em verificação anterior, não reexecutados nesta auditoria.
