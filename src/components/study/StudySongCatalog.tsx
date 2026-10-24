@@ -1,37 +1,37 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MusicLoader } from '@/components/MusicLoader';
-import { TableView } from '@/components/tables/core/TableView';
-import type { TableColumnDef } from '@/components/tables/core/table-features';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MusicLoader } from "@/components/MusicLoader";
+import { TableView } from "@/components/tables/core/TableView";
+import type { TableColumnDef } from "@/components/tables/core/table-features";
 import {
   filterSongsForCatalog,
   isSongVisibleInCatalog,
-} from '@/domains/songs/catalogAccess';
-import type { Song } from '@/domains/songs/types';
-import { useAuth } from '@/contexts/AuthContext';
-import { apiFetch, fetchAuthedAsset } from '@/lib/api';
-import { failureMessage } from '@/lib/userMessages';
+} from "@/domains/songs/catalogAccess";
+import type { Song } from "@/domains/songs/types";
+import { useAuth } from "@/contexts/AuthContext";
+import { apiFetch, fetchAuthedAsset } from "@/lib/api";
+import { failureMessage } from "@/lib/userMessages";
 import {
   extractInstrumentsFromXml,
   type InstrumentInfo,
-} from '@/study/studyUtils';
+} from "@/study/studyUtils";
 import {
   defaultPartIds,
   fetchSongParts,
   partToInstrument,
   readStoredSelection,
-} from '@/study/songParts';
-import type { Person } from '@/domains/people/types';
-import { youtubeWatchUrl } from '@/domains/songs/youtube';
+} from "@/study/songParts";
+import type { Person } from "@/domains/people/types";
+import { youtubeWatchUrl } from "@/domains/songs/youtube";
 import {
   studyAudioReady,
   studyProcessingGateEnabled,
   studyProcessingLabel,
   studyScoreReady,
-} from '@/config/studyProcessing';
-import { waitForStudyScoreReady } from '@/study/songParts';
-import { StudyPublicRepertoireNotice } from '@/components/study/StudyPublicRepertoireNotice';
+} from "@/config/studyProcessing";
+import { waitForStudyScoreReady } from "@/study/songParts";
+import { StudyPublicRepertoireNotice } from "@/components/study/StudyPublicRepertoireNotice";
 
 export interface StudyStartOptions {
   song: Song;
@@ -58,7 +58,12 @@ interface SetupState {
   audioPending: boolean;
 }
 
-export function StudySongCatalog({ onStart, ownerId = null, personId = null, initialSongId = null }: StudySongCatalogProps) {
+export function StudySongCatalog({
+  onStart,
+  ownerId = null,
+  personId = null,
+  initialSongId = null,
+}: StudySongCatalogProps) {
   const { roles, permissions } = useAuth();
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +85,7 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
     apiFetch<Person>(`/people/${encodeURIComponent(personId)}`)
       .then((person) => {
         if (!active) return;
-        const name = person.musician?.playedInstrument?.name?.trim() ?? '';
+        const name = person.musician?.playedInstrument?.name?.trim() ?? "";
         setPlayedNames(name ? [name] : []);
       })
       .catch(() => {
@@ -98,14 +103,16 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
     setLoading(true);
     setError(null);
     try {
-      const items = await apiFetch<Song[]>('/songs');
-      const withScores = items.filter((song) => song.scores?.some((score) => Boolean(score.url)));
+      const items = await apiFetch<Song[]>("/songs");
+      const withScores = items.filter((song) =>
+        song.scores?.some((score) => Boolean(score.url)),
+      );
       setSongs(filterSongsForCatalog(withScores, roles, permissions));
     } catch (caught: unknown) {
       setError(
         failureMessage(
           caught,
-          'Não foi possível carregar as músicas para estudo.',
+          "Não foi possível carregar as músicas para estudo.",
         ),
       );
     } finally {
@@ -119,37 +126,38 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
 
   const columns = useMemo<TableColumnDef<Song>[]>(
     () => [
-      { accessorKey: 'title', header: 'Música', minSize: 180 },
+      { accessorKey: "title", header: "Música", minSize: 180 },
       {
-        accessorKey: 'composer',
-        header: 'Compositor',
+        accessorKey: "composer",
+        header: "Compositor",
         minSize: 160,
-        cell: ({ getValue }) => getValue<string>() || '—',
+        cell: ({ getValue }) => getValue<string>() || "—",
       },
       {
-        accessorKey: 'arranger',
-        header: 'Arranjador',
+        accessorKey: "arranger",
+        header: "Arranjador",
         minSize: 150,
-        cell: ({ getValue }) => getValue<string | undefined>() || '—',
+        cell: ({ getValue }) => getValue<string | undefined>() || "—",
       },
       {
-        accessorKey: 'genre',
-        header: 'Gênero',
+        accessorKey: "genre",
+        header: "Gênero",
         minSize: 120,
-        cell: ({ getValue }) => getValue<string | undefined>() || '—',
+        cell: ({ getValue }) => getValue<string | undefined>() || "—",
       },
       {
-        id: 'scores',
+        id: "scores",
         accessorFn: (song) => song.scores.length,
-        header: 'Partituras',
+        header: "Partituras",
         minSize: 110,
       },
       ...(studyProcessingGateEnabled()
         ? [
             {
-              id: 'studyPrep',
-              accessorFn: (song: Song) => studyProcessingLabel(song) ?? 'Pronta',
-              header: 'Preparação',
+              id: "studyPrep",
+              accessorFn: (song: Song) =>
+                studyProcessingLabel(song) ?? "Pronta",
+              header: "Preparação",
               minSize: 140,
             } satisfies TableColumnDef<Song>,
           ]
@@ -160,7 +168,7 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
 
   const openSetup = async (song: Song) => {
     if (!isSongVisibleInCatalog(song, roles, permissions)) {
-      setError('Essa música não está disponível para o seu perfil.');
+      setError("Essa música não está disponível para o seu perfil.");
       return;
     }
     const score = song.scores.find((item) => Boolean(item.url));
@@ -170,8 +178,8 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
     try {
       let activeSong = song;
       if (studyProcessingGateEnabled()) {
-        if (activeSong.studyScoreStatus === 'failed') {
-          throw new Error('study_score_failed');
+        if (activeSong.studyScoreStatus === "failed") {
+          throw new Error("study_score_failed");
         }
         if (!studyScoreReady(activeSong)) {
           activeSong = await waitForStudyScoreReady(String(song.id));
@@ -190,21 +198,24 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
         const midiIds = keep(stored.midi);
         setSetup({
           song: activeSong,
-          xml: '',
+          xml: "",
           instruments,
-          scoreInstrumentIds: scoreIdsForViewport(scoreIds.length > 0 ? scoreIds : defaults),
+          scoreInstrumentIds: scoreIdsForViewport(
+            scoreIds.length > 0 ? scoreIds : defaults,
+          ),
           midiInstrumentIds: midiIds.length > 0 ? midiIds : defaults,
-          audioPending: studyProcessingGateEnabled() && !studyAudioReady(activeSong),
+          audioPending:
+            studyProcessingGateEnabled() && !studyAudioReady(activeSong),
         });
         return;
       } catch {
         if (studyProcessingGateEnabled()) {
-          throw new Error('study_parts_unavailable');
+          throw new Error("study_parts_unavailable");
         }
         /* mock legado: lê o XML inteiro */
       }
       const response = await fetchAuthedAsset(score.url);
-      if (!response.ok) throw new Error('score_fetch_failed');
+      if (!response.ok) throw new Error("score_fetch_failed");
       const xml = await response.text();
       instruments = extractInstrumentsFromXml(xml);
       const allIds = instruments.map((instrument) => instrument.id);
@@ -214,23 +225,35 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
         instruments,
         scoreInstrumentIds: scoreIdsForViewport(allIds),
         midiInstrumentIds: allIds,
-        audioPending: studyProcessingGateEnabled() && !studyAudioReady(activeSong),
+        audioPending:
+          studyProcessingGateEnabled() && !studyAudioReady(activeSong),
       });
     } catch (caught) {
-      if (caught instanceof Error && caught.message === 'study_score_failed') {
+      if (caught instanceof Error && caught.message === "study_score_failed") {
         setError(
           `A partitura de ${song.title} não pôde ser preparada. Peça ao maestro para reenviar o MusicXML.`,
         );
-      } else if (caught instanceof Error && caught.message === 'study_score_timeout') {
+      } else if (
+        caught instanceof Error &&
+        caught.message === "study_score_timeout"
+      ) {
         setError(
           `A partitura de ${song.title} ainda está sendo processada. Aguarde e tente novamente.`,
         );
-      } else if (caught instanceof Error && caught.message === 'study_parts_unavailable') {
+      } else if (
+        caught instanceof Error &&
+        caught.message === "study_parts_unavailable"
+      ) {
         setError(
           `Os naipes de ${song.title} ainda não estão disponíveis. Tente novamente em instantes.`,
         );
       } else {
-        setError(failureMessage(caught, `Não foi possível preparar a partitura de ${song.title}.`));
+        setError(
+          failureMessage(
+            caught,
+            `Não foi possível preparar a partitura de ${song.title}.`,
+          ),
+        );
       }
     } finally {
       setPreparingId(null);
@@ -238,24 +261,30 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
   };
 
   useEffect(() => {
-    if (!initialSongId || loading || !profileReady || openedSong.current === initialSongId) return;
+    if (
+      !initialSongId ||
+      loading ||
+      !profileReady ||
+      openedSong.current === initialSongId
+    )
+      return;
     openedSong.current = initialSongId;
     const song = songs.find((item) => String(item.id) === initialSongId);
     if (!song) {
-      setError('Essa música não está disponível para o seu perfil.');
+      setError("Essa música não está disponível para o seu perfil.");
       return;
     }
     void openSetup(song);
   }, [initialSongId, loading, openSetup, profileReady, songs]);
 
   const toggleInstrument = (
-    field: 'scoreInstrumentIds' | 'midiInstrumentIds',
+    field: "scoreInstrumentIds" | "midiInstrumentIds",
     instrumentId: string,
     checked: boolean,
   ) => {
     setSetup((current) => {
       if (!current) return current;
-      if (field === 'scoreInstrumentIds' && mobileStudyViewport()) {
+      if (field === "scoreInstrumentIds" && mobileStudyViewport()) {
         if (!checked) return current;
         return { ...current, scoreInstrumentIds: [instrumentId] };
       }
@@ -267,15 +296,18 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
   };
 
   const setAll = (
-    field: 'scoreInstrumentIds' | 'midiInstrumentIds',
+    field: "scoreInstrumentIds" | "midiInstrumentIds",
     checked: boolean,
   ) => {
     setSetup((current) => {
       if (!current) return current;
-      if (field === 'scoreInstrumentIds' && mobileStudyViewport()) return current;
+      if (field === "scoreInstrumentIds" && mobileStudyViewport())
+        return current;
       return {
         ...current,
-        [field]: checked ? current.instruments.map((instrument) => instrument.id) : [],
+        [field]: checked
+          ? current.instruments.map((instrument) => instrument.id)
+          : [],
       };
     });
   };
@@ -314,7 +346,7 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
             emptyMessage="Nenhuma música com partitura foi encontrada."
             noResultsMessage="Nenhuma música corresponde à busca."
             getRowLabel={(song) => song.title}
-            toolbarLabels={{ section: 'Controles das músicas para estudo' }}
+            toolbarLabels={{ section: "Controles das músicas para estudo" }}
             renderRowActions={(song) => (
               <SongStudyActions
                 song={song}
@@ -322,6 +354,34 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
                 onStart={() => void openSetup(song)}
               />
             )}
+            renderMobileRowActions={(song) => {
+              const watchUrl = youtubeWatchUrl(song.videoUrl ?? "");
+              return [
+                ...(watchUrl
+                  ? [
+                      {
+                        label: "Vídeo",
+                        icon: "smart_display",
+                        onSelect: () =>
+                          window.open(
+                            watchUrl,
+                            "_blank",
+                            "noopener,noreferrer",
+                          ),
+                      },
+                    ]
+                  : []),
+                {
+                  label: "Iniciar estudo",
+                  icon: "school",
+                  disabled:
+                    preparingId === String(song.id) ||
+                    (studyProcessingGateEnabled() &&
+                      song.studyScoreStatus === "failed"),
+                  onSelect: () => void openSetup(song),
+                },
+              ];
+            }}
           />
         </div>
       </section>
@@ -345,7 +405,10 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
                 <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                   Preparar estudo
                 </p>
-                <h2 id="study-setup-title" className="mt-1 text-xl font-semibold">
+                <h2
+                  id="study-setup-title"
+                  className="mt-1 text-xl font-semibold"
+                >
                   {setup.song.title}
                 </h2>
               </div>
@@ -365,17 +428,17 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
                   title="Mostrar na partitura"
                   description={
                     mobileStudyViewport()
-                      ? 'Escolha a pauta que ficará visível.'
-                      : 'Escolha as pautas que ficarão visíveis.'
+                      ? "Escolha a pauta que ficará visível."
+                      : "Escolha as pautas que ficarão visíveis."
                   }
                   instruments={setup.instruments}
                   selectedIds={setup.scoreInstrumentIds}
                   single={mobileStudyViewport()}
                   onToggle={(id, checked) =>
-                    toggleInstrument('scoreInstrumentIds', id, checked)
+                    toggleInstrument("scoreInstrumentIds", id, checked)
                   }
                   onToggleAll={(checked) =>
-                    setAll('scoreInstrumentIds', checked)
+                    setAll("scoreInstrumentIds", checked)
                   }
                 />
                 <InstrumentSelection
@@ -384,24 +447,24 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
                   instruments={setup.instruments}
                   selectedIds={setup.midiInstrumentIds}
                   onToggle={(id, checked) =>
-                    toggleInstrument('midiInstrumentIds', id, checked)
+                    toggleInstrument("midiInstrumentIds", id, checked)
                   }
                   onToggleAll={(checked) =>
-                    setAll('midiInstrumentIds', checked)
+                    setAll("midiInstrumentIds", checked)
                   }
                 />
               </div>
             ) : (
               <p className="p-6 text-sm text-[var(--muted)]">
-                A partitura não separa os instrumentos por partes. Ela será aberta
-                completa.
+                A partitura não separa os instrumentos por partes. Ela será
+                aberta completa.
               </p>
             )}
 
             {setup.audioPending ? (
               <p className="border-t border-[var(--border)] px-6 py-3 text-sm text-[var(--muted)]">
-                A partitura já pode ser aberta. O áudio de referência ainda está sendo gerado — o play
-                ficará disponível em breve.
+                A partitura já pode ser aberta. O áudio de referência ainda está
+                sendo gerado — o play ficará disponível em breve.
               </p>
             ) : null}
 
@@ -430,12 +493,14 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
                       setPreparingId(String(setup.song.id));
                       let didStart = false;
                       try {
-                        const score = setup.song.scores.find((item) => Boolean(item.url));
-                        if (!score?.url) throw new Error('score');
+                        const score = setup.song.scores.find((item) =>
+                          Boolean(item.url),
+                        );
+                        if (!score?.url) throw new Error("score");
                         let xml = setup.xml;
-                        if (!xml?.includes('<score')) {
+                        if (!xml?.includes("<score")) {
                           const response = await fetchAuthedAsset(score.url);
-                          if (!response.ok) throw new Error('score');
+                          if (!response.ok) throw new Error("score");
                           xml = await response.text();
                         }
                         onStart({
@@ -448,7 +513,12 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
                         });
                         didStart = true;
                       } catch (caught) {
-                        setError(failureMessage(caught, 'Não foi possível abrir a partitura.'));
+                        setError(
+                          failureMessage(
+                            caught,
+                            "Não foi possível abrir a partitura.",
+                          ),
+                        );
                       } finally {
                         setPreparingId(null);
                         setOpeningScore(false);
@@ -457,7 +527,11 @@ export function StudySongCatalog({ onStart, ownerId = null, personId = null, ini
                     })();
                   }}
                 >
-                  {openingScore ? <MusicLoader compact label="Carregando partitura…" /> : 'Continuar'}
+                  {openingScore ? (
+                    <MusicLoader compact label="Carregando partitura…" />
+                  ) : (
+                    "Continuar"
+                  )}
                 </button>
               </div>
             </footer>
@@ -477,41 +551,46 @@ function SongStudyActions({
   preparing: boolean;
   onStart: () => void;
 }) {
-  const watchUrl = youtubeWatchUrl(song.videoUrl ?? '');
+  const watchUrl = youtubeWatchUrl(song.videoUrl ?? "");
   const prepLabel = studyProcessingLabel(song);
   const blocked =
-    studyProcessingGateEnabled() &&
-    song.studyScoreStatus === 'failed';
+    studyProcessingGateEnabled() && song.studyScoreStatus === "failed";
   const waitingScore =
     studyProcessingGateEnabled() &&
     !studyScoreReady(song) &&
-    song.studyScoreStatus !== 'failed';
+    song.studyScoreStatus !== "failed";
   return (
-    <div className="flex shrink-0 flex-wrap justify-end gap-2">
+    <div className="flex min-h-11 w-full flex-wrap items-center justify-center gap-2">
       {watchUrl ? (
         <a
           href={watchUrl}
           target="_blank"
           rel="noreferrer"
-          className="btn-ghost inline-flex min-h-11 items-center gap-1.5"
+          className="btn-secondary inline-flex min-h-11 touch-manipulation cursor-pointer select-none items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
         >
-          <span className="material-icons text-base" aria-hidden>smart_display</span>
+          <span className="material-icons text-base text-current" aria-hidden>
+            smart_display
+          </span>
           Vídeo
         </a>
       ) : null}
       <button
         type="button"
-        className="btn-primary min-h-11"
+        className="btn-primary inline-flex min-h-11 touch-manipulation cursor-pointer select-none items-center disabled:cursor-not-allowed disabled:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
         disabled={preparing || blocked}
         onClick={onStart}
         title={prepLabel ?? undefined}
       >
         {preparing || waitingScore ? (
-          <MusicLoader compact label={waitingScore ? 'Processando…' : 'Preparando…'} />
+          <MusicLoader
+            compact
+            label={waitingScore ? "Processando…" : "Preparando…"}
+            tone="current"
+          />
         ) : blocked ? (
-          'Indisponível'
+          "Indisponível"
         ) : (
-          'Iniciar estudo'
+          "Iniciar estudo"
         )}
       </button>
     </div>
@@ -519,7 +598,10 @@ function SongStudyActions({
 }
 
 function mobileStudyViewport() {
-  return typeof window !== 'undefined' && window.matchMedia('(max-width: 600px)').matches;
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia("(max-width: 600px)").matches
+  );
 }
 
 function scoreIdsForViewport(ids: string[]) {
@@ -573,8 +655,8 @@ function InstrumentSelection({
             className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-[var(--card-secondary)]"
           >
             <input
-              type={single ? 'radio' : 'checkbox'}
-              name={single ? 'study-setup-score' : undefined}
+              type={single ? "radio" : "checkbox"}
+              name={single ? "study-setup-score" : undefined}
               checked={selected.has(instrument.id)}
               onChange={(event) =>
                 onToggle(instrument.id, single ? true : event.target.checked)

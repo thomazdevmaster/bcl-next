@@ -1,6 +1,7 @@
 "use client";
 
 import { EntityDialog } from "../../shared/EntityDialog";
+import { tableButtonMotion } from "../core/tableMotion";
 
 interface TableResetConfirmationDialogProps {
   open: boolean;
@@ -20,7 +21,7 @@ export function TableResetConfirmationDialog({ open, onClose, onConfirm }: Table
         <button
           type="button"
           onClick={onClose}
-          className="min-h-11 cursor-pointer rounded-[var(--radius)] border border-[var(--border)] px-4 text-sm font-medium hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
+          className={`min-h-11 rounded-[var(--radius)] border border-[var(--border)] px-4 text-sm font-medium hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${tableButtonMotion}`}
         >
           Cancelar
         </button>
@@ -33,7 +34,7 @@ export function TableResetConfirmationDialog({ open, onClose, onConfirm }: Table
               onClose();
             }
           }}
-          className="min-h-11 cursor-pointer rounded-[var(--radius)] bg-[var(--destructive)] px-4 text-sm font-medium text-[var(--destructive-foreground)] hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
+          className={`min-h-11 rounded-[var(--radius)] bg-[var(--destructive)] px-4 text-sm font-medium text-[var(--destructive-foreground)] hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${tableButtonMotion}`}
         >
           Redefinir tabela
         </button>

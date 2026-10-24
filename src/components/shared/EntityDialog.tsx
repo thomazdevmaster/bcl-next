@@ -13,11 +13,12 @@ export interface EntityDialogProps {
   size?: EntityDialogSize;
   placement?: EntityDialogPlacement;
   /**
-   * Formulários com campos: false (só X, Cancelar, Salvar etc.).
-   * Informativas / confirmação sem campos: true — fecha no backdrop, Esc e clique fora de controles.
+   * Padrão: true — fecha no backdrop e com Esc. Formulários com campos devem
+   * definir false para exigir uma ação explícita de saída.
    */
   closeOnBackdropClick?: boolean;
   onClose: () => void;
+  onCloseComplete?: () => void;
   children: ReactNode;
 }
 
@@ -29,22 +30,12 @@ const sizeClasses: Record<EntityDialogSize, string> = {
 };
 
 const placementClasses: Record<EntityDialogPlacement, string> = {
-  center:
-    "fixed inset-0 m-auto max-h-[min(92dvh,48rem)] w-[calc(100%-1rem)] rounded-2xl sm:w-[calc(100%-2rem)]",
+  center: "fixed inset-0 m-auto max-h-[min(92dvh,48rem)] w-[calc(100%-1rem)] rounded-2xl sm:w-[calc(100%-2rem)]",
   bottom:
     "fixed inset-x-0 bottom-0 m-0 max-h-[100dvh] w-full rounded-t-2xl sm:inset-0 sm:m-auto sm:max-h-[92dvh] sm:w-[calc(100%-2rem)] sm:rounded-2xl",
 };
 
 const CLOSE_MS = 180;
-
-function isInteractiveDismissTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false;
-  return Boolean(
-    target.closest(
-      'button, a, input, select, textarea, label, [role="button"], [role="link"], [contenteditable="true"]',
-    ),
-  );
-}
 
 export function EntityDialog({
   open,
@@ -52,21 +43,28 @@ export function EntityDialog({
   description,
   size = "md",
   placement = "center",
-  closeOnBackdropClick = false,
+  closeOnBackdropClick = true,
   onClose,
+  onCloseComplete,
   children,
 }: EntityDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onCloseRef = useRef(onClose);
+  const onCloseCompleteRef = useRef(onCloseComplete);
+  const openRef = useRef(open);
   const [renderOpen, setRenderOpen] = useState(open);
-  const [closing, setClosing] = useState(false);
   const titleId = useId();
   const descriptionId = useId();
 
   useEffect(() => {
     onCloseRef.current = onClose;
-  }, [onClose]);
+    onCloseCompleteRef.current = onCloseComplete;
+  }, [onClose, onCloseComplete]);
+
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
 
   const clearCloseTimeout = useCallback(() => {
     if (closeTimeoutRef.current) {
@@ -76,53 +74,42 @@ export function EntityDialog({
   }, []);
 
   const finishDomClose = useCallback(() => {
+    if (openRef.current) return;
     const dialog = dialogRef.current;
     if (dialog?.open) dialog.close();
-    setClosing(false);
     setRenderOpen(false);
+    onCloseCompleteRef.current?.();
   }, []);
 
   const requestClose = useCallback(
     (notifyParent: boolean) => {
-      const dialog = dialogRef.current;
-      if (!dialog?.open || closing) {
-        if (!open) {
-          clearCloseTimeout();
-          finishDomClose();
-        }
-        return;
-      }
-
-      clearCloseTimeout();
-
+      if (!dialogRef.current?.open) return;
       if (notifyParent) onCloseRef.current();
-
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        finishDomClose();
-        return;
-      }
-
-      setClosing(true);
-      closeTimeoutRef.current = setTimeout(() => {
-        closeTimeoutRef.current = null;
-        finishDomClose();
-      }, CLOSE_MS);
     },
-    [clearCloseTimeout, closing, finishDomClose, open],
+    [],
   );
 
-  // Sincroniza `open` controlado com o ciclo de animação do <dialog> (mount/unmount).
+  // A prop controlada dirige o ciclo: reabrir cancela qualquer saída pendente.
   useEffect(() => {
     if (open) {
-      if (closing) return;
       clearCloseTimeout();
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- estado de portal/animacao
-      setRenderOpen(true);
+      if (!renderOpen) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- mounta novamente o portal ao reabrir
+        setRenderOpen(true);
+      }
       return;
     }
     if (!renderOpen) return;
-    requestClose(false);
-  }, [clearCloseTimeout, closing, open, renderOpen, requestClose]);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      finishDomClose();
+      return;
+    }
+    closeTimeoutRef.current = setTimeout(() => {
+      closeTimeoutRef.current = null;
+      finishDomClose();
+    }, CLOSE_MS);
+    return clearCloseTimeout;
+  }, [clearCloseTimeout, finishDomClose, open, renderOpen]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -146,7 +133,13 @@ export function EntityDialog({
       ref={dialogRef}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
-      data-closing={closing ? "true" : undefined}
+      data-closing={!open ? "true" : undefined}
+      onKeyDownCapture={(event) => {
+        if (event.key !== "Escape" || !closeOnBackdropClick) return;
+        event.preventDefault();
+        event.stopPropagation();
+        requestClose(true);
+      }}
       onCancel={(event) => {
         event.preventDefault();
         if (closeOnBackdropClick) requestClose(true);
@@ -154,12 +147,18 @@ export function EntityDialog({
       onClick={(event) => {
         if (closeOnBackdropClick && event.target === event.currentTarget) requestClose(true);
       }}
-      className={`flex translate-y-3 flex-col overflow-hidden border border-[var(--border)] bg-[var(--card)] p-0 text-[var(--foreground)] opacity-0 shadow-lg transition-[opacity,transform,box-shadow,display] transition-discrete duration-[240ms] ease-[cubic-bezier(0.2,0,0,1)] starting:translate-y-3 starting:opacity-0 starting:shadow-lg open:translate-y-0 open:opacity-100 open:shadow-2xl open:data-[closing=true]:translate-y-2 open:data-[closing=true]:opacity-0 open:data-[closing=true]:shadow-lg open:data-[closing=true]:duration-[180ms] motion-reduce:translate-y-0 motion-reduce:transition-none backdrop:bg-black/0 backdrop:transition-colors backdrop:duration-[240ms] starting:backdrop:bg-black/0 open:backdrop:bg-black/50 open:data-[closing=true]:backdrop:bg-black/0 open:data-[closing=true]:backdrop:duration-[180ms] motion-reduce:backdrop:transition-none ${placementClasses[placement]} ${sizeClasses[size]}`}
+      className={`flex ${placement === "bottom" ? "translate-y-full starting:translate-y-full open:data-[closing=true]:translate-y-full" : "translate-y-3 starting:translate-y-3 open:data-[closing=true]:translate-y-2"} flex-col overflow-hidden border border-[var(--border)] bg-[var(--card)] p-0 text-[var(--foreground)] opacity-0 shadow-lg transition-[opacity,transform,box-shadow,display] transition-discrete duration-[240ms] ease-[cubic-bezier(0.2,0,0,1)] starting:opacity-0 starting:shadow-lg open:translate-y-0 open:opacity-100 open:shadow-2xl open:data-[closing=true]:opacity-0 open:data-[closing=true]:shadow-lg open:data-[closing=true]:duration-[180ms] motion-reduce:translate-y-0 motion-reduce:transition-none backdrop:bg-black/0 backdrop:transition-colors backdrop:duration-[240ms] starting:backdrop:bg-black/0 open:backdrop:bg-black/50 open:data-[closing=true]:backdrop:bg-black/0 open:data-[closing=true]:backdrop:duration-[180ms] motion-reduce:backdrop:transition-none ${placementClasses[placement]} ${sizeClasses[size]}`}
     >
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3 sm:px-6">
         <div className="min-w-0">
-          <h2 id={titleId} className="text-lg font-semibold">{title}</h2>
-          {description && <p id={descriptionId} className="mt-1 text-sm text-[var(--muted)]">{description}</p>}
+          <h2 id={titleId} className="text-lg font-semibold">
+            {title}
+          </h2>
+          {description && (
+            <p id={descriptionId} className="mt-1 text-sm text-[var(--muted)]">
+              {description}
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -167,18 +166,15 @@ export function EntityDialog({
           onClick={() => requestClose(true)}
           className="group inline-flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-[var(--radius)] text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
         >
-          <span className="material-icons transition-transform duration-150 group-hover:rotate-90 motion-reduce:transition-none motion-reduce:group-hover:rotate-0" aria-hidden="true">close</span>
+          <span
+            className="material-icons transition-transform duration-150 group-hover:rotate-90 motion-reduce:transition-none motion-reduce:group-hover:rotate-0"
+            aria-hidden="true"
+          >
+            close
+          </span>
         </button>
       </header>
-      <div
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto"
-        onClick={(event) => {
-          if (!closeOnBackdropClick || isInteractiveDismissTarget(event.target)) return;
-          requestClose(true);
-        }}
-      >
-        {children}
-      </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
     </dialog>,
     document.body,
   );
