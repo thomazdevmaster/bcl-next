@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 export type IconSelectOption<Value extends string> = {
   value: Value;
   label: string;
-  icon: string;
+  icon?: string;
 };
 
 type SingleSelectProps<Value extends string> = {
@@ -102,7 +102,7 @@ export function IconSelect<Value extends string>(props: IconSelectProps<Value>) 
               <button
                 key={option.value}
                 type="button"
-                role={props.multiple ? 'menuitemcheckbox' : 'menuitemradio'}
+                role={props.multiple ? "menuitemcheckbox" : "menuitemradio"}
                 aria-checked={selected}
                 onClick={() => {
                   if (props.multiple) {
@@ -118,9 +118,11 @@ export function IconSelect<Value extends string>(props: IconSelectProps<Value>) 
                 }}
                 className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)] ${selected ? "bg-[var(--card-secondary)] text-[var(--foreground)]" : "text-[var(--muted)] hover:bg-[var(--card-secondary)]"}`}
               >
-                <span className="material-icons text-lg" aria-hidden="true">
-                  {option.icon}
-                </span>
+                {option.icon ? (
+                  <span className="material-icons text-lg" aria-hidden="true">
+                    {option.icon}
+                  </span>
+                ) : null}
                 <span className="min-w-0 flex-1">{option.label}</span>
                 {selected ? (
                   <span className="material-icons text-lg" aria-hidden="true">

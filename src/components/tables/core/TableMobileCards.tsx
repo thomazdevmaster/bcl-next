@@ -36,6 +36,9 @@ export function TableMobileCards<TData extends RowData>({
   noResultsMessage,
   renderHeaderExtra,
   getRowLabel,
+  getMobilePrimary,
+  getMobilePrimaryLabel,
+  mobilePrimaryLabel,
   renderRowActions,
   rowPinningEnabled,
   mobileSelectionEnabled,
@@ -49,6 +52,9 @@ export function TableMobileCards<TData extends RowData>({
   noResultsMessage: string;
   renderHeaderExtra?: (row: Row<typeof tableFeatures, TData>) => ReactNode;
   getRowLabel?: (row: TData) => string;
+  getMobilePrimary?: (row: TData) => ReactNode;
+  getMobilePrimaryLabel?: (row: TData) => ReactNode;
+  mobilePrimaryLabel?: string;
   renderRowActions?: (row: TData) => MobileTableAction[];
   rowPinningEnabled: boolean;
   mobileSelectionEnabled: boolean;
@@ -112,9 +118,9 @@ export function TableMobileCards<TData extends RowData>({
               cell.column.id !== ROW_ACTIONS_ID,
           );
           const rowLabel = getRowLabel?.(row.original) ?? row.id;
-          const primaryLabel = primary
-            ? columnLabel(primary.column.columnDef.header, primary.column.id)
-            : "Registro";
+          const primaryLabel =
+            mobilePrimaryLabel ??
+            (primary ? columnLabel(primary.column.columnDef.header, primary.column.id) : "Registro");
           const pinned = row.getIsPinned() === "top";
           const actions = renderRowActions?.(row.original) ?? [];
           const menuOpen = openMenuId === row.id;
@@ -218,11 +224,17 @@ export function TableMobileCards<TData extends RowData>({
                 <div className="min-w-0 flex-1">
                   <div className="flex min-h-5 items-center">
                     <p className="text-xs font-medium text-[var(--muted)]">
-                      {primaryLabel}
+                      {getMobilePrimaryLabel ? getMobilePrimaryLabel(row.original) : primaryLabel}
                     </p>
                   </div>
                   <div className="mt-1 break-words text-base font-semibold leading-snug text-[var(--foreground)]">
-                    {primary ? <table.FlexRender cell={primary} /> : row.id}
+                    {getMobilePrimary ? (
+                      getMobilePrimary(row.original)
+                    ) : primary ? (
+                      <table.FlexRender cell={primary} />
+                    ) : (
+                      row.id
+                    )}
                   </div>
                 </div>
                 {headerExtra ||

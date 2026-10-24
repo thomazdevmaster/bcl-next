@@ -3,19 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 import { Subscribe, createColumnHelper, useTable } from "@tanstack/react-table";
-import type {
-  CellSelectionState,
-  ReactTable,
-  RowData,
-} from "@tanstack/react-table";
+import type { CellSelectionState, ReactTable, RowData } from "@tanstack/react-table";
 import { useCreateAtom } from "@tanstack/react-store";
 import { DndContext, closestCenter } from "@dnd-kit/core";
 import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
-import {
-  SortableContext,
-  horizontalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { MusicLoader } from "@/components/MusicLoader";
+import { EntityDialog } from "@/components/shared/EntityDialog";
 import { TableCell } from "../cells/TableCell";
 import { TableAnimatedRow } from "../cells/TableAnimatedRow";
 import { tableButtonMotion, tableIconMotion } from "./tableMotion";
@@ -54,20 +48,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isColumnPresentation(
-  value: unknown,
-): value is TableColumnPresentation {
+function isColumnPresentation(value: unknown): value is TableColumnPresentation {
   if (!isRecord(value)) return false;
   return (
-    (value.alignment === "left" ||
-      value.alignment === "center" ||
-      value.alignment === "right") &&
+    (value.alignment === "left" || value.alignment === "center" || value.alignment === "right") &&
     (value.verticalAlignment === "top" ||
       value.verticalAlignment === "middle" ||
       value.verticalAlignment === "bottom") &&
-    (value.textTransform === "none" ||
-      value.textTransform === "uppercase" ||
-      value.textTransform === "lowercase") &&
+    (value.textTransform === "none" || value.textTransform === "uppercase" || value.textTransform === "lowercase") &&
     typeof value.bold === "boolean" &&
     typeof value.italic === "boolean" &&
     typeof value.underline === "boolean" &&
@@ -77,20 +65,10 @@ function isColumnPresentation(
   );
 }
 
-function parseTablePreferences(
-  value: unknown,
-): PersistedTablePreferences | null {
-  if (!isRecord(value) || value.version !== TABLE_PREFERENCES_VERSION)
-    return null;
-  if (
-    !Array.isArray(value.columnOrder) ||
-    !value.columnOrder.every((id) => typeof id === "string")
-  )
-    return null;
-  if (
-    !isRecord(value.columnPresentations) ||
-    !Object.values(value.columnPresentations).every(isColumnPresentation)
-  )
+function parseTablePreferences(value: unknown): PersistedTablePreferences | null {
+  if (!isRecord(value) || value.version !== TABLE_PREFERENCES_VERSION) return null;
+  if (!Array.isArray(value.columnOrder) || !value.columnOrder.every((id) => typeof id === "string")) return null;
+  if (!isRecord(value.columnPresentations) || !Object.values(value.columnPresentations).every(isColumnPresentation))
     return null;
   if (
     !isRecord(value.columnPinning) ||
@@ -98,23 +76,16 @@ function parseTablePreferences(
     !value.columnPinning.start.every((id) => typeof id === "string")
   )
     return null;
-  if (
-    !Array.isArray(value.columnPinning.end) ||
-    !value.columnPinning.end.every((id) => typeof id === "string")
-  )
+  if (!Array.isArray(value.columnPinning.end) || !value.columnPinning.end.every((id) => typeof id === "string"))
     return null;
   if (
     !isRecord(value.columnSizing) ||
-    !Object.values(value.columnSizing).every(
-      (size) => typeof size === "number" && Number.isFinite(size),
-    )
+    !Object.values(value.columnSizing).every((size) => typeof size === "number" && Number.isFinite(size))
   )
     return null;
   if (
     !isRecord(value.columnVisibility) ||
-    !Object.values(value.columnVisibility).every(
-      (visible) => typeof visible === "boolean",
-    )
+    !Object.values(value.columnVisibility).every((visible) => typeof visible === "boolean")
   )
     return null;
 
@@ -168,6 +139,9 @@ export interface TableViewProps<TData extends RowData> {
   renderMobileCardHeaderExtra?: (row: TData) => ReactNode;
   renderMobileRowActions?: (row: TData) => MobileTableAction[];
   getRowLabel?: (row: TData) => string;
+  mobilePrimaryLabel?: string;
+  getMobilePrimary?: (row: TData) => ReactNode;
+  getMobilePrimaryLabel?: (row: TData) => ReactNode;
   features?: TableViewFeatures;
   toolbarLabels?: Partial<TableToolbarLabels>;
   pageSizeOptions?: number[];
@@ -193,11 +167,7 @@ function sameOffsets(previous: PinnedOffsets, next: PinnedOffsets) {
   });
 }
 
-type TableInstance<TData extends RowData> = ReactTable<
-  typeof tableFeatures,
-  TData,
-  TableState
->;
+type TableInstance<TData extends RowData> = ReactTable<typeof tableFeatures, TData, TableState>;
 
 function CellSelectionHotkeys<TData extends RowData>({
   table,
@@ -225,6 +195,9 @@ export function TableView<TData extends RowData>({
   renderMobileCardHeaderExtra,
   renderMobileRowActions,
   getRowLabel,
+  mobilePrimaryLabel,
+  getMobilePrimary,
+  getMobilePrimaryLabel,
   features,
   toolbarLabels,
   pageSizeOptions = DEFAULT_PAGE_SIZES,
@@ -234,8 +207,7 @@ export function TableView<TData extends RowData>({
   onDeleteSelected,
 }: TableViewProps<TData>) {
   const rowControlsEnabled =
-    features?.rowControls !== false &&
-    (features?.rowSelection !== false || features?.rowPinning !== false);
+    features?.rowControls !== false && (features?.rowSelection !== false || features?.rowPinning !== false);
   const rowSelectionEnabled = features?.rowSelection !== false;
   const rowPinningEnabled = features?.rowPinning !== false;
   // Cell selection remains available as an opt-in feature, but is off by default.
@@ -301,20 +273,11 @@ export function TableView<TData extends RowData>({
                       aria-label={`${row.getIsPinned() === "top" ? "Desafixar" : "Fixar"} linha ${getRowLabel?.(row.original) ?? row.id}`}
                       aria-pressed={row.getIsPinned() === "top"}
                       disabled={!row.getCanPin()}
-                      onClick={() =>
-                        row.pin(row.getIsPinned() === "top" ? false : "top")
-                      }
-                      title={
-                        row.getIsPinned() === "top"
-                          ? "Desafixar linha"
-                          : "Fixar linha"
-                      }
+                      onClick={() => row.pin(row.getIsPinned() === "top" ? false : "top")}
+                      title={row.getIsPinned() === "top" ? "Desafixar linha" : "Fixar linha"}
                       className={`group inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-[var(--radius)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-65 max-[959px]:hidden ${tableButtonMotion} ${row.getIsPinned() === "top" ? "bg-[var(--accent)] text-[var(--accent-foreground)]" : "text-[var(--info)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]"}`}
                     >
-                      <span
-                        className={`material-icons text-base ${tableIconMotion}`}
-                        aria-hidden="true"
-                      >
+                      <span className={`material-icons text-base ${tableIconMotion}`} aria-hidden="true">
                         push_pin
                       </span>
                     </button>
@@ -338,20 +301,12 @@ export function TableView<TData extends RowData>({
           enableHiding: false,
           enableCellSelection: false,
           enableCellSpanning: false,
-          cell: ({ row }) =>
-            row.getIsGrouped() ? null : renderRowActions(row.original),
+          cell: ({ row }) => (row.getIsGrouped() ? null : renderRowActions(row.original)),
         }),
       );
     }
     return result;
-  }, [
-    columns,
-    getRowLabel,
-    renderRowActions,
-    rowControlsEnabled,
-    rowPinningEnabled,
-    rowSelectionEnabled,
-  ]);
+  }, [columns, getRowLabel, renderRowActions, rowControlsEnabled, rowPinningEnabled, rowSelectionEnabled]);
 
   const cellSelectionAtom = useCreateAtom<CellSelectionState>([]);
   const table = useTable(
@@ -361,9 +316,7 @@ export function TableView<TData extends RowData>({
       columns: tableColumns,
       data,
       getRowId,
-      enableRowSelection: rowSelectionEnabled
-        ? (row) => canSelectRow?.(row.original) ?? true
-        : false,
+      enableRowSelection: rowSelectionEnabled ? (row) => canSelectRow?.(row.original) ?? true : false,
       enableRowPinning: rowPinningEnabled,
       enableCellSelection: cellSelectionEnabled,
       enableCellSpanning: features?.cellSpanning !== false,
@@ -424,10 +377,9 @@ export function TableView<TData extends RowData>({
   });
   const [resetKey, setResetKey] = useState(0);
   const [resetConfirmationOpen, setResetConfirmationOpen] = useState(false);
+  const [clearSelectionConfirmationOpen, setClearSelectionConfirmationOpen] = useState(false);
   const [availableTableWidth, setAvailableTableWidth] = useState(0);
-  const [columnPresentations, setColumnPresentations] = useState<
-    Record<string, TableColumnPresentation>
-  >({});
+  const [columnPresentations, setColumnPresentations] = useState<Record<string, TableColumnPresentation>>({});
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const preferencesTableRef = useRef(table);
   const persistenceSnapshotRef = useRef<string | null>(null);
@@ -437,24 +389,16 @@ export function TableView<TData extends RowData>({
 
   useEffect(() => {
     const preferencesTable = preferencesTableRef.current;
-    const knownColumnIds = preferencesTable
-      .getAllLeafColumns()
-      .map((column) => column.id);
+    const knownColumnIds = preferencesTable.getAllLeafColumns().map((column) => column.id);
     const knownColumnIdSet = new Set(knownColumnIds);
-    persistenceSnapshotRef.current = serializeTablePreferences(
-      preferencesTable.state,
-      {},
-    );
+    persistenceSnapshotRef.current = serializeTablePreferences(preferencesTable.state, {});
 
     let storedPreferences: PersistedTablePreferences | null = null;
     try {
       const serialized = window.localStorage.getItem(preferencesStorageKey);
       if (serialized) {
-        storedPreferences = parseTablePreferences(
-          JSON.parse(serialized) as unknown,
-        );
-        if (!storedPreferences)
-          window.localStorage.removeItem(preferencesStorageKey);
+        storedPreferences = parseTablePreferences(JSON.parse(serialized) as unknown);
+        if (!storedPreferences) window.localStorage.removeItem(preferencesStorageKey);
       }
     } catch {
       try {
@@ -469,35 +413,21 @@ export function TableView<TData extends RowData>({
         storedPreferences.columnOrder.length === 0
           ? []
           : [
-              ...storedPreferences.columnOrder.filter((id) =>
-                knownColumnIdSet.has(id),
-              ),
-              ...knownColumnIds.filter(
-                (id) => !storedPreferences.columnOrder.includes(id),
-              ),
+              ...storedPreferences.columnOrder.filter((id) => knownColumnIdSet.has(id)),
+              ...knownColumnIds.filter((id) => !storedPreferences.columnOrder.includes(id)),
             ];
       const columnPinning: TableState["columnPinning"] = {
-        start: storedPreferences.columnPinning.start.filter((id) =>
-          knownColumnIdSet.has(id),
-        ),
-        end: storedPreferences.columnPinning.end.filter((id) =>
-          knownColumnIdSet.has(id),
-        ),
+        start: storedPreferences.columnPinning.start.filter((id) => knownColumnIdSet.has(id)),
+        end: storedPreferences.columnPinning.end.filter((id) => knownColumnIdSet.has(id)),
       };
       const columnSizing = Object.fromEntries(
-        Object.entries(storedPreferences.columnSizing).filter(([id]) =>
-          knownColumnIdSet.has(id),
-        ),
+        Object.entries(storedPreferences.columnSizing).filter(([id]) => knownColumnIdSet.has(id)),
       );
       const columnVisibility = Object.fromEntries(
-        Object.entries(storedPreferences.columnVisibility).filter(([id]) =>
-          knownColumnIdSet.has(id),
-        ),
+        Object.entries(storedPreferences.columnVisibility).filter(([id]) => knownColumnIdSet.has(id)),
       );
       const savedPresentations = Object.fromEntries(
-        Object.entries(storedPreferences.columnPresentations).filter(([id]) =>
-          knownColumnIdSet.has(id),
-        ),
+        Object.entries(storedPreferences.columnPresentations).filter(([id]) => knownColumnIdSet.has(id)),
       );
       const restoredPreferences: PersistedTablePreferences = {
         version: TABLE_PREFERENCES_VERSION,
@@ -522,9 +452,7 @@ export function TableView<TData extends RowData>({
       if (storedPreferences) {
         setColumnPresentations(storedPreferences.columnPresentations);
       } else {
-        setColumnPresentations((current) =>
-          Object.keys(current).length === 0 ? current : {},
-        );
+        setColumnPresentations((current) => (Object.keys(current).length === 0 ? current : {}));
       }
       setPreferencesLoaded(true);
     });
@@ -534,13 +462,9 @@ export function TableView<TData extends RowData>({
   }, [preferencesStorageKey, tableId]);
 
   useEffect(() => {
-    if (!preferencesLoaded || loadedPreferencesTableRef.current !== tableId)
-      return;
+    if (!preferencesLoaded || loadedPreferencesTableRef.current !== tableId) return;
 
-    const serialized = serializeTablePreferences(
-      table.state,
-      columnPresentations,
-    );
+    const serialized = serializeTablePreferences(table.state, columnPresentations);
     if (skipPreferencesPersistenceRef.current) {
       skipPreferencesPersistenceRef.current = false;
       persistenceSnapshotRef.current = serialized;
@@ -590,20 +514,14 @@ export function TableView<TData extends RowData>({
       const currentBottomIds = bottomRowIds ? bottomRowIds.split("\u0000") : [];
       currentTopIds.forEach((id, index) => {
         next.top[id] = topOffset;
-        topOffset +=
-          body.children.item(index)?.getBoundingClientRect().height ?? 0;
+        topOffset += body.children.item(index)?.getBoundingClientRect().height ?? 0;
       });
       let bottomOffset = 0;
       for (let index = currentBottomIds.length - 1; index >= 0; index -= 1) {
         next.bottom[currentBottomIds[index]] = bottomOffset;
-        bottomOffset +=
-          body.children
-            .item(topRowCount + centerRowCount + index)
-            ?.getBoundingClientRect().height ?? 0;
+        bottomOffset += body.children.item(topRowCount + centerRowCount + index)?.getBoundingClientRect().height ?? 0;
       }
-      setPinnedOffsets((previous) =>
-        sameOffsets(previous, next) ? previous : next,
-      );
+      setPinnedOffsets((previous) => (sameOffsets(previous, next) ? previous : next));
     };
 
     const observer = new ResizeObserver(measure);
@@ -618,29 +536,16 @@ export function TableView<TData extends RowData>({
     }
     measure();
     return () => observer.disconnect();
-  }, [
-    data,
-    topRowIds,
-    bottomRowIds,
-    topRowCount,
-    centerRowCount,
-    bottomRowCount,
-  ]);
+  }, [data, topRowIds, bottomRowIds, topRowCount, centerRowCount, bottomRowCount]);
 
   const visibleColumns = table.getVisibleLeafColumns();
   const columnSizes = getExpandedColumnSizes(
     visibleColumns.map((column) => ({
       id: column.id,
       size: column.getSize(),
-      maxSize:
-        column.columnDef.maxSize ??
-        table.getDefaultColumnDef().maxSize ??
-        Number.MAX_SAFE_INTEGER,
+      maxSize: column.columnDef.maxSize ?? table.getDefaultColumnDef().maxSize ?? Number.MAX_SAFE_INTEGER,
       canResize: column.getCanResize(),
-      manuallySized: Object.prototype.hasOwnProperty.call(
-        table.state.columnSizing,
-        column.id,
-      ),
+      manuallySized: Object.prototype.hasOwnProperty.call(table.state.columnSizing, column.id),
     })),
     availableTableWidth,
   );
@@ -652,30 +557,28 @@ export function TableView<TData extends RowData>({
   for (const header of table.getFlatHeaders()) {
     const headerSize = header
       .getLeafHeaders()
-      .reduce(
-        (total, leafHeader) =>
-          total +
-          (columnSizes[leafHeader.column.id] ?? leafHeader.column.getSize()),
-        0,
-      );
+      .reduce((total, leafHeader) => total + (columnSizes[leafHeader.column.id] ?? leafHeader.column.getSize()), 0);
     columnSizeVars[`--header-${header.id}-size`] = headerSize;
-    columnSizeVars[`--col-${header.column.id}-size`] =
-      columnSizes[header.column.id] ?? header.column.getSize();
+    columnSizeVars[`--col-${header.column.id}-size`] = columnSizes[header.column.id] ?? header.column.getSize();
   }
   const sortableColumns = table.getAllLeafColumns().map((column) => column.id);
   const totalRowCount = table.getCoreRowModel().flatRows.length;
   const selectedRows = table.getSelectedRowModel().flatRows;
   const selectedRowCount = selectedRows.length;
+  const selectableFilteredRows = table.getFilteredRowModel().flatRows.filter((row) => row.getCanSelect());
+  const allFilteredRowsSelected =
+    selectableFilteredRows.length > 0 && selectableFilteredRows.every((row) => row.getIsSelected());
   const noData = data.length === 0;
 
   return (
     <section className="flex min-w-0 flex-col gap-4 text-[var(--foreground)]">
-      {cellSelectionEnabled && (
-        <CellSelectionHotkeys table={table} target={tableRef} />
-      )}
+      {cellSelectionEnabled && <CellSelectionHotkeys table={table} target={tableRef} />}
       <TableToolbar
         searchValue={String(table.state.globalFilter ?? "")}
-        onSearchChange={(value) => table.setGlobalFilter(String(value))}
+        onSearchChange={(value) => {
+          table.setGlobalFilter(String(value));
+          table.setPageIndex(0);
+        }}
         resetKey={resetKey}
         onRefresh={onRefresh}
         isLoading={loading}
@@ -689,12 +592,7 @@ export function TableView<TData extends RowData>({
         onSelectAllRows={() => table.toggleAllRowsSelected(true)}
         selectedCellCount={
           <Subscribe source={table.atoms.cellSelection}>
-            {() => (
-              <span>
-                {table.getSelectedCellCount().toLocaleString("pt-BR")} células
-                selecionadas
-              </span>
-            )}
+            {() => <span>{table.getSelectedCellCount().toLocaleString("pt-BR")} células selecionadas</span>}
           </Subscribe>
         }
         onClearCells={() => table.resetCellSelection(true)}
@@ -703,10 +601,7 @@ export function TableView<TData extends RowData>({
         onToggleAllColumns={table.getToggleAllColumnsVisibilityHandler()}
         columns={table.getAllLeafColumns().map((column) => ({
           id: column.id,
-          label:
-            typeof column.columnDef.header === "string"
-              ? column.columnDef.header
-              : column.id,
+          label: typeof column.columnDef.header === "string" ? column.columnDef.header : column.id,
           checked: column.getIsVisible(),
           disabled: !column.getCanHide(),
           onChange: column.getToggleVisibilityHandler(),
@@ -735,6 +630,39 @@ export function TableView<TData extends RowData>({
           if (cellSelectionEnabled) table.resetCellSelection(true);
         }}
       />
+      <EntityDialog
+        open={clearSelectionConfirmationOpen}
+        title="Limpar seleção?"
+        size="sm"
+        closeOnBackdropClick
+        onClose={() => setClearSelectionConfirmationOpen(false)}
+      >
+        <div className="flex flex-col gap-3 p-5">
+          <p className="text-sm leading-relaxed text-[var(--muted)]">
+            Os {selectedRowCount} registros selecionados serão desmarcados.
+          </p>
+        </div>
+        <div className="flex flex-col-reverse justify-end gap-2 border-t border-[var(--border)] p-4 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => setClearSelectionConfirmationOpen(false)}
+            className="min-h-11 rounded-[var(--radius)] border border-[var(--border)] px-4 text-sm font-medium hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              table.resetRowSelection(true);
+              setMobileSelectionMode(false);
+              setClearSelectionConfirmationOpen(false);
+            }}
+            className="min-h-11 rounded-[var(--radius)] bg-[var(--info)] px-4 text-sm font-medium text-[var(--info-foreground)] hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
+          >
+            Limpar seleção
+          </button>
+        </div>
+      </EntityDialog>
 
       {loading && (
         <MusicLoader
@@ -748,9 +676,7 @@ export function TableView<TData extends RowData>({
           className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--destructive)]/40 bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]"
         >
           <span>{error}</span>
-          <TableActionButton onClick={onRefresh}>
-            Tentar novamente
-          </TableActionButton>
+          <TableActionButton onClick={onRefresh}>Tentar novamente</TableActionButton>
         </div>
       )}
       {!loading && !error && noData && (
@@ -764,61 +690,73 @@ export function TableView<TData extends RowData>({
         rowSelectionEnabled &&
         onDeleteSelected &&
         (mobileSelectionMode || selectedRowCount > 0) ? (
-          <div className="flex min-h-11 items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] px-3 py-2">
-            <span
-              className="text-sm font-medium text-[var(--foreground)]"
-              role="status"
-            >
-              {selectedRowCount} selecionado{selectedRowCount === 1 ? "" : "s"}
-            </span>
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-1 rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
               <TableActionButton
                 onClick={() => {
-                  table.resetRowSelection(true);
-                  setMobileSelectionMode(false);
-                }}
-              >
-                Limpar
-              </TableActionButton>
-              {selectedRowCount > 0 ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    onDeleteSelected(
-                      selectedRows.map((row) => row.original),
-                      () => {
-                        table.resetRowSelection(true);
-                        setMobileSelectionMode(false);
-                      },
-                    )
+                  if (allFilteredRowsSelected) {
+                    table.resetRowSelection(true);
+                    setMobileSelectionMode(false);
+                    return;
                   }
-                  className="btn-danger inline-flex min-h-11 items-center gap-2 px-3 text-sm"
-                >
-                  <span className="material-icons text-base" aria-hidden="true">
-                    delete
+                  const next = { ...table.atoms.rowSelection.get() };
+                  selectableFilteredRows.forEach((row) => (next[row.id] = true));
+                  table.setRowSelection(next);
+                }}
+                ariaLabel={
+                  allFilteredRowsSelected ? "Limpar seleção de todos os registros" : "Selecionar todos os registros"
+                }
+              >
+                <span className="material-icons" aria-hidden="true">
+                  {allFilteredRowsSelected ? "deselect" : "select_all"}
+                </span>
+              </TableActionButton>
+              <div className="flex items-center gap-2">
+                <TableActionButton onClick={() => setClearSelectionConfirmationOpen(true)} ariaLabel="Limpar seleção">
+                  <span className="material-icons" aria-hidden="true">
+                    cleaning_services
                   </span>
-                  Excluir
-                </button>
-              ) : null}
+                </TableActionButton>
+                {selectedRowCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onDeleteSelected(
+                        selectedRows.map((row) => row.original),
+                        () => {
+                          table.resetRowSelection(true);
+                          setMobileSelectionMode(false);
+                        },
+                      )
+                    }
+                    aria-label={`Excluir ${selectedRowCount} registros selecionados`}
+                    title="Excluir selecionados"
+                    className="btn-danger inline-flex min-h-11 min-w-11 items-center justify-center rounded-[var(--radius)]"
+                  >
+                    <span className="material-icons text-base" aria-hidden="true">
+                      delete
+                    </span>
+                  </button>
+                ) : null}
+              </div>
             </div>
+            <p className="text-center text-lg font-semibold tabular-nums text-[var(--foreground)]" role="status">
+              {selectedRowCount.toLocaleString("pt-BR")}/{totalRowCount.toLocaleString("pt-BR")} selecionados
+            </p>
           </div>
         ) : null}
         <TableMobileCards
           table={table}
           rows={[...topRows, ...centerRows, ...bottomRows]}
-          noResults={
-            !loading &&
-            !error &&
-            !noData &&
-            table.getRowModel().rows.length === 0
-          }
+          noResults={!loading && !error && !noData && table.getFilteredRowModel().rows.length === 0}
           noResultsMessage={noResultsMessage}
           renderHeaderExtra={
-            renderMobileCardHeaderExtra
-              ? (row) => renderMobileCardHeaderExtra(row.original)
-              : undefined
+            renderMobileCardHeaderExtra ? (row) => renderMobileCardHeaderExtra(row.original) : undefined
           }
           getRowLabel={getRowLabel}
+          getMobilePrimary={getMobilePrimary}
+          getMobilePrimaryLabel={getMobilePrimaryLabel}
+          mobilePrimaryLabel={mobilePrimaryLabel}
           renderRowActions={renderMobileRowActions}
           rowPinningEnabled={rowPinningEnabled}
           mobileSelectionEnabled={mobileSelectionEnabled && rowSelectionEnabled}
@@ -831,11 +769,7 @@ export function TableView<TData extends RowData>({
       <div
         ref={tableRef}
         tabIndex={cellSelectionEnabled ? 0 : undefined}
-        aria-label={
-          cellSelectionEnabled
-            ? "Tabela; use as setas para navegar pelas células"
-            : "Tabela de dados"
-        }
+        aria-label={cellSelectionEnabled ? "Tabela; use as setas para navegar pelas células" : "Tabela de dados"}
         className="max-w-full overflow-auto rounded-xl border border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-soft)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] max-[959px]:hidden"
       >
         <table
@@ -845,24 +779,17 @@ export function TableView<TData extends RowData>({
           {/* Only headers participate in this drag context. TableCell uses the same column ids for display. */}
           <DndContext
             accessibility={{
-              container:
-                typeof document === "undefined" ? undefined : document.body,
+              container: typeof document === "undefined" ? undefined : document.body,
             }}
             collisionDetection={closestCenter}
             modifiers={[restrictToHorizontalAxis]}
             onDragEnd={handleDragEnd}
             sensors={columnReorderingEnabled ? sensors : []}
           >
-            <thead
-              ref={theadRef}
-              className="sticky top-0 z-10 bg-[var(--card-secondary)]"
-            >
+            <thead ref={theadRef} className="sticky top-0 z-10 bg-[var(--card-secondary)]">
               {table.getHeaderGroups().map((group) => (
                 <tr key={group.id}>
-                  <SortableContext
-                    items={sortableColumns}
-                    strategy={horizontalListSortingStrategy}
-                  >
+                  <SortableContext items={sortableColumns} strategy={horizontalListSortingStrategy}>
                     {group.headers.map((header) => (
                       <TableHeader
                         key={header.id}
@@ -880,9 +807,7 @@ export function TableView<TData extends RowData>({
                         }
                         resetKey={resetKey}
                         columnSizes={columnSizes}
-                        columnPresentation={
-                          columnPresentations[header.column.id]
-                        }
+                        columnPresentation={columnPresentations[header.column.id]}
                         onColumnPresentationChange={(presentation) => {
                           setColumnPresentations((current) => ({
                             ...current,
@@ -912,22 +837,13 @@ export function TableView<TData extends RowData>({
                 key={row.id}
                 source={table.atoms.cellSelection}
                 selector={(ranges) =>
-                  rowSelectionKey(
-                    ranges,
-                    table.getCellSelectionBounds(),
-                    row.getDisplayIndex(),
-                    row.id,
-                  )
+                  rowSelectionKey(ranges, table.getCellSelectionBounds(), row.getDisplayIndex(), row.id)
                 }
               >
                 {() => (
                   <TableAnimatedRow index={row.getDisplayIndex()}>
                     {row.getVisibleCells().map((cell) => (
-                      <SortableContext
-                        key={cell.id}
-                        items={sortableColumns}
-                        strategy={horizontalListSortingStrategy}
-                      >
+                      <SortableContext key={cell.id} items={sortableColumns} strategy={horizontalListSortingStrategy}>
                         <TableCell
                           cell={cell}
                           table={table}
@@ -950,19 +866,16 @@ export function TableView<TData extends RowData>({
                 columnPresentations={columnPresentations}
               />
             ))}
-            {!loading &&
-              !error &&
-              !noData &&
-              table.getRowModel().rows.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={Math.max(1, table.getVisibleLeafColumns().length)}
-                    className="p-8 text-center text-sm text-[var(--muted)]"
-                  >
-                    {noResultsMessage}
-                  </td>
-                </tr>
-              )}
+            {!loading && !error && !noData && table.getFilteredRowModel().rows.length === 0 && (
+              <tr>
+                <td
+                  colSpan={Math.max(1, table.getVisibleLeafColumns().length)}
+                  className="p-8 text-center text-sm text-[var(--muted)]"
+                >
+                  {noResultsMessage}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
