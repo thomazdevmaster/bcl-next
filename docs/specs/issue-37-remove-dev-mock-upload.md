@@ -3,7 +3,7 @@
 - Issue: [#37 — Remover upload dev não autenticado com mock](https://github.com/thomazdevmaster/bcl-next/issues/37)
 - Status: **Em andamento**
 - Branch: `fix/issue-37-remove-upload-mock`
-- Commit base: `1b1cbcccddf83eebfe50ad867111afbd1eba52dc` (`origin/main`)
+- Commit base: `f9518a0dfa55e972a103dae381b110ea33a9e6fe` (`origin/main`)
 - Data da SPEC: 2026-10-24
 
 ## Objetivo
@@ -63,7 +63,8 @@ Não alterar os consumidores (`PostEditor`, `MediaSourceField` e `ProfilePhotoPi
 - Implementado em `src/app/bcl-api/uploads/route.ts` (removido) e `src/lib/uploadMedia.ts` (token obrigatório antes de `fetch`; Bearer obrigatório).
 - `npx eslint src/lib/uploadMedia.ts` passou.
 - `npx tsc --noEmit` passou.
-- Nenhum teste automatizado foi adicionado ou executado. Não houve alteração de UI, então não foi necessário verificar layout no browser.
+- Uma verificação local com `fetch` interceptado confirmou que sem token o helper rejeita sem requisição e que com token envia multipart com Bearer.
+- `POST /bcl-api/uploads` no Next local respondeu 404. Nenhum teste automatizado do projeto foi adicionado ou executado. Não houve alteração de UI.
 - A rota catch-all existente responde 404 para `/bcl-api/uploads`, sem persistir o arquivo localmente.
 
 ## Estado do escopo
