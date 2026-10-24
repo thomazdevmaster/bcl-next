@@ -1,14 +1,14 @@
 # SPEC — Issue #37: remover upload dev não autenticado com mock
 
 - Issue: [#37 — Remover upload dev não autenticado com mock](https://github.com/thomazdevmaster/bcl-next/issues/37)
-- Status: **SPEC em revisão**
+- Status: **Em andamento**
 - Branch: `fix/issue-37-remove-upload-mock`
 - Commit base: `1b1cbcccddf83eebfe50ad867111afbd1eba52dc` (`origin/main`)
 - Data da SPEC: 2026-10-24
 
 ## Objetivo
 
-Remover o endpoint de upload local não autenticado do mock do Next.js. Uploads de arquivos devem usar a API configurada com uma sessão autenticada. A interface deve explicar e impedir o envio quando o mock está ativo ou quando não há sessão.
+Remover o Route Handler local `/bcl-api/uploads` e impedir que o helper envie arquivos sem token. Os uploads existentes devem continuar usando a API externa autenticada.
 
 ## Contexto observado no código
 
@@ -22,51 +22,54 @@ Remover o endpoint de upload local não autenticado do mock do Next.js. Uploads 
 
 ## Decisões acordadas na entrevista
 
-1. Com `usesRemoteApi() === false`, os controles de seleção/envio de arquivo ficam desabilitados e mostram aviso acessível, por exemplo: “O envio de arquivos exige a API autenticada.”
-2. `uploadMediaFile` bloqueia antes do `fetch` quando não há token.
-3. Com a API remota configurada e sem token/sessão, os controles também ficam desabilitados com aviso acessível, por exemplo: “Entre na sua conta para enviar arquivos.”
-4. Com sessão válida, o cliente envia para `/uploads` na API configurada com `Authorization: Bearer <token>`. A API continua responsável pela validação de autenticação.
-5. O comportamento vale para todos os consumidores existentes de `uploadMediaFile`; a entrada manual de URLs permanece disponível.
-6. A rota mock local será removida. A aplicação não deverá gravar novos uploads em `public/uploads` por esse endpoint.
+1. O endpoint local de upload será removido.
+2. `uploadMediaFile` não fará `fetch` sem token e enviará Bearer obrigatório quando autenticado.
+3. Os consumidores existentes e seus formulários não serão alterados; eles já tratam erros do helper.
+4. O helper é compartilhado por uploads editoriais e pela foto de perfil. A remoção do endpoint local afeta qualquer consumidor que ainda tente enviar sem autenticação, conforme o pedido “uploads só via API autenticada”.
+5. A issue não solicita mudanças em dados mascarados. `photoUrl` não é mascarado pelo domínio.
+6. Nenhuma alteração será feita no backend externo ou em permissões por papel.
 
 ## Desenho recomendado
 
-Usar uma regra compartilhada de disponibilidade de upload ligada ao modo de API e ao estado de autenticação, consumida pela interface e pelo helper. A interface consulta o estado de hidratação do `AuthContext` para evitar exibir um aviso incorreto antes da sessão ser restaurada. Os avisos devem ser texto visível e acessível (por exemplo, `role="status"`). O helper mantém uma verificação própria antes de qualquer requisição, pois a desativação visual dos controles não é uma fronteira de segurança.
+Excluir `src/app/bcl-api/uploads/route.ts`. Em `src/lib/uploadMedia.ts`, exigir token antes de criar/enviar a requisição e sempre incluir `Authorization: Bearer <token>`. Manter os consumidores e o tratamento de erro existentes, sem mudanças na UI ou no mascaramento.
 
-Remover `src/app/bcl-api/uploads/route.ts`. Os controles em `PostEditor`, `MediaSourceField` e `ProfilePhotoPicker` usam a disponibilidade compartilhada para desativar a seleção e apresentar o motivo. A API remota continua sendo chamada pelo helper existente, com Bearer obrigatório. Respostas de erro da API permanecem no fluxo atual de mensagens de usuário.
+Não alterar os consumidores (`PostEditor`, `MediaSourceField` e `ProfilePhotoPicker`): os três usam o helper compartilhado e apresentam os erros pelo tratamento que já existe.
 
-Alternativas consideradas:
+## Alternativas consideradas
 
-- Repetir condições em cada formulário: implementação inicial simples, com risco de divergência entre consumidores.
-- **Regra compartilhada para UI e helper (recomendada):** mantém uma decisão única e protege chamadas diretas ao helper.
-- Componente React de upload único: oferece composição visual mais uniforme, mas exigiria refatorar controles com usos e layouts diferentes além do necessário nesta issue.
+- Desabilitar controles individualmente: descartado porque alteraria formulários e consumidores além do necessário para remover o upload local não autenticado.
+- Refatorar para um componente de upload único: descartado porque a issue não pede mudança de UI e os consumidores atuais já tratam as falhas do helper.
+- **Remover a rota local e exigir token no helper (implementado):** impede armazenamento local pela rota e impede chamadas do cliente sem token, mantendo os consumidores existentes.
 
 ## Critérios de aceite
 
-- [ ] A rota `src/app/bcl-api/uploads/route.ts` não existe mais; chamadas diretas a `/bcl-api/uploads` não executam armazenamento local e retornam o 404 normal do App Router.
-- [ ] No modo mock, todos os controles de envio de arquivo estão desabilitados e apresentam aviso acessível como “O envio de arquivos exige a API autenticada.”
-- [ ] Com API remota configurada e sem sessão/token, todos os controles de envio estão desabilitados e apresentam aviso acessível como “Entre na sua conta para enviar arquivos.”
-- [ ] `uploadMediaFile` rejeita antes de chamar `fetch` quando o mock está ativo ou não há token.
-- [ ] Com API remota e token, `uploadMediaFile` envia `POST` a `${getApiUrl()}/uploads` com `Authorization: Bearer <token>`.
-- [ ] Os erros devolvidos pela API continuam chegando aos usuários pelo tratamento existente.
-- [ ] Os campos de URL manual continuam disponíveis nos formulários atuais.
-- [ ] Nenhum novo upload pelo mock é gravado em `public/uploads`.
-- [ ] Nenhuma mudança é feita no backend externo nem nas permissões por papel.
+- [x] A rota dedicada `src/app/bcl-api/uploads/route.ts` foi removida; a rota catch-all existente responde 404 a `/bcl-api/uploads`.
+- [x] `uploadMediaFile` rejeita antes de chamar `fetch` quando não há token.
+- [x] Com token, `uploadMediaFile` envia `POST` a `${getApiUrl()}/uploads` com `Authorization: Bearer <token>`.
+- [x] Os erros devolvidos pela API continuam chegando aos usuários pelo tratamento existente.
+- [x] Nenhuma mudança foi feita em formulários, conteúdos, mascaramento, permissões por papel ou backend externo.
 
 ## Plano de implementação e verificação
 
 - Ler a documentação local do Next.js 16 pertinente a Route Handlers e remoção de rotas antes de alterar código, conforme `AGENTS.md`.
-- Implementar a regra compartilhada para os consumidores existentes e remover a rota mock.
-- Usar Tailwind nas classes dos componentes alterados; não criar folha CSS por componente.
-- Conferir tipos e lint nos arquivos alterados.
-- Verificar no browser o fluxo em desktop e em viewport móvel, conforme `AGENTS.md`: modo mock, API remota sem sessão, API remota autenticada e preservação da entrada manual de URL.
+- Remover `src/app/bcl-api/uploads/route.ts`.
+- Exigir token em `uploadMediaFile` antes de `fetch` e enviar o Bearer em toda requisição.
+- Conferir tipos e lint nos arquivos de código tocados.
 - Não adicionar nem executar testes automatizados sem pedido explícito de teste/verificação.
-- A autenticação real do endpoint remoto depende do backend, que não está disponível neste repositório; validar visualmente que o cliente envia o Bearer não prova a política do servidor.
+- A autenticação real do endpoint remoto depende do backend, que não está disponível neste repositório; o código cliente enviar Bearer não confirma a política do servidor.
+
+## Resultado da implementação
+
+- Implementado em `src/app/bcl-api/uploads/route.ts` (removido) e `src/lib/uploadMedia.ts` (token obrigatório antes de `fetch`; Bearer obrigatório).
+- `npx eslint src/lib/uploadMedia.ts` passou.
+- `npx tsc --noEmit` passou.
+- Nenhum teste automatizado foi adicionado ou executado. Não houve alteração de UI, então não foi necessário verificar layout no browser.
+- A rota catch-all existente responde 404 para `/bcl-api/uploads`, sem persistir o arquivo localmente.
 
 ## Estado do escopo
 
-- **Incluído:** remoção do endpoint mock; disponibilidade dos controles em mock/sem sessão; bloqueio no helper quando não há API remota ou token; envio autenticado pela API configurada; preservação de entradas manuais de URL.
-- **Fora do escopo acordado:** mudanças no backend/API externa; alteração de autorização por papel; criação de armazenamento local alternativo; remoção de campos de URL manual.
+- **Incluído e implementado:** remoção do Route Handler local de upload e exigência de token no helper compartilhado.
+- **Fora do escopo acordado:** mudanças de UI/formulários, mascaramento de dados, outras rotas ou conteúdos, backend/API externa e permissões por papel.
 - **Limitação observada:** a autenticação server-side da API externa não pode ser inspecionada neste repositório.
 
 ## Contexto original da issue — snapshot integral do GitHub
@@ -81,18 +84,20 @@ Snapshot carregado em 2026-10-24. O conteúdo abaixo preserva o título e o corp
 
 ```markdown
 ## Metadado
+
 - **Código plano:** `SEC-05`
 - **Prioridade produto:** P2
 
 ## Priorização (PERT — person-days)
-| | Dias |
-|---|-----|
-| Otimista (O) | 0.5 |
-| Mais provável (M) | 1 |
-| Pessimista (P) | 2 |
+
+|                              | Dias     |
+| ---------------------------- | -------- |
+| Otimista (O)                 | 0.5      |
+| Mais provável (M)            | 1        |
+| Pessimista (P)               | 2        |
 | **Esperado Te = (O+4M+P)/6** | **1.08** |
 
-*Te serve para ordenar o backlog; ajuste O/M/P quando refinarem.*
+_Te serve para ordenar o backlog; ajuste O/M/P quando refinarem._
 
 ---
 
@@ -137,11 +142,11 @@ Nenhum comentário na issue (endpoint paginado de comentários retornou lista va
 - Campos e valores do Project V2 indisponíveis por falta do escopo `read:project`; os eventos de inclusão/mudança de status foram observados, sem seus valores.
 - Código e política de autenticação do backend remoto não estão neste repositório.
 
-## Registro da entrevista e da decisão
+## Registro histórico da entrevista
 
-A entrevista foi conduzida nesta conversa após leitura da skill instalada `grilling`. A ferramenta Skill indicada pelo wrapper `grill-me` não estava exposta nesta execução; não se afirma que ela foi invocada.
+As respostas abaixo foram registradas antes da releitura do escopo literal da #37. A instrução posterior da pessoa solicitante restringiu o trabalho ao endpoint e ao helper compartilhado; por isso, as propostas de alterar a UI registradas aqui foram superadas pelas decisões atuais acima. A entrevista foi conduzida após leitura da skill instalada `grilling`; a ferramenta Skill indicada pelo wrapper `grill-me` não estava exposta nesta execução, então não se afirma que ela foi invocada.
 
 - Q1 — No mock local, desabilitar controles e mostrar aviso acessível: **Sim**.
 - Q2 — Bloquear no helper antes do envio quando não houver token: **Sim**.
 - Q3 — Com API remota sem sessão, desabilitar controles e mostrar aviso de login: **Sim**.
-- Desenho recomendado com regra compartilhada e remoção da rota mock: **Aprovado para elaboração da SPEC**.
+- Desenho inicial com regra compartilhada e remoção da rota mock: **Aprovado para elaboração da SPEC; depois restringido conforme registrado acima**.
