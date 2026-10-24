@@ -84,35 +84,37 @@ export function TablePagination({
       <span className="basis-full whitespace-nowrap text-center text-sm min-[960px]:basis-auto min-[960px]:text-left">
         Página {currentPage} de {pageCount}
       </span>
-      <label className="flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap text-sm">
-        Ir para página
-        <input
-          key={currentPage}
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          defaultValue={currentPage}
-          onBlur={(event) => commitPageDraft(event.currentTarget)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              commitPageDraft(event.currentTarget);
-              event.currentTarget.blur();
-            }
-          }}
-          className={`min-h-11 w-20 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-2 text-[var(--foreground)] ${tableControlMotion}`}
-        />
-      </label>
-      <label className="flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap text-sm">
-        Linhas
-        <IconSelect
-          label="Linhas por página"
-          options={pageSizeSelectOptions}
-          value={String(pageSize)}
-          onChange={(value) => onPageSizeChange(Number(value))}
-          className="relative min-w-[5.5rem]"
-        />
-      </label>
+      <div className="flex w-full shrink-0 items-center justify-center gap-3 min-[960px]:w-auto min-[960px]:justify-start">
+        <label className="flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap text-sm">
+          Ir para página
+          <input
+            key={currentPage}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            defaultValue={currentPage}
+            onBlur={(event) => commitPageDraft(event.currentTarget)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commitPageDraft(event.currentTarget);
+                event.currentTarget.blur();
+              }
+            }}
+            className={`min-h-11 w-20 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-2 text-[var(--foreground)] ${tableControlMotion}`}
+          />
+        </label>
+        <label className="flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap text-sm">
+          Linhas
+          <IconSelect
+            label="Linhas por página"
+            options={pageSizeSelectOptions}
+            value={String(pageSize)}
+            onChange={(value) => onPageSizeChange(Number(value))}
+            className="relative min-w-[5.5rem]"
+          />
+        </label>
+      </div>
       <span className="whitespace-nowrap text-sm text-[var(--muted)]">
         {rowsOnPage} nesta página · {filteredRowCount} filtradas · {totalRowCount} no total
       </span>
