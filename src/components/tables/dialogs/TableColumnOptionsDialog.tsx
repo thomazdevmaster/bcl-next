@@ -167,7 +167,7 @@ export function TableColumnOptionsDialog<TData extends RowData>({
       title="Opções da coluna"
       description={columnLabel}
       size="md"
-      closeOnBackdropClick={false}
+      closeOnBackdropClick
       onClose={onClose}
     >
       <div className="flex flex-col gap-3 p-4">

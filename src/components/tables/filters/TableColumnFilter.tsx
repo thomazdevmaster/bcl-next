@@ -27,32 +27,30 @@ export function TableColumnFilter<TData extends RowData>({
   const minMax = isRange ? column.getFacetedMinMaxValues() : undefined;
   const facetedValues = isRange ? undefined : column.getFacetedUniqueValues();
   const uniqueValues = facetedValues ? Array.from(facetedValues.keys()).sort().slice(0, 500) : [];
-  const inputClass =
-    `mt-2 min-h-11 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-2 text-sm font-normal text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${tableControlMotion}`;
+  const inputClass = `mt-2 min-h-11 w-full touch-manipulation rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-2 text-base font-normal text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] min-[960px]:text-sm ${tableControlMotion}`;
 
   if (isRange) {
     const range = filterValue as [number | undefined, number | undefined] | undefined;
     const inputType = variant === "date" ? "date" : variant === "datetime" ? "datetime-local" : "number";
     const setBound = (bound: "min" | "max", rawValue: string | number) => {
-      const parsed = rawValue === ""
-        ? undefined
-        : isTemporal
-          ? parseTemporalFilterValue(String(rawValue), variant, bound)
-          : Number(rawValue);
+      const parsed =
+        rawValue === ""
+          ? undefined
+          : isTemporal
+            ? parseTemporalFilterValue(String(rawValue), variant, bound)
+            : Number(rawValue);
       column.setFilterValue((old: [number | undefined, number | undefined] | undefined) =>
         bound === "min" ? [parsed, old?.[1]] : [old?.[0], parsed],
       );
     };
     const boundValue = (bound: "min" | "max") => {
       const value = bound === "min" ? range?.[0] : range?.[1];
-      return isTemporal && value !== undefined ? formatTemporalFilterValue(value, variant) : value ?? "";
+      return isTemporal && value !== undefined ? formatTemporalFilterValue(value, variant) : (value ?? "");
     };
-    const boundMin = minMax?.[0] === undefined || !isTemporal
-      ? minMax?.[0]
-      : formatTemporalFilterValue(minMax[0], variant);
-    const boundMax = minMax?.[1] === undefined || !isTemporal
-      ? minMax?.[1]
-      : formatTemporalFilterValue(minMax[1], variant);
+    const boundMin =
+      minMax?.[0] === undefined || !isTemporal ? minMax?.[0] : formatTemporalFilterValue(minMax[0], variant);
+    const boundMax =
+      minMax?.[1] === undefined || !isTemporal ? minMax?.[1] : formatTemporalFilterValue(minMax[1], variant);
     return (
       <div className="mt-2 flex gap-1">
         <TableDebouncedInput
@@ -120,17 +118,14 @@ export function TableColumnFilter<TData extends RowData>({
   );
 }
 
-function parseTemporalFilterValue(
-  value: string,
-  variant: "date" | "datetime",
-  bound: "min" | "max",
-): number {
-  const date = variant === "date"
-    ? (() => {
-        const [year, month, day] = value.split("-").map(Number);
-        return new Date(year, month - 1, day);
-      })()
-    : new Date(value);
+function parseTemporalFilterValue(value: string, variant: "date" | "datetime", bound: "min" | "max"): number {
+  const date =
+    variant === "date"
+      ? (() => {
+          const [year, month, day] = value.split("-").map(Number);
+          return new Date(year, month - 1, day);
+        })()
+      : new Date(value);
   if (bound === "max") {
     if (variant === "date") date.setHours(23, 59, 59, 999);
     else date.setSeconds(59, 999);
