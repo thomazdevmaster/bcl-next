@@ -48,6 +48,7 @@ interface TableToolbarProps {
   rowSelectionEnabled?: boolean;
   cellSelectionEnabled?: boolean;
   columnVisibilityEnabled?: boolean;
+  mobilePrimaryAction?: ReactNode;
 }
 
 export function TableToolbar({
@@ -73,36 +74,45 @@ export function TableToolbar({
   rowSelectionEnabled = true,
   cellSelectionEnabled = false,
   columnVisibilityEnabled = true,
+  mobilePrimaryAction,
 }: TableToolbarProps) {
   return (
     <section
       aria-label={labels?.section ?? "Controles da tabela"}
       className="flex flex-col rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] px-3 sm:px-4"
     >
-      <div className="flex flex-col gap-2 py-3 sm:flex-row">
+      <div className="flex flex-col gap-2 py-3 min-[960px]:flex-row">
         {globalFilterEnabled && (
           <TableDebouncedInput
             value={searchValue}
             onChange={onSearchChange}
             resetKey={resetKey}
-            className="min-h-11 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-3 text-sm text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] sm:min-w-0 sm:flex-1"
+            className="min-h-11 w-full touch-manipulation rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-3 text-base text-[var(--foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] min-[960px]:min-w-0 min-[960px]:flex-1 min-[960px]:text-sm"
             placeholder={labels?.searchPlaceholder ?? searchLabel}
             aria-label={labels?.search ?? searchLabel}
           />
         )}
-        <TableActionButton onClick={onRefresh} disabled={isLoading}>
-          {isLoading ? <MusicLoader compact label={labels?.refreshing ?? "Carregando…"} /> : (labels?.refresh ?? "Atualizar dados")}
-        </TableActionButton>
-        <TableActionButton onClick={onReset}>{labels?.reset ?? "Redefinir tabela"}</TableActionButton>
+        {mobilePrimaryAction ? <div className="min-[960px]:hidden">{mobilePrimaryAction}</div> : null}
+        <div className="hidden min-w-0 gap-2 min-[960px]:flex">
+          <TableActionButton onClick={onRefresh} disabled={isLoading}>
+            {isLoading ? (
+              <MusicLoader compact label={labels?.refreshing ?? "Carregando…"} />
+            ) : (
+              (labels?.refresh ?? "Atualizar dados")
+            )}
+          </TableActionButton>
+          <TableActionButton onClick={onReset}>{labels?.reset ?? "Redefinir tabela"}</TableActionButton>
+        </div>
       </div>
 
-      <div className="flex flex-col gap-2 border-t border-[var(--border)] py-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="hidden flex-col gap-2 border-t border-[var(--border)] py-2 min-[960px]:flex min-[960px]:flex-row min-[960px]:items-center min-[960px]:justify-between">
         {(rowSelectionEnabled || cellSelectionEnabled) && (
           <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
             {rowSelectionEnabled && (
               <>
                 <span>
-                  {selectedRowCount.toLocaleString("pt-BR")} de {totalRowCount.toLocaleString("pt-BR")} linhas selecionadas
+                  {selectedRowCount.toLocaleString("pt-BR")} de {totalRowCount.toLocaleString("pt-BR")} linhas
+                  selecionadas
                 </span>
                 <TableActionButton onClick={onClearRows}>Limpar seleção</TableActionButton>
                 <TableActionButton onClick={onSelectAllRows}>Selecionar todas as linhas</TableActionButton>
@@ -124,17 +134,26 @@ export function TableToolbar({
             disabled
             aria-label="Imprimir relatório (em breve)"
             title="Em breve"
-            className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-[var(--radius)] border border-[var(--info)] px-3 text-sm font-medium text-[var(--info)] disabled:cursor-not-allowed disabled:opacity-65"
+            className="inline-flex min-h-11 min-w-11 cursor-not-allowed items-center justify-center gap-2 rounded-[var(--radius)] border border-[var(--info)] px-3 text-sm font-medium text-[var(--info)] disabled:cursor-not-allowed disabled:opacity-65"
           >
-            <span className="material-icons text-base" aria-hidden="true">print</span>
+            <span className="material-icons text-base" aria-hidden="true">
+              print
+            </span>
             Imprimir
           </button>
 
           {columnVisibilityEnabled && (
             <details className="group relative text-sm">
-              <summary className={`group flex min-h-11 cursor-pointer items-center gap-1 rounded-[var(--radius)] border border-[var(--info)] px-3 font-medium text-[var(--info)] hover:bg-[var(--info)] hover:text-[var(--info-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${tableButtonMotion}`}>
+              <summary
+                className={`group flex min-h-11 cursor-pointer items-center gap-1 rounded-[var(--radius)] border border-[var(--info)] px-3 font-medium text-[var(--info)] hover:bg-[var(--info)] hover:text-[var(--info-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] ${tableButtonMotion}`}
+              >
                 {labels?.columns ?? "Visibilidade das colunas"}
-                <span className={`material-icons text-base group-open:rotate-180 motion-reduce:group-open:rotate-0 ${tableIconMotion}`} aria-hidden="true">expand_more</span>
+                <span
+                  className={`material-icons text-base group-open:rotate-180 motion-reduce:group-open:rotate-0 ${tableIconMotion}`}
+                  aria-hidden="true"
+                >
+                  expand_more
+                </span>
               </summary>
               <div className="absolute right-0 top-full z-30 mt-1 max-h-64 min-w-56 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 text-[var(--foreground)] shadow-[var(--shadow-soft)]">
                 <label className="flex min-h-11 items-center gap-2 border-b border-[var(--border)] pb-2">
