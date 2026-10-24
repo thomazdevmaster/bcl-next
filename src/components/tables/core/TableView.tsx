@@ -21,7 +21,7 @@ import { TableActionButton } from "../toolbar/TableActionButton";
 import { TableSelectionToolbar } from "../toolbar/TableSelectionToolbar";
 import { TableCheckbox } from "../toolbar/TableCheckbox";
 import { TableMobileCards } from "./TableMobileCards";
-import type { MobileTableAction } from "./TableMobileCards";
+import type { MobileTableAction } from "./table-actions";
 import { TableToolbar } from "../toolbar/TableToolbar";
 import type { TableToolbarLabels } from "../toolbar/TableToolbar";
 import { TableResetConfirmationDialog } from "../dialogs/TableResetConfirmationDialog";
@@ -222,9 +222,9 @@ export function TableView<TData extends RowData>({
       result.push(
         columnHelper.display({
           id: ROW_CONTROLS_ID,
-          size: 128,
-          minSize: 128,
-          maxSize: 128,
+          size: rowSelectionEnabled && rowPinningEnabled ? 96 : 56,
+          minSize: rowSelectionEnabled && rowPinningEnabled ? 96 : 56,
+          maxSize: rowSelectionEnabled && rowPinningEnabled ? 96 : 56,
           enableSorting: false,
           enableGrouping: false,
           enableHiding: false,
@@ -335,7 +335,7 @@ export function TableView<TData extends RowData>({
           start: rowControlsEnabled ? [ROW_CONTROLS_ID] : [],
           end: [],
         },
-        pagination: { pageIndex: 0, pageSize: 20 },
+        pagination: { pageIndex: 0, pageSize: 10 },
       },
       keepPinnedRows: true,
       autoResetExpanded: false,
@@ -420,7 +420,9 @@ export function TableView<TData extends RowData>({
         end: storedPreferences.columnPinning.end.filter((id) => knownColumnIdSet.has(id)),
       };
       const columnSizing = Object.fromEntries(
-        Object.entries(storedPreferences.columnSizing).filter(([id]) => knownColumnIdSet.has(id)),
+        Object.entries(storedPreferences.columnSizing).filter(
+          ([id]) => id !== ROW_CONTROLS_ID && knownColumnIdSet.has(id),
+        ),
       );
       const columnVisibility = Object.fromEntries(
         Object.entries(storedPreferences.columnVisibility).filter(([id]) => knownColumnIdSet.has(id)),
@@ -751,6 +753,7 @@ export function TableView<TData extends RowData>({
                         resetKey={resetKey}
                         columnSizes={columnSizes}
                         columnPresentation={columnPresentations[header.column.id]}
+                        compact={header.column.id === ROW_CONTROLS_ID}
                         onColumnPresentationChange={(presentation) => {
                           setColumnPresentations((current) => ({
                             ...current,

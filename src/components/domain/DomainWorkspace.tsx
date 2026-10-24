@@ -2,9 +2,9 @@
 
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
-import Link from "next/link";
-
 import { EntityDialog } from "@/components/shared/EntityDialog";
+import { TableRowActions } from "@/components/tables/core/TableRowActions";
+import { createCrudTableRowActions } from "@/components/tables/core/table-actions";
 import { TableView } from "@/components/tables/core/TableView";
 import { useAuth } from "@/contexts/AuthContext";
 import { usesRemoteApi } from "@/core/auth/accessToken";
@@ -42,8 +42,6 @@ type DialogMode = "create" | "view" | "edit" | null;
 
 const buttonMotion =
   "transition-[transform,background-color,color,border-color,box-shadow] duration-150 ease-out active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100";
-const iconMotion =
-  "transition-transform duration-200 ease-out group-hover:scale-110 group-active:scale-75 motion-reduce:transition-none motion-reduce:group-hover:scale-100 motion-reduce:group-active:scale-100";
 const controlMotion =
   "transition-[border-color,background-color,box-shadow] duration-150 ease-out motion-reduce:transition-none";
 
@@ -253,49 +251,41 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
     [config],
   );
 
-  const renderRowActions = useCallback(
-    (row: Record<string, unknown>) => (
-      <div className="flex justify-end gap-1">
-        {resource === "songs" ? (
-          songHasScore(row) ? (
-            <Link
-              href={`/study/${row.id}`}
-              title="Estudar"
-              aria-label="Estudar"
-              className={`group inline-flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-brand-strong)] hover:bg-[var(--color-brand-soft)] ${buttonMotion}`}
-            >
-              <span className={`material-icons text-lg ${iconMotion}`} aria-hidden="true">
-                school
-              </span>
-            </Link>
-          ) : (
-            <button
-              type="button"
-              disabled
-              title="Sem partitura"
-              aria-label="Estudar"
-              className="inline-flex h-11 w-11 cursor-not-allowed items-center justify-center rounded-full text-[var(--muted)] opacity-40"
-            >
-              <span className="material-icons text-lg" aria-hidden="true">
-                school
-              </span>
-            </button>
-          )
-        ) : null}
-        <ActionButton icon="visibility" label="Visualizar" onClick={() => openItem(row, "view")} />
-        {canUpdate && <ActionButton icon="edit" label="Editar" onClick={() => openItem(row, "edit")} />}
-        {canDelete && (
-          <ActionButton
-            icon="delete"
-            label="Excluir"
-            danger
-            disabled={resource === "users" && String(row.id) === String(user?.id)}
-            onClick={() => setDeleteTarget(row)}
-          />
-        )}
-      </div>
-    ),
+  const getRowActions = useCallback(
+    (row: Record<string, unknown>, includeView: boolean, mobile = false) => {
+      const hasScore = resource === "songs" && songHasScore(row);
+      return createCrudTableRowActions({
+        extras:
+          resource === "songs" && (hasScore || !mobile)
+            ? [
+                {
+                  id: "study",
+                  label: "Estudar",
+                  icon: "school",
+                  href: hasScore ? `/study/${row.id}` : undefined,
+                  onSelect: () => window.location.assign(`/study/${row.id}`),
+                  disabled: !hasScore,
+                  disabledTitle: "Sem partitura",
+                },
+              ]
+            : [],
+        view: includeView ? { onSelect: () => openItem(row, "view") } : undefined,
+        edit: canUpdate ? { onSelect: () => openItem(row, "edit") } : undefined,
+        remove: canDelete
+          ? {
+              onSelect: () => setDeleteTarget(row),
+              disabled: resource === "users" && String(row.id) === String(user?.id),
+              disabledTitle: "Não é possível excluir o usuário da sessão.",
+            }
+          : undefined,
+      });
+    },
     [canDelete, canUpdate, openItem, resource, user?.id],
+  );
+
+  const renderRowActions = useCallback(
+    (row: Record<string, unknown>) => <TableRowActions actions={getRowActions(row, false)} />,
+    [getRowActions],
   );
 
   const dismissEntityDialog = useCallback(() => {
@@ -512,39 +502,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
                 setDeleteTarget(null);
               }}
               renderRowActions={renderRowActions}
-              renderMobileRowActions={(row) => [
-                ...(resource === "songs" && songHasScore(row)
-                  ? [
-                      {
-                        label: "Estudar",
-                        icon: "school",
-                        onSelect: () => {
-                          window.location.assign(`/study/${row.id}`);
-                        },
-                      },
-                    ]
-                  : []),
-                ...(canUpdate
-                  ? [
-                      {
-                        label: "Editar",
-                        icon: "edit",
-                        onSelect: () => openItem(row, "edit"),
-                      },
-                    ]
-                  : []),
-                ...(canDelete
-                  ? [
-                      {
-                        label: "Excluir",
-                        icon: "delete",
-                        danger: true,
-                        disabled: resource === "users" && String(row.id) === String(user?.id),
-                        onSelect: () => setDeleteTarget(row),
-                      },
-                    ]
-                  : []),
-              ]}
+              renderMobileRowActions={(row) => getRowActions(row, false, true)}
               toolbarLabels={{
                 section: `Controles de ${domain.label.toLocaleLowerCase("pt-BR")}`,
               }}
@@ -566,7 +524,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
         }
         size="xl"
         placement="bottom"
-        closeOnBackdropClick={false}
+        closeOnBackdropClick
         onClose={closeDialog}
       >
         {dialogMode ? (
@@ -721,37 +679,6 @@ function songHasScore(row: Record<string, unknown>): boolean {
       const url = (score as { url?: unknown }).url;
       return typeof url === "string" && url.length > 0;
     })
-  );
-}
-
-function ActionButton({
-  icon,
-  label,
-  onClick,
-  danger = false,
-  disabled = false,
-}: {
-  icon: string;
-  label: string;
-  onClick: () => void;
-  danger?: boolean;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      title={disabled ? "Não é possível excluir o usuário da sessão." : label}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className={`group inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full disabled:cursor-not-allowed disabled:opacity-30 ${buttonMotion} ${
-        danger ? "text-red-600 hover:bg-red-50" : "text-[var(--color-brand-strong)] hover:bg-[var(--color-brand-soft)]"
-      }`}
-    >
-      <span className={`material-icons text-lg ${iconMotion}`} aria-hidden="true">
-        {icon}
-      </span>
-    </button>
   );
 }
 

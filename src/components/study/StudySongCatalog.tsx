@@ -560,15 +560,15 @@ function SongStudyActions({
     !studyScoreReady(song) &&
     song.studyScoreStatus !== "failed";
   return (
-    <div className="flex shrink-0 flex-wrap justify-end gap-2">
+    <div className="flex min-h-11 w-full flex-wrap items-center justify-center gap-2">
       {watchUrl ? (
         <a
           href={watchUrl}
           target="_blank"
           rel="noreferrer"
-          className="btn-ghost inline-flex min-h-11 items-center gap-1.5"
+          className="btn-secondary inline-flex min-h-11 touch-manipulation cursor-pointer select-none items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
         >
-          <span className="material-icons text-base" aria-hidden>
+          <span className="material-icons text-base text-current" aria-hidden>
             smart_display
           </span>
           Vídeo
@@ -576,7 +576,7 @@ function SongStudyActions({
       ) : null}
       <button
         type="button"
-        className="btn-primary min-h-11"
+        className="btn-primary inline-flex min-h-11 touch-manipulation cursor-pointer select-none items-center disabled:cursor-not-allowed disabled:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
         disabled={preparing || blocked}
         onClick={onStart}
         title={prepLabel ?? undefined}
@@ -585,6 +585,7 @@ function SongStudyActions({
           <MusicLoader
             compact
             label={waitingScore ? "Processando…" : "Preparando…"}
+            tone="current"
           />
         ) : blocked ? (
           "Indisponível"

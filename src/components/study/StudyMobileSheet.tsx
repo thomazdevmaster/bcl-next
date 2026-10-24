@@ -218,7 +218,7 @@ export function StudyMobileSheet({
             aria-label={state.audioPreparing ? 'Preparando áudio' : 'Play'}
           >
             {state.audioPreparing ? (
-              <MusicLoader compact label="" className="py-0 text-[var(--primary-foreground)]" />
+              <MusicLoader compact label="" className="py-0" tone="current" />
             ) : (
               <span className="material-icons text-3xl">play_arrow</span>
             )}

@@ -28,6 +28,7 @@ export function TableHeader<TData extends RowData>({
   columnSizes,
   columnPresentation,
   onColumnPresentationChange,
+  compact = false,
 }: {
   header: Header<typeof tableFeatures, TData, unknown>;
   table: TableInstance<TData>;
@@ -37,6 +38,7 @@ export function TableHeader<TData extends RowData>({
   columnSizes: Record<string, number>;
   columnPresentation?: TableColumnPresentation;
   onColumnPresentationChange: (presentation: TableColumnPresentation) => void;
+  compact?: boolean;
 }) {
   const { attributes, isDragging, listeners, setNodeRef, transform } = useSortable({
     id: header.column.id,
@@ -77,7 +79,7 @@ export function TableHeader<TData extends RowData>({
           className={`relative border-b border-r border-[var(--border)] bg-[var(--table-header-bg)] p-3 text-left align-top text-xs font-semibold uppercase tracking-wide text-[var(--table-header-fg)] ${tableSortableMotion}`}
         >
           {header.isPlaceholder ? null : (
-            <div className="min-w-32">
+            <div className={compact ? "min-w-0" : "min-w-32"}>
               <div className="flex min-h-11 items-center gap-1 text-[var(--table-header-fg)]">
                 {canReorder && (
                   <button

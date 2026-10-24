@@ -5,19 +5,14 @@ import type { ReactTable, Row, RowData } from "@tanstack/react-table";
 import { EntityDialog } from "@/components/shared/EntityDialog";
 import { TableCheckbox } from "../toolbar/TableCheckbox";
 import { TableMobileIconAction } from "./TableMobileIconAction";
+import type { MobileTableAction } from "./table-actions";
 import { tableFeatures } from "./table-features";
 import type { TableState } from "./table-features";
 
 const ROW_CONTROLS_ID = "__table_row_controls";
 const ROW_ACTIONS_ID = "__table_row_actions";
 
-export type MobileTableAction = {
-  label: string;
-  icon: string;
-  onSelect: () => void;
-  disabled?: boolean;
-  danger?: boolean;
-};
+export type { MobileTableAction } from "./table-actions";
 
 type TableInstance<TData extends RowData> = ReactTable<typeof tableFeatures, TData, TableState>;
 
@@ -261,7 +256,7 @@ export function TableMobileCards<TData extends RowData>({
                         aria-haspopup="menu"
                         aria-expanded={menuOpen}
                         onClick={() => (menuOpen ? closeMenu() : openMenu(row.id))}
-                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-[var(--info)] transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] motion-reduce:transition-none"
+                        className="inline-flex min-h-11 min-w-11 touch-manipulation cursor-pointer select-none items-center justify-center rounded-xl text-[var(--info)] transition-colors duration-150 ease-out active:scale-[0.98] hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] motion-reduce:transition-none motion-reduce:active:scale-100"
                       >
                         <span className="material-icons text-2xl" aria-hidden="true">
                           more_horiz
@@ -285,7 +280,7 @@ export function TableMobileCards<TData extends RowData>({
                                 toggleRowSelection();
                                 closeMenu();
                               }}
-                              className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold text-[var(--foreground)] transition-colors duration-150 hover:bg-[var(--card-secondary)] focus-visible:outline-2 focus-visible:outline-[var(--ring)] disabled:opacity-50 motion-reduce:transition-none"
+                              className="flex min-h-11 w-full touch-manipulation cursor-pointer select-none items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold text-[var(--foreground)] transition-colors duration-150 active:scale-[0.99] hover:bg-[var(--card-secondary)] focus-visible:outline-2 focus-visible:outline-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100"
                             >
                               <span className="material-icons text-lg" aria-hidden="true">
                                 {row.getIsSelected() ? "check_box" : "check_box_outline_blank"}
@@ -293,20 +288,6 @@ export function TableMobileCards<TData extends RowData>({
                               {row.getIsSelected() ? "Desmarcar seleção" : "Selecionar"}
                             </button>
                           ) : null}
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setViewingRowId(row.id);
-                              closeMenu();
-                            }}
-                            className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold text-[var(--foreground)] transition-colors duration-150 hover:bg-[var(--card-secondary)] focus-visible:outline-2 focus-visible:outline-[var(--ring)] motion-reduce:transition-none"
-                          >
-                            <span className="material-icons text-lg" aria-hidden="true">
-                              visibility
-                            </span>
-                            Visualizar
-                          </button>
                           {rowPinningEnabled ? (
                             <button
                               type="button"
@@ -316,7 +297,7 @@ export function TableMobileCards<TData extends RowData>({
                                 row.pin(pinned ? false : "top");
                                 closeMenu();
                               }}
-                              className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold text-[var(--foreground)] transition-colors duration-150 hover:bg-[var(--card-secondary)] focus-visible:outline-2 focus-visible:outline-[var(--ring)] disabled:opacity-50 motion-reduce:transition-none"
+                              className="flex min-h-11 w-full touch-manipulation cursor-pointer select-none items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold text-[var(--foreground)] transition-colors duration-150 active:scale-[0.99] hover:bg-[var(--card-secondary)] focus-visible:outline-2 focus-visible:outline-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100"
                             >
                               <span className="material-icons text-lg" aria-hidden="true">
                                 push_pin
@@ -334,7 +315,7 @@ export function TableMobileCards<TData extends RowData>({
                                 action.onSelect();
                                 closeMenu();
                               }}
-                              className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold transition-colors duration-150 hover:bg-[var(--card-secondary)] focus-visible:outline-2 focus-visible:outline-[var(--ring)] disabled:opacity-50 motion-reduce:transition-none ${action.danger ? "text-[var(--destructive)]" : "text-[var(--foreground)]"}`}
+                              className={`flex min-h-11 w-full touch-manipulation cursor-pointer select-none items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold transition-colors duration-150 active:scale-[0.99] hover:bg-[var(--card-secondary)] focus-visible:outline-2 focus-visible:outline-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100 ${action.danger ? "text-[var(--destructive)]" : "text-[var(--foreground)]"}`}
                             >
                               <span className="material-icons text-lg" aria-hidden="true">
                                 {action.icon}

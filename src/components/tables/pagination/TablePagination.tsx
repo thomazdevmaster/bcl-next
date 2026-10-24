@@ -101,7 +101,7 @@ export function TablePagination({
                 event.currentTarget.blur();
               }
             }}
-            className={`min-h-11 w-20 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-2 text-[var(--foreground)] ${tableControlMotion}`}
+            className={`min-h-11 w-20 touch-manipulation rounded-[var(--radius)] border border-[var(--border)] bg-[var(--input)] px-2 text-base text-[var(--foreground)] min-[960px]:text-sm ${tableControlMotion}`}
           />
         </label>
         <label className="flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap text-sm">

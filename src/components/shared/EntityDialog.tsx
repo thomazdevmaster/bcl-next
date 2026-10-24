@@ -13,8 +13,8 @@ export interface EntityDialogProps {
   size?: EntityDialogSize;
   placement?: EntityDialogPlacement;
   /**
-   * Formulários com campos: false (só X, Cancelar, Salvar etc.).
-   * Informativas / confirmação sem campos: true — fecha no backdrop e com Esc.
+   * Padrão: true — fecha no backdrop e com Esc. Formulários com campos devem
+   * definir false para exigir uma ação explícita de saída.
    */
   closeOnBackdropClick?: boolean;
   onClose: () => void;
@@ -43,7 +43,7 @@ export function EntityDialog({
   description,
   size = "md",
   placement = "center",
-  closeOnBackdropClick = false,
+  closeOnBackdropClick = true,
   onClose,
   onCloseComplete,
   children,
@@ -52,8 +52,8 @@ export function EntityDialog({
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onCloseRef = useRef(onClose);
   const onCloseCompleteRef = useRef(onCloseComplete);
+  const openRef = useRef(open);
   const [renderOpen, setRenderOpen] = useState(open);
-  const [closing, setClosing] = useState(false);
   const titleId = useId();
   const descriptionId = useId();
 
@@ -61,6 +61,10 @@ export function EntityDialog({
     onCloseRef.current = onClose;
     onCloseCompleteRef.current = onCloseComplete;
   }, [onClose, onCloseComplete]);
+
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
 
   const clearCloseTimeout = useCallback(() => {
     if (closeTimeoutRef.current) {
@@ -70,54 +74,42 @@ export function EntityDialog({
   }, []);
 
   const finishDomClose = useCallback(() => {
+    if (openRef.current) return;
     const dialog = dialogRef.current;
     if (dialog?.open) dialog.close();
-    setClosing(false);
     setRenderOpen(false);
     onCloseCompleteRef.current?.();
   }, []);
 
   const requestClose = useCallback(
     (notifyParent: boolean) => {
-      const dialog = dialogRef.current;
-      if (!dialog?.open || closing) {
-        if (!open) {
-          clearCloseTimeout();
-          finishDomClose();
-        }
-        return;
-      }
-
-      clearCloseTimeout();
-
+      if (!dialogRef.current?.open) return;
       if (notifyParent) onCloseRef.current();
-
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        finishDomClose();
-        return;
-      }
-
-      setClosing(true);
-      closeTimeoutRef.current = setTimeout(() => {
-        closeTimeoutRef.current = null;
-        finishDomClose();
-      }, CLOSE_MS);
     },
-    [clearCloseTimeout, closing, finishDomClose, open],
+    [],
   );
 
-  // Sincroniza `open` controlado com o ciclo de animação do <dialog> (mount/unmount).
+  // A prop controlada dirige o ciclo: reabrir cancela qualquer saída pendente.
   useEffect(() => {
     if (open) {
-      if (closing) return;
       clearCloseTimeout();
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- estado de portal/animacao
-      setRenderOpen(true);
+      if (!renderOpen) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- mounta novamente o portal ao reabrir
+        setRenderOpen(true);
+      }
       return;
     }
     if (!renderOpen) return;
-    requestClose(false);
-  }, [clearCloseTimeout, closing, open, renderOpen, requestClose]);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      finishDomClose();
+      return;
+    }
+    closeTimeoutRef.current = setTimeout(() => {
+      closeTimeoutRef.current = null;
+      finishDomClose();
+    }, CLOSE_MS);
+    return clearCloseTimeout;
+  }, [clearCloseTimeout, finishDomClose, open, renderOpen]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -141,7 +133,13 @@ export function EntityDialog({
       ref={dialogRef}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
-      data-closing={closing ? "true" : undefined}
+      data-closing={!open ? "true" : undefined}
+      onKeyDownCapture={(event) => {
+        if (event.key !== "Escape" || !closeOnBackdropClick) return;
+        event.preventDefault();
+        event.stopPropagation();
+        requestClose(true);
+      }}
       onCancel={(event) => {
         event.preventDefault();
         if (closeOnBackdropClick) requestClose(true);

@@ -48,7 +48,7 @@ export function TableSelectionToolbar({
           type="button"
           onClick={onToggleAll}
           aria-label={allSelected ? "Desmarcar todos os registros" : "Selecionar todos os registros"}
-          className="flex min-h-11 min-w-0 touch-manipulation items-center justify-center gap-2 rounded-lg px-2 text-sm font-medium text-[var(--info)] transition-colors hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
+          className="flex min-h-11 min-w-0 touch-manipulation cursor-pointer select-none items-center justify-center gap-2 rounded-lg px-2 text-sm font-medium text-[var(--info)] transition-colors hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
         >
           <SelectionIcon kind="all" />
           <span className="truncate">{allSelected ? "Desmarcar todos" : "Selecionar todos"}</span>
@@ -57,7 +57,7 @@ export function TableSelectionToolbar({
           type="button"
           onClick={onDelete}
           disabled={!hasSelection}
-          className="btn-danger flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-semibold active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:active:scale-100! motion-reduce:transition-none! motion-reduce:hover:transform-none!"
+          className="btn-danger flex min-h-11 touch-manipulation cursor-pointer select-none items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-semibold active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:active:scale-100! motion-reduce:transition-none! motion-reduce:hover:transform-none!"
         >
           <SelectionIcon kind="delete" />
           <span>Excluir</span>

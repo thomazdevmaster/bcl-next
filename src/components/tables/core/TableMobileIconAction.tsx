@@ -26,7 +26,7 @@ export function TableMobileIconAction({
       title={title ?? ariaLabel}
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-[var(--info)] transition-colors duration-150 hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none ${className}`}
+      className={`inline-flex min-h-11 min-w-11 shrink-0 touch-manipulation cursor-pointer select-none items-center justify-center rounded-lg text-[var(--info)] transition-colors duration-150 active:scale-[0.98] hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100 ${className}`}
     >
       <span className="material-icons text-xl" aria-hidden="true">
         {icon}

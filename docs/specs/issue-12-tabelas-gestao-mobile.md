@@ -160,6 +160,12 @@ Entrevista feita após recarregar corpo, comentários, metadados, eventos e refe
 - Mídias tem uma lista própria fora de TableView; verificar sua usabilidade sem adicionar busca nem redesenhar a lista nesta issue.
 - Preservar todas as regras de permissão can().
 
+### Ajuste de escopo — 2026-10-24
+
+- Aplicar também a `TableView` em Gestão de Mídias, em mobile e desktop. A lista antiga passa a usar busca global, ação “Novo post” condicionada por `can()`, cartões e menu móvel, tabela desktop e ações de linha.
+- Reutilizar a seleção por menu ⋯ e toque prolongado já prevista nesta SPEC; exibir checkboxes só após iniciar seleção e permitir exclusão em lote com confirmação quando `can()` permitir.
+- No rótulo secundário do cartão, mostrar tipo e status do post (por exemplo, “Matéria - Publicado”).
+
 ## Fatos observados na base
 
 - TableView cria a coluna __table_row_controls; seleção de linhas e fixação são habilitadas por padrão (src/components/tables/core/TableView.tsx, por volta das linhas 167–250).
@@ -167,7 +173,7 @@ Entrevista feita após recarregar corpo, comentários, metadados, eventos e refe
 - TableToolbar mantém busca, atualizar, redefinir, seleção em massa, imprimir e visibilidade de colunas (src/components/tables/toolbar/TableToolbar.tsx).
 - Gestão genérica e Gestão de Usuários usam TableView; ambas mantêm criação em seu cabeçalho e calculam permissões com can() (src/components/domain/DomainWorkspace.tsx; src/components/domain/users/UserManagementWorkspace.tsx).
 - Estudo usa TableView em src/components/study/StudySongCatalog.tsx. Seleção de linhas não inicia sessão; cada música tem ações Iniciar estudo e Vídeo. Instrumentos são selecionados dentro do modal.
-- Mídias é uma lista de cartões em src/app/gestao/midias/page.tsx, fora de TableView.
+- Mídias era uma lista própria em src/app/gestao/midias/page.tsx; o ajuste de escopo de 2026-10-24 a migra para TableView.
 - Foram encontrados três pontos de uso de TableView: CRUD genérico, usuários e catálogo de músicas de estudo.
 
 ## Desenho proposto
@@ -196,7 +202,7 @@ A recomendação mantém uma interface pequena no TableView: os chamadores forne
 3. Cartões mostram menu ⋯ acessível com ícones: Visualizar, Fixar/Desafixar e ações disponíveis para a linha; editar/excluir aparecem apenas quando as regras atuais permitem.
 4. “Visualizar” abre diálogo com os campos visíveis da linha em formato rótulo/valor; não há controle separado “Ver mais/Recolher”.
 5. Em desktop (~960px+), tabela, toolbar, seleção e ações mantêm a apresentação e comportamento atuais.
-6. Conferir Gestão de Pessoas, Usuários, Patrimônio, Músicas e Estudo. Verificar Mídias em 360px e desktop sem mudar sua funcionalidade.
+6. Conferir Gestão de Pessoas, Usuários, Patrimônio, Músicas, Mídias e Estudo em 360px e desktop; em Estudo, validar com partituras e funcionalidades reais.
 7. Controles novos têm alvo mínimo de 44px; busca e menu têm nomes acessíveis e funcionam por teclado. Toque prolongado também inicia seleção.
 8. Diálogos continuam utilizáveis em viewport móvel com teclado virtual.
 9. As permissões can() não mudam.
