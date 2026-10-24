@@ -5,6 +5,6 @@ Este índice aponta para um arquivo por issue acompanhada. O estado do GitHub é
 | Issue                                                                                                                 | Status real  | Última verificação | Acompanhamento                                                         |
 | --------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------ | ---------------------------------------------------------------------- |
 | [#9 — Login Google: modal completar cadastro e dados do perfil](https://github.com/thomazdevmaster/bcl-next/issues/9) | Implementada | 2026-10-22         | [issue-9-login-google.md](issue-9-login-google.md)                     |
-| [#12 — Tabelas de gestão otimizadas para mobile](https://github.com/thomazdevmaster/bcl-next/issues/12)               | Parcial      | 2026-10-23         | [issue-12-tabelas-gestao-mobile.md](issue-12-tabelas-gestao-mobile.md) |
+| [#12 — Tabelas de gestão otimizadas para mobile](https://github.com/thomazdevmaster/bcl-next/issues/12)               | Implementada | 2026-10-24         | [issue-12-tabelas-gestao-mobile.md](issue-12-tabelas-gestao-mobile.md) |
 
 Ao registrar outra issue, crie `issue-<número>-<resumo>.md` nesta pasta e adicione uma linha à tabela. O status deve refletir o código verificado, separado do estado GitHub.
