@@ -3,7 +3,7 @@
 - **Issue:** [#15](https://github.com/thomazdevmaster/bcl-next/issues/15)
 - **SPEC:** [docs/specs/issue-15-centro-notificacoes.md](../specs/issue-15-centro-notificacoes.md) — aprovada pela pessoa usuária
 - **GitHub:** aberta, atribuída a `kjunda01`
-- **Status real do trabalho:** Implementação entregue em PRs separados; revisão visual manual pendente
+- **Status real do trabalho:** Implementação registrada em commits locais; PRs fechados até concluir a verificação e receber autorização
 - **Última verificação:** 2026-10-25
 - **Branches preparadas:** `bcl-next: feat/issue-15-centro-notificacoes` sobre `7b3cbe4`; `bcl-api: feat/issue-15-notifications` sobre `a31a3aa`
 - **Prioridade declarada:** P1
@@ -11,14 +11,14 @@
 - **Labels:** `enhancement`
 - **Milestone/campos de projeto acessíveis:** milestone ausente; `projectItems` vazio. A timeline registra eventos de projeto em 2026-10-21 e 2026-10-24, sem campos do item disponíveis na consulta.
 - **Comentários:** nenhum; confirmado por consulta paginada à API.
-- **PRs relacionadas:** [bcl-next #96](https://github.com/thomazdevmaster/bcl-next/pull/96) e [bcl-api #5](https://github.com/thomazdevmaster/bcl-api/pull/5). O PR do backend cita `Refs: thomazdevmaster/bcl-next#15` sem fechar a issue.
+- **PRs anteriores, fechados antes da revisão:** [bcl-next #96](https://github.com/thomazdevmaster/bcl-next/pull/96) e [bcl-api #5](https://github.com/thomazdevmaster/bcl-api/pull/5). Não reabrir sem autorização após a verificação.
 
 ## Implementação atual
 
 - Frontend: tipos e chamadas da API real, badge mobile/desktop, inbox com paginação e leitura individual, preferências em `/settings` e formulário protegido por `notifications:create` em `/gestao/notificacao`.
 - Backend: migration Flyway V14, persistência e endpoints, isolamento por audiência/leitura, preferências, autorização delegável, eventos de signup/senha e outbox de e-mail com retry/reenvio.
-- Verificações executadas: `npx tsc --noEmit`, ESLint nos arquivos alterados e `./mvnw -DskipTests compile` passaram. Nenhum teste foi executado e nenhuma migration foi aplicada a banco.
-- Ainda pendente: revisão visual manual no browser e revisão/aprovação dos dois PRs. O estado `MERGEABLE` foi confirmado pelo GitHub em 2026-10-25.
+- Verificações executadas: `npx tsc --noEmit`, ESLint nos arquivos alterados, `npm run build` e `./mvnw -DskipTests compile` passaram. `./mvnw test` falhou em fixture preexistente: `demo.sql` insere em `musician_instruments`, tabela removida em V5. Foram adicionados testes unitários de autorização e visibilidade, ainda não executados. Nenhuma migration foi aplicada a banco persistente.
+- Ainda pendente: executar os testes novos, revisar visualmente o fluxo no browser e reavaliar o estado local antes de solicitar autorização para reabrir PRs.
 
 ## Matriz inicial dos requisitos originais
 
@@ -65,10 +65,10 @@ Esta matriz registra o estado observado antes da implementação, em 2026-10-24.
 
 ## Acréscimo de escopo da entrevista (não consta no texto original)
 
-| Requisito acordado na entrevista                                                                                             | Status   | Evidência no código ou pendência                                                                                                                                                                                                                                                                                               |
-| ---------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Conta com `notifications:create` envia uma notificação a uma ou várias contas; somente remetente e destinatários podem vê-la | Implementado | API valida permissão, destinatários ativos/aprovados e texto/link interno; inbox limita visibilidade ao remetente e destinatários. PR [bcl-api #5](https://github.com/thomazdevmaster/bcl-api/pull/5). |
+| Requisito acordado na entrevista                                                                                             | Status       | Evidência no código ou pendência                                                                                                                                                                                                                |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Conta com `notifications:create` envia uma notificação a uma ou várias contas; somente remetente e destinatários podem vê-la | Implementado | API valida permissão, destinatários ativos/aprovados e texto/link interno; inbox limita visibilidade ao remetente e destinatários. PR [bcl-api #5](https://github.com/thomazdevmaster/bcl-api/pull/5).                                          |
 | Preferências por tipo configuram portal e/ou e-mail                                                                          | Implementado | `/settings` salva preferências com defaults ligados; alertas manuais continuam obrigatórios no portal. Front PR [#96](https://github.com/thomazdevmaster/bcl-next/pull/96), backend PR [#5](https://github.com/thomazdevmaster/bcl-api/pull/5). |
-| Cada destinatário mantém sua própria leitura; leitura de uma pessoa não altera a cópia das demais                            | Implementado | Tabela de leitura independente por visualizador e endpoint autenticado de marcar como lida no backend, PR [bcl-api #5](https://github.com/thomazdevmaster/bcl-api/pull/5). |
-| Área Gestão > Notificação (`/gestao/notificacao`) para enviar alertas, protegida por permissão                               | Implementado | Rota e navegação protegidas por `notifications:create`, com autorização também no backend. Front PR [#96](https://github.com/thomazdevmaster/bcl-next/pull/96), backend PR [#5](https://github.com/thomazdevmaster/bcl-api/pull/5). |
-| Badge e inbox disponíveis a todas as contas autenticadas; sino independente no mobile e contador no avatar/menu desktop      | Implementado | `AppShell` contém sino móvel, contador no avatar desktop, menu, inbox paginada e estados acessíveis; revisão visual no browser pendente. Front PR [#96](https://github.com/thomazdevmaster/bcl-next/pull/96). |
+| Cada destinatário mantém sua própria leitura; leitura de uma pessoa não altera a cópia das demais                            | Implementado | Tabela de leitura independente por visualizador e endpoint autenticado de marcar como lida no backend, PR [bcl-api #5](https://github.com/thomazdevmaster/bcl-api/pull/5).                                                                      |
+| Área Gestão > Notificação (`/gestao/notificacao`) para enviar alertas, protegida por permissão                               | Implementado | Rota e navegação protegidas por `notifications:create`, com autorização também no backend. Front PR [#96](https://github.com/thomazdevmaster/bcl-next/pull/96), backend PR [#5](https://github.com/thomazdevmaster/bcl-api/pull/5).             |
+| Badge e inbox disponíveis a todas as contas autenticadas; sino independente no mobile e contador no avatar/menu desktop      | Implementado | `AppShell` contém sino móvel, contador no avatar desktop, menu, inbox paginada e estados acessíveis; revisão visual no browser pendente. Front PR [#96](https://github.com/thomazdevmaster/bcl-next/pull/96).                                   |

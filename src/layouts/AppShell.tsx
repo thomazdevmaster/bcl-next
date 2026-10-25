@@ -1,17 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useAuth } from "../contexts/AuthContext";
-import { useTheme } from "@/contexts/ThemeContext";
-import { roleLabels } from "@/core/auth/roles";
-import { getAuthenticatedNavGroups, titleForPath, type AuthenticatedNavGroup } from "@/core/navigation/menus";
+import { useEffect, useRef, useState } from "react";
+
 import { UserAvatar } from "@/components/auth/UserAvatar";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { NotificationInbox } from "@/components/notifications/NotificationInbox";
 import { useUnreadNotifications } from "@/components/notifications/useUnreadNotifications";
+import { useTheme } from "@/contexts/ThemeContext";
+import { roleLabels } from "@/core/auth/roles";
+import {
+  type AuthenticatedNavGroup,
+  getAuthenticatedNavGroups,
+  titleForPath,
+} from "@/core/navigation/menus";
+
+import { useAuth } from "../contexts/AuthContext";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [desktop, setDesktop] = useState(false);
@@ -28,17 +34,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
   const { theme, setTheme } = useTheme();
   const navGroups = getAuthenticatedNavGroups(auth.roles, auth.permissions);
-  const { count: unreadCount, refreshCount: refreshUnreadCount } = useUnreadNotifications(
-    auth.isHydrated && auth.isLoggedIn,
-    auth.user?.id,
-  );
+  const {
+    count: unreadCount,
+    countError: unreadCountError,
+    refreshCount: refreshUnreadCount,
+  } = useUnreadNotifications(auth.isHydrated && auth.isLoggedIn, auth.user?.id);
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 960px)");
     const onMediaChange = () => setDesktop(mq.matches);
     const hydrateState = () => {
       setDesktop(mq.matches);
-      setSidenavCollapsed(window.localStorage.getItem("app.sidenavCollapsed") === "true");
+      setSidenavCollapsed(
+        window.localStorage.getItem("app.sidenavCollapsed") === "true",
+      );
     };
     requestAnimationFrame(hydrateState);
     mq.addEventListener("change", onMediaChange);
@@ -51,7 +60,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       router.replace("/alterar-senha");
       return;
     }
-    if (auth.user?.needsProfileCompletion && pathname !== "/completar-cadastro") {
+    if (
+      auth.user?.needsProfileCompletion &&
+      pathname !== "/completar-cadastro"
+    ) {
       router.replace("/completar-cadastro");
     }
   }, [
@@ -93,7 +105,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const contentMargin = desktop ? (sidenavCollapsed ? 56 : 280) : 0;
   const pageTitle = titleForPath(pathname);
-  const isActiveRoute = (to: string) => pathname === to || (to !== "/" && pathname.startsWith(to));
+  const isActiveRoute = (to: string) =>
+    pathname === to || (to !== "/" && pathname.startsWith(to));
   const toggleCollapsed = () => {
     const next = !sidenavCollapsed;
     setSidenavCollapsed(next);
@@ -101,11 +114,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     localStorage.setItem("app.sidenavCollapsed", String(next));
   };
 
-  const NavLink = ({ href, label, icon }: { href: string; label: string; icon: string }) => (
+  const NavLink = ({
+    href,
+    label,
+    icon,
+  }: {
+    href: string;
+    label: string;
+    icon: string;
+  }) => (
     <Link
       href={href}
       className={`flex items-center gap-3 px-4 py-3 no-underline hover:no-underline transition-colors ${
-        isActiveRoute(href) ? "bg-white/10 text-[var(--color-brand)] font-semibold" : "text-[var(--sidebar-fg)]"
+        isActiveRoute(href)
+          ? "bg-white/10 text-[var(--color-brand)] font-semibold"
+          : "text-[var(--sidebar-fg)]"
       } ${sidenavCollapsed ? "justify-center px-0" : ""}`}
       title={label}
       aria-label={label}
@@ -139,7 +162,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       );
     }
     if (isFirst) return null;
-    return <div className="mx-2 my-1 h-px bg-white/15" role="presentation" aria-hidden />;
+    return (
+      <div
+        className="mx-2 my-1 h-px bg-white/15"
+        role="presentation"
+        aria-hidden
+      />
+    );
   };
 
   const renderNavGroups = (onNavigate?: () => void, mobile = false) =>
@@ -147,9 +176,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div
         key={group.id}
         role="group"
-        aria-labelledby={group.label.trim() && (mobile || !sidenavCollapsed) ? `nav-group-${group.id}` : undefined}
+        aria-labelledby={
+          group.label.trim() && (mobile || !sidenavCollapsed)
+            ? `nav-group-${group.id}`
+            : undefined
+        }
       >
-        <NavGroupHeading group={group} isFirst={groupIndex === 0} mobile={mobile} />
+        <NavGroupHeading
+          group={group}
+          isFirst={groupIndex === 0}
+          mobile={mobile}
+        />
         {group.items.map((item) =>
           mobile ? (
             <Link
@@ -185,7 +222,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         className={`fixed left-0 top-0 bottom-0 z-[100] flex flex-col transition-all duration-200 ${
           sidenavCollapsed ? "w-14 min-w-[3.5rem]" : "w-[280px]"
         } ${desktop ? "" : "hidden"}`}
-        style={{ backgroundColor: "var(--sidebar-bg)", borderRight: "1px solid var(--sidebar-border)" }}
+        style={{
+          backgroundColor: "var(--sidebar-bg)",
+          borderRight: "1px solid var(--sidebar-border)",
+        }}
         aria-label="Navegação"
       >
         <div
@@ -200,8 +240,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           />
           {!sidenavCollapsed && (
             <div>
-              <p className="font-semibold text-[var(--header-fg)] leading-tight">Banda Carmelitana</p>
-              <p className="text-xs text-[var(--color-brand)]">{roleLabels(auth.roles)}</p>
+              <p className="font-semibold text-[var(--header-fg)] leading-tight">
+                Banda Carmelitana
+              </p>
+              <p className="text-xs text-[var(--color-brand)]">
+                {roleLabels(auth.roles)}
+              </p>
             </div>
           )}
         </div>
@@ -233,7 +277,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </span>
                 ) : null}
                 <span className="sr-only" aria-live="polite" aria-atomic="true">
-                  {unreadCount === 1 ? "1 notificação não lida" : `${unreadCount} notificações não lidas`}
+                  {unreadCount === 1
+                    ? "1 notificação não lida"
+                    : `${unreadCount} notificações não lidas`}
                 </span>
               </span>
               {!sidenavCollapsed ? (
@@ -241,7 +287,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <span className="min-w-0 flex-1 truncate text-sm text-[var(--sidebar-fg)]">
                     {auth.displayName ?? auth.user.name}
                   </span>
-                  <span className="material-icons text-xl text-[var(--sidebar-fg)]" aria-hidden>
+                  <span
+                    className="material-icons text-xl text-[var(--sidebar-fg)]"
+                    aria-hidden
+                  >
                     {desktopUserMenuOpen ? "expand_less" : "expand_more"}
                   </span>
                 </>
@@ -250,7 +299,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
             </button>
             {desktopUserMenuOpen && !sidenavCollapsed ? (
-              <div id="desktop-user-submenu" className="mb-1 space-y-0.5 pl-3" role="menu">
+              <div
+                id="desktop-user-submenu"
+                className="mb-1 space-y-0.5 pl-3"
+                role="menu"
+              >
                 <button
                   type="button"
                   role="menuitem"
@@ -258,7 +311,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   aria-expanded={notificationsOpen}
                   aria-controls="notification-inbox"
                   onClick={() => {
-                    notificationReturnFocusRef.current = desktopAccountRef.current;
+                    notificationReturnFocusRef.current =
+                      desktopAccountRef.current;
                     setDesktopUserMenuOpen(false);
                     setNotificationsOpen(true);
                   }}
@@ -320,7 +374,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   aria-expanded={notificationsOpen}
                   aria-controls="notification-inbox"
                   onClick={() => {
-                    notificationReturnFocusRef.current = desktopAccountRef.current;
+                    notificationReturnFocusRef.current =
+                      desktopAccountRef.current;
                     setDesktopUserMenuOpen(false);
                     setNotificationsOpen(true);
                   }}
@@ -367,7 +422,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               onClick={() => setTheme(theme === "light" ? "dark" : "light")}
               aria-label="Alternar tema"
             >
-              <span className="material-icons">{theme === "light" ? "dark_mode" : "light_mode"}</span>
+              <span className="material-icons">
+                {theme === "light" ? "dark_mode" : "light_mode"}
+              </span>
             </button>
             <button
               type="button"
@@ -375,7 +432,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               onClick={toggleCollapsed}
               aria-label={sidenavCollapsed ? "Expandir menu" : "Recolher menu"}
             >
-              <span className="material-icons">{sidenavCollapsed ? "chevron_right" : "chevron_left"}</span>
+              <span className="material-icons">
+                {sidenavCollapsed ? "chevron_right" : "chevron_left"}
+              </span>
             </button>
           </div>
         )}
@@ -399,9 +458,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <NotificationBell
                 buttonRef={mobileNotificationsRef}
                 count={unreadCount}
+                countError={unreadCountError}
                 expanded={notificationsOpen}
                 onClick={() => {
-                  notificationReturnFocusRef.current = mobileNotificationsRef.current;
+                  notificationReturnFocusRef.current =
+                    mobileNotificationsRef.current;
                   setNotificationsOpen((open) => !open);
                 }}
               />
@@ -456,7 +517,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
 
         {!desktop && moreOpen && (
-          <div className="fixed inset-0 bg-black/40 z-[120]" onClick={() => setMoreOpen(false)} aria-hidden />
+          <div
+            className="fixed inset-0 bg-black/40 z-[120]"
+            onClick={() => setMoreOpen(false)}
+            aria-hidden
+          />
         )}
 
         {!desktop && moreOpen && (
@@ -475,7 +540,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <span className="material-icons">close</span>
               </button>
             </div>
-            <nav className="overflow-y-auto py-2">{renderNavGroups(() => setMoreOpen(false), true)}</nav>
+            <nav className="overflow-y-auto py-2">
+              {renderNavGroups(() => setMoreOpen(false), true)}
+            </nav>
           </aside>
         )}
 
@@ -492,6 +559,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         mobile={!desktop}
         onClose={() => setNotificationsOpen(false)}
         onUnreadCountRefresh={refreshUnreadCount}
+        countError={unreadCountError}
         returnFocusRef={notificationReturnFocusRef}
       />
     </div>

@@ -1,21 +1,28 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+
 import { getUnreadNotificationCount } from "@/domains/notifications/api";
 
-export function useUnreadNotifications(enabled: boolean, userId?: string | number) {
+export function useUnreadNotifications(
+  enabled: boolean,
+  userId?: string | number,
+) {
   const [count, setCount] = useState(0);
+  const [countError, setCountError] = useState<string | null>(null);
 
   const refreshCount = useCallback(async () => {
     if (!enabled) {
       setCount(0);
+      setCountError(null);
       return;
     }
+    setCountError(null);
     try {
       const response = await getUnreadNotificationCount();
       setCount(Math.max(0, response.count));
     } catch {
-      // Falha de contagem não deve bloquear a navegação autenticada.
+      setCountError("Não foi possível atualizar a contagem de notificações.");
     }
   }, [enabled]);
 
@@ -24,15 +31,20 @@ export function useUnreadNotifications(enabled: boolean, userId?: string | numbe
     let cancelled = false;
     getUnreadNotificationCount()
       .then((response) => {
-        if (!cancelled) setCount(Math.max(0, response.count));
+        if (cancelled) return;
+        setCount(Math.max(0, response.count));
+        setCountError(null);
       })
       .catch(() => {
-        // Falha de contagem não deve bloquear a navegação autenticada.
+        if (!cancelled)
+          setCountError(
+            "Não foi possível atualizar a contagem de notificações.",
+          );
       });
     return () => {
       cancelled = true;
     };
   }, [enabled, userId]);
 
-  return { count, refreshCount };
+  return { count, countError, refreshCount };
 }

@@ -4,6 +4,7 @@ import type { Ref } from "react";
 
 type Props = {
   count: number;
+  countError: string | null;
   expanded: boolean;
   onClick: () => void;
   buttonRef?: Ref<HTMLButtonElement>;
@@ -13,8 +14,16 @@ function formatCount(count: number): string {
   return count > 99 ? "99+" : String(count);
 }
 
-export function NotificationBell({ count, expanded, onClick, buttonRef }: Props) {
-  const label = count === 1 ? "1 notificação não lida" : `${count} notificações não lidas`;
+export function NotificationBell({
+  count,
+  countError,
+  expanded,
+  onClick,
+  buttonRef,
+}: Props) {
+  const countLabel =
+    count === 1 ? "1 notificação não lida" : `${count} notificações não lidas`;
+  const label = countError ? `${countLabel}. ${countError}` : countLabel;
 
   return (
     <button

@@ -1,26 +1,44 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
-import Link from "next/link";
-import { getNotifications, markNotificationRead } from "@/domains/notifications/api";
-import type { NotificationItem, NotificationPage } from "@/domains/notifications/types";
+
+import {
+  getNotifications,
+  markNotificationRead,
+} from "@/domains/notifications/api";
+import type {
+  NotificationItem,
+  NotificationPage,
+} from "@/domains/notifications/types";
 
 type Props = {
   open: boolean;
   mobile: boolean;
   onClose: () => void;
   onUnreadCountRefresh: () => Promise<void>;
+  countError: string | null;
   returnFocusRef: RefObject<HTMLButtonElement | null>;
 };
 
 function safeInternalPath(path: string | null): string | null {
-  return path?.startsWith("/") && !path.startsWith("//") && !path.includes("\\") && !/[\u0000-\u001f\u007f]/.test(path)
+  return path?.startsWith("/") &&
+    !path.startsWith("//") &&
+    !path.includes("\\") &&
+    !/[\u0000-\u001f\u007f]/.test(path)
     ? path
     : null;
 }
 
-export function NotificationInbox({ open, mobile, onClose, onUnreadCountRefresh, returnFocusRef }: Props) {
+export function NotificationInbox({
+  open,
+  mobile,
+  onClose,
+  onUnreadCountRefresh,
+  countError,
+  returnFocusRef,
+}: Props) {
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [nextCursor, setNextCursor] = useState<number | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -104,11 +122,17 @@ export function NotificationInbox({ open, mobile, onClose, onUnreadCountRefresh,
     try {
       await markNotificationRead(item.id);
       setItems((current) =>
-        current.map((entry) => (entry.id === item.id ? { ...entry, readAt: new Date().toISOString() } : entry)),
+        current.map((entry) =>
+          entry.id === item.id
+            ? { ...entry, readAt: new Date().toISOString() }
+            : entry,
+        ),
       );
       await onUnreadCountRefresh();
     } catch {
-      setError("Não foi possível marcar a notificação como lida. Tente novamente.");
+      setError(
+        "Não foi possível marcar a notificação como lida. Tente novamente.",
+      );
     }
   };
 
@@ -140,7 +164,9 @@ export function NotificationInbox({ open, mobile, onClose, onUnreadCountRefresh,
             <h2 id="notification-inbox-title" className="text-lg font-semibold">
               Notificações
             </h2>
-            <p className="text-sm text-[var(--muted)]">Avisos recentes da sua conta.</p>
+            <p className="text-sm text-[var(--muted)]">
+              Avisos recentes da sua conta.
+            </p>
           </div>
           <button
             ref={closeButtonRef}
@@ -163,9 +189,31 @@ export function NotificationInbox({ open, mobile, onClose, onUnreadCountRefresh,
             {error}
           </p>
         ) : null}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" aria-busy={loading}>
+        {countError ? (
+          <div
+            className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]"
+            role="alert"
+          >
+            <span>{countError}</span>
+            <button
+              type="button"
+              className="min-h-11 rounded-md px-3 font-semibold underline"
+              onClick={() => {
+                void onUnreadCountRefresh();
+              }}
+            >
+              Tentar novamente
+            </button>
+          </div>
+        ) : null}
+        <div
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+          aria-busy={loading}
+        >
           {items.length === 0 && !loading && !error ? (
-            <p className="px-5 py-10 text-center text-sm text-[var(--muted)]">Nenhuma notificação</p>
+            <p className="px-5 py-10 text-center text-sm text-[var(--muted)]">
+              Nenhuma notificação
+            </p>
           ) : null}
           <ul className="divide-y divide-[var(--border)]">
             {items.map((item) => {
@@ -174,8 +222,13 @@ export function NotificationInbox({ open, mobile, onClose, onUnreadCountRefresh,
                 <>
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className="font-medium leading-5">{item.title}</span>
-                    <span className="text-sm leading-5 text-[var(--muted)]">{item.body}</span>
-                    <time className="text-xs text-[var(--muted)]" dateTime={item.createdAt}>
+                    <span className="text-sm leading-5 text-[var(--muted)]">
+                      {item.body}
+                    </span>
+                    <time
+                      className="text-xs text-[var(--muted)]"
+                      dateTime={item.createdAt}
+                    >
                       {new Date(item.createdAt).toLocaleString("pt-BR")}
                     </time>
                   </span>
@@ -189,7 +242,10 @@ export function NotificationInbox({ open, mobile, onClose, onUnreadCountRefresh,
               );
 
               return (
-                <li key={item.id} className={`px-4 py-3 ${!item.readAt ? "bg-[var(--accent)]/30" : ""}`}>
+                <li
+                  key={item.id}
+                  className={`px-4 py-3 ${!item.readAt ? "bg-[var(--accent)]/30" : ""}`}
+                >
                   <div className="flex items-start gap-3">
                     {href ? (
                       <Link
@@ -203,7 +259,9 @@ export function NotificationInbox({ open, mobile, onClose, onUnreadCountRefresh,
                         {content}
                       </Link>
                     ) : (
-                      <div className="flex min-w-0 flex-1 items-start gap-3">{content}</div>
+                      <div className="flex min-w-0 flex-1 items-start gap-3">
+                        {content}
+                      </div>
                     )}
                     {!item.readAt ? (
                       <button
@@ -223,7 +281,10 @@ export function NotificationInbox({ open, mobile, onClose, onUnreadCountRefresh,
             })}
           </ul>
           {loading && items.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-[var(--muted)]" role="status">
+            <p
+              className="px-4 py-8 text-center text-sm text-[var(--muted)]"
+              role="status"
+            >
               Carregando notificações…
             </p>
           ) : null}
