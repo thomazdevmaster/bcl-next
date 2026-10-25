@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { metadataFromMusicXml } from '../src/domains/songs/musicXmlMetadata.ts';
+import { metadataFromMusicXml } from '../src/domains/songs/musicXmlMetadata';
 import {
   DEFAULT_INSTRUMENT_METADATA,
   resolveInstrumentMetadata,
-} from '../src/study/instrumentHelper.ts';
+} from '../src/study/instrumentHelper';
 
 const files = [
   'Africa.musicxml',
