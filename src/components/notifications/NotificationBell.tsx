@@ -29,7 +29,7 @@ export function NotificationBell({
     <button
       ref={buttonRef}
       type="button"
-      className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+      className="relative inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-white hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
       aria-label={`Notificações, ${label}`}
       aria-expanded={expanded}
       aria-controls="notification-inbox"

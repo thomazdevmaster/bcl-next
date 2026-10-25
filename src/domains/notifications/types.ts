@@ -3,6 +3,8 @@ export const NOTIFICATION_TYPES = [
   "signup_completed",
   "password_changed",
   "admin_message",
+  "blog_post_published",
+  "agenda_event_published",
   "repertoire_song_created",
   "board_message",
   "rehearsal_reminder",
@@ -15,6 +17,8 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   signup_completed: "Novo cadastro concluído",
   password_changed: "Senha alterada",
   admin_message: "Alertas enviados pela gestão",
+  blog_post_published: "Publicações do blog",
+  agenda_event_published: "Novidades da agenda",
   repertoire_song_created: "Música nova no repertório",
   board_message: "Mensagem da diretoria",
   rehearsal_reminder: "Lembrete de ensaio",
@@ -30,6 +34,7 @@ export type NotificationItem = {
   actorUserId: number | null;
   createdAt: string;
   readAt: string | null;
+  archived: boolean;
 };
 
 export type NotificationPage = {
@@ -58,4 +63,11 @@ export type NotificationEmailFailure = {
   recipientEmail: string | null;
   attemptCount: number;
   lastError: string | null;
+};
+
+export type NotificationReadReceipt = {
+  recipientId: number;
+  recipientName: string;
+  recipientUsername: string;
+  readAt: string | null;
 };

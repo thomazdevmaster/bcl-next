@@ -1,15 +1,33 @@
 import { usesRemoteApi } from "@/config/environment";
-import { apiFetch, ApiError } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
+
 import type {
   NotificationEmailFailure,
   NotificationPage,
   NotificationPreferences,
+  NotificationReadReceipt,
   NotificationRecipient,
 } from "./types";
 
-async function notificationApiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+const UNREAD_COUNT_CHANGED_EVENT = "bcl:notifications:count-changed";
+
+export function notifyUnreadCountChanged(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(UNREAD_COUNT_CHANGED_EVENT));
+  }
+}
+
+export { UNREAD_COUNT_CHANGED_EVENT };
+
+async function notificationApiFetch<T>(
+  path: string,
+  options?: RequestInit,
+): Promise<T> {
   if (!usesRemoteApi()) {
-    throw new ApiError("Configure NEXT_PUBLIC_API_URL para conectar à API oficial de notificações.", 0);
+    throw new ApiError(
+      "Configure NEXT_PUBLIC_API_URL para conectar à API oficial de notificações.",
+      0,
+    );
   }
   return apiFetch<T>(path, options);
 }
@@ -18,30 +36,81 @@ export function getUnreadNotificationCount(): Promise<{ count: number }> {
   return notificationApiFetch<{ count: number }>("/notifications/unread-count");
 }
 
-export function getNotifications(cursor?: number | null): Promise<NotificationPage> {
+export function getNotifications(
+  cursor?: number | null,
+): Promise<NotificationPage> {
   const query = new URLSearchParams({ limit: "10" });
   if (cursor) query.set("cursor", String(cursor));
-  return notificationApiFetch<NotificationPage>(`/notifications?${query.toString()}`);
+  return notificationApiFetch<NotificationPage>(
+    `/notifications?${query.toString()}`,
+  );
+}
+
+export function getNotificationCenter(
+  cursor?: number | null,
+): Promise<NotificationPage> {
+  const query = new URLSearchParams({ limit: "10" });
+  if (cursor) query.set("cursor", String(cursor));
+  return notificationApiFetch<NotificationPage>(
+    `/notifications/center?${query.toString()}`,
+  );
 }
 
 export function markNotificationRead(id: number): Promise<void> {
-  return notificationApiFetch<void>(`/notifications/${id}/read`, { method: "PATCH" });
+  return notificationApiFetch<void>(`/notifications/${id}/read`, {
+    method: "PATCH",
+  });
 }
 
-export function getNotificationPreferences(): Promise<NotificationPreferences[]> {
-  return notificationApiFetch<NotificationPreferences[]>("/notifications/preferences");
+export function markNotificationUnread(id: number): Promise<void> {
+  return notificationApiFetch<void>(`/notifications/${id}/read`, {
+    method: "DELETE",
+  });
+}
+
+export function archiveNotification(id: number): Promise<void> {
+  return notificationApiFetch<void>(`/notifications/${id}/archive`, {
+    method: "PUT",
+  });
+}
+
+export function restoreNotification(id: number): Promise<void> {
+  return notificationApiFetch<void>(`/notifications/${id}/archive`, {
+    method: "DELETE",
+  });
+}
+
+export function getNotificationReadReceipts(
+  id: number,
+): Promise<NotificationReadReceipt[]> {
+  return notificationApiFetch<NotificationReadReceipt[]>(
+    `/notifications/${id}/read-receipts`,
+  );
+}
+
+export function getNotificationPreferences(): Promise<
+  NotificationPreferences[]
+> {
+  return notificationApiFetch<NotificationPreferences[]>(
+    "/notifications/preferences",
+  );
 }
 
 export function saveNotificationPreferences(
   preferences: NotificationPreferences[],
 ): Promise<NotificationPreferences[]> {
-  return notificationApiFetch<NotificationPreferences[]>("/notifications/preferences", {
-    method: "PUT",
-    body: JSON.stringify({ preferences }),
-  });
+  return notificationApiFetch<NotificationPreferences[]>(
+    "/notifications/preferences",
+    {
+      method: "PUT",
+      body: JSON.stringify({ preferences }),
+    },
+  );
 }
 
-export function findNotificationRecipients(search: string): Promise<NotificationRecipient[]> {
+export function findNotificationRecipients(
+  search: string,
+): Promise<NotificationRecipient[]> {
   const query = new URLSearchParams();
   if (search.trim()) query.set("search", search.trim());
   const queryString = query.toString();
@@ -57,16 +126,26 @@ export function sendNotification(payload: {
   body: string;
   targetUrl: string | null;
 }): Promise<{ id: number; recipientCount: number }> {
-  return notificationApiFetch<{ id: number; recipientCount: number }>("/notifications", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return notificationApiFetch<{ id: number; recipientCount: number }>(
+    "/notifications",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
-export function getNotificationEmailFailures(): Promise<NotificationEmailFailure[]> {
-  return notificationApiFetch<NotificationEmailFailure[]>("/notifications/sent/email-failures");
+export function getNotificationEmailFailures(): Promise<
+  NotificationEmailFailure[]
+> {
+  return notificationApiFetch<NotificationEmailFailure[]>(
+    "/notifications/sent/email-failures",
+  );
 }
 
 export function retryNotificationEmail(outboxId: number): Promise<void> {
-  return notificationApiFetch<void>(`/notifications/email-outbox/${outboxId}/retry`, { method: "POST" });
+  return notificationApiFetch<void>(
+    `/notifications/email-outbox/${outboxId}/retry`,
+    { method: "POST" },
+  );
 }

@@ -10,22 +10,22 @@ import { FormStageBlock } from "@/components/forms/FormStageBlock";
 import { FormStageField } from "@/components/forms/FormStageField";
 import { FormView } from "@/components/forms/core/FormView";
 import { FormFieldValidationShell } from "@/components/forms/validations/FormFieldValidationShell";
+import { NotificationCenter } from "@/components/notifications/NotificationCenter";
+import {
+  type ResponsiveTabOption,
+  ResponsiveTabs,
+} from "@/components/shared/ResponsiveTabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { can } from "@/core/auth/permissions";
 import {
   findNotificationRecipients,
-  getNotificationEmailFailures,
-  retryNotificationEmail,
   sendNotification,
 } from "@/domains/notifications/api";
 import {
   type SendNotificationValues,
   sendNotificationSchema,
 } from "@/domains/notifications/schemas/send-notification.schema";
-import type {
-  NotificationEmailFailure,
-  NotificationRecipient,
-} from "@/domains/notifications/types";
+import type { NotificationRecipient } from "@/domains/notifications/types";
 import { failureMessage } from "@/lib/userMessages";
 
 const defaults: SendNotificationValues = {
@@ -36,21 +36,76 @@ const defaults: SendNotificationValues = {
   targetUrl: "",
 };
 
+type NotificationManagementTab = "send" | "center";
+
+const notificationManagementTabs: ResponsiveTabOption<NotificationManagementTab>[] =
+  [
+    {
+      value: "send",
+      label: "Enviar alerta",
+      icon: "campaign",
+      tabId: "notification-send-tab",
+      panelId: "notification-send-panel",
+    },
+    {
+      value: "center",
+      label: "Central",
+      icon: "notifications",
+      tabId: "notification-center-tab",
+      panelId: "notification-center-panel",
+    },
+  ];
+
 export default function NotificationManagementPage() {
   const auth = useAuth();
   const router = useRouter();
   const allowed = can(auth.roles, "notifications", "create", auth.permissions);
+  const rolesResolved = auth.isLoggedIn && !auth.roles.includes("public");
 
   useEffect(() => {
-    if (auth.isHydrated && !allowed)
+    if (auth.isHydrated && rolesResolved && !allowed)
       router.replace(auth.isLoggedIn ? "/" : "/login");
-  }, [allowed, auth.isHydrated, auth.isLoggedIn, router]);
+  }, [allowed, auth.isHydrated, auth.isLoggedIn, rolesResolved, router]);
 
-  if (!auth.isHydrated || !allowed) return null;
+  if (!auth.isHydrated || !rolesResolved || !allowed) return null;
   return <NotificationManagement />;
 }
 
 function NotificationManagement() {
+  const [activePanel, setActivePanel] =
+    useState<NotificationManagementTab>("send");
+
+  return (
+    <ResponsiveTabs
+      label="Notificações da gestão"
+      options={notificationManagementTabs}
+      value={activePanel}
+      onChange={setActivePanel}
+      className="mx-auto w-full max-w-3xl"
+    >
+      <div
+        id="notification-send-panel"
+        role="tabpanel"
+        aria-labelledby="notification-send-tab"
+        hidden={activePanel !== "send"}
+        className="p-4 sm:p-6"
+      >
+        <NotificationComposer />
+      </div>
+      <div
+        id="notification-center-panel"
+        role="tabpanel"
+        aria-labelledby="notification-center-tab"
+        hidden={activePanel !== "center"}
+        className="p-4 sm:p-6"
+      >
+        {activePanel === "center" ? <NotificationCenter /> : null}
+      </div>
+    </ResponsiveTabs>
+  );
+}
+
+function NotificationComposer() {
   const form = useForm<SendNotificationValues>({
     defaultValues: defaults,
     resolver: zodResolver(sendNotificationSchema),
@@ -65,10 +120,6 @@ function NotificationManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [emailFailures, setEmailFailures] = useState<
-    NotificationEmailFailure[]
-  >([]);
-  const [retryingId, setRetryingId] = useState<number | null>(null);
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   const loadRecipients = useCallback(async (search: string) => {
@@ -96,12 +147,6 @@ function NotificationManagement() {
     return () => window.clearTimeout(timeout);
   }, [allApproved, loadRecipients, recipientSearch]);
 
-  useEffect(() => {
-    void getNotificationEmailFailures()
-      .then(setEmailFailures)
-      .catch(() => setEmailFailures([]));
-  }, []);
-
   const submit = async (values: SendNotificationValues) => {
     setSaving(true);
     setError(null);
@@ -124,33 +169,16 @@ function NotificationManagement() {
     }
   };
 
-  const retryEmail = async (failure: NotificationEmailFailure) => {
-    setRetryingId(failure.outboxId);
-    setError(null);
-    try {
-      await retryNotificationEmail(failure.outboxId);
-      setEmailFailures((current) =>
-        current.filter((item) => item.outboxId !== failure.outboxId),
-      );
-      setSuccess(
-        `Novo envio de e-mail solicitado para ${failure.recipientName}.`,
-      );
-    } catch (caught) {
-      setError(failureMessage(caught, "Não foi possível solicitar o reenvio."));
-    } finally {
-      setRetryingId(null);
-    }
-  };
-
   return (
     <div className="mx-auto w-full max-w-3xl">
       <FormProvider {...form}>
         <FormView
           eyebrow="Gestão"
           title="Enviar notificação"
-          description="Envie um alerta pelo portal para uma ou mais contas ativas e aprovadas. O e-mail segue as preferências de cada destinatário."
+          description="Envie um alerta pelo portal para uma ou mais contas ativas e aprovadas. O envio por e-mail está temporariamente desabilitado."
           onSubmit={form.handleSubmit(submit)}
           noValidate
+          className="!rounded-none !border-0 !bg-transparent !p-0 !shadow-none"
           formClassName="space-y-5"
         >
           {error ? (
@@ -172,7 +200,7 @@ function NotificationManagement() {
 
           <FormStageBlock
             title="Destinatários"
-            description="O remetente consegue consultar o alerta enviado; não recebe um e-mail para si mesmo."
+            description="O remetente consegue consultar o alerta enviado na Central de notificações."
             surface="plain"
           >
             <Controller
@@ -345,9 +373,9 @@ function NotificationManagement() {
               />
               <FormStageField<SendNotificationValues>
                 name="targetUrl"
-                label="Link interno (opcional)"
+                label="Link (opcional)"
                 required={false}
-                optionalMessage="O link precisa começar com / e apontar para o portal."
+                optionalMessage="Aceita caminhos do portal e URLs externas http(s)."
                 maxLength={2048}
               />
             </div>
@@ -366,49 +394,6 @@ function NotificationManagement() {
           />
         </FormView>
       </FormProvider>
-
-      {emailFailures.length > 0 ? (
-        <section
-          className="mt-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-[var(--shadow-soft)] sm:p-6"
-          aria-labelledby="failed-email-title"
-        >
-          <h2 id="failed-email-title" className="text-lg font-semibold">
-            E-mails que falharam
-          </h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            O alerta continua disponível no portal. Você pode solicitar uma nova
-            tentativa de e-mail.
-          </p>
-          <ul className="mt-4 divide-y divide-[var(--border)]">
-            {emailFailures.map((failure) => (
-              <li
-                key={failure.outboxId}
-                className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium">{failure.recipientName}</p>
-                  <p className="break-all text-sm text-[var(--muted)]">
-                    {failure.recipientEmail ?? "Sem e-mail cadastrado"} ·{" "}
-                    {failure.lastError}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="min-h-11 shrink-0 rounded-lg border border-[var(--border)] px-4 text-sm font-medium hover:bg-[var(--accent)] disabled:opacity-60"
-                  disabled={retryingId === failure.outboxId}
-                  onClick={() => {
-                    void retryEmail(failure);
-                  }}
-                >
-                  {retryingId === failure.outboxId
-                    ? "Solicitando…"
-                    : "Tentar novamente"}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
     </div>
   );
 }

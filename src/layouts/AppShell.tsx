@@ -16,6 +16,7 @@ import {
   getAuthenticatedNavGroups,
   titleForPath,
 } from "@/core/navigation/menus";
+import { UNREAD_COUNT_CHANGED_EVENT } from "@/domains/notifications/api";
 
 import { useAuth } from "../contexts/AuthContext";
 
@@ -27,6 +28,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [desktopUserMenuOpen, setDesktopUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const desktopAccountRef = useRef<HTMLButtonElement>(null);
+  const desktopNotificationsRef = useRef<HTMLButtonElement>(null);
   const mobileNotificationsRef = useRef<HTMLButtonElement>(null);
   const notificationReturnFocusRef = useRef<HTMLButtonElement | null>(null);
   const pathname = usePathname() ?? "/";
@@ -39,6 +41,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     countError: unreadCountError,
     refreshCount: refreshUnreadCount,
   } = useUnreadNotifications(auth.isHydrated && auth.isLoggedIn, auth.user?.id);
+
+  useEffect(() => {
+    const handleUnreadCountChange = () => {
+      void refreshUnreadCount();
+    };
+    window.addEventListener(
+      UNREAD_COUNT_CHANGED_EVENT,
+      handleUnreadCountChange,
+    );
+    return () =>
+      window.removeEventListener(
+        UNREAD_COUNT_CHANGED_EVENT,
+        handleUnreadCountChange,
+      );
+  }, [refreshUnreadCount]);
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 960px)");
@@ -112,6 +129,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setSidenavCollapsed(next);
     if (next) setDesktopUserMenuOpen(false);
     localStorage.setItem("app.sidenavCollapsed", String(next));
+  };
+  const toggleDesktopNotifications = () => {
+    notificationReturnFocusRef.current = desktopNotificationsRef.current;
+    setDesktopUserMenuOpen(false);
+    setNotificationsOpen((open) => !open);
   };
 
   const NavLink = ({
@@ -187,6 +209,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           isFirst={groupIndex === 0}
           mobile={mobile}
         />
+        {desktop &&
+        sidenavCollapsed &&
+        !mobile &&
+        group.id === "public" &&
+        auth.isLoggedIn ? (
+          <div className="flex justify-center py-1">
+            <NotificationBell
+              buttonRef={desktopNotificationsRef}
+              count={unreadCount}
+              countError={unreadCountError}
+              expanded={notificationsOpen}
+              onClick={toggleDesktopNotifications}
+            />
+          </div>
+        ) : null}
         {group.items.map((item) =>
           mobile ? (
             <Link
@@ -229,25 +266,38 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         aria-label="Navegação"
       >
         <div
-          className={`flex-shrink-0 ${!sidenavCollapsed ? "px-4 py-4" : "px-1 py-3"} flex items-center justify-center gap-3`}
+          className={`flex-shrink-0 ${sidenavCollapsed ? "flex flex-col items-center gap-2 px-1 py-3" : "flex items-center justify-between gap-3 px-4 py-4"}`}
         >
-          <Image
-            src="/assets/logo.png"
-            alt="Banda Carmelitana"
-            className="w-12 h-12 rounded-full"
-            width={48}
-            height={48}
-          />
-          {!sidenavCollapsed && (
-            <div>
-              <p className="font-semibold text-[var(--header-fg)] leading-tight">
-                Banda Carmelitana
-              </p>
-              <p className="text-xs text-[var(--color-brand)]">
-                {roleLabels(auth.roles)}
-              </p>
-            </div>
-          )}
+          <div
+            className={`flex min-w-0 items-center gap-3 ${sidenavCollapsed ? "justify-center" : ""}`}
+          >
+            <Image
+              src="/assets/logo.png"
+              alt="Banda Carmelitana"
+              className="h-12 w-12 shrink-0 rounded-full"
+              width={48}
+              height={48}
+            />
+            {!sidenavCollapsed ? (
+              <div className="min-w-0">
+                <p className="truncate font-semibold leading-tight text-[var(--header-fg)]">
+                  Banda Carmelitana
+                </p>
+                <p className="truncate text-xs text-[var(--color-brand)]">
+                  {roleLabels(auth.roles)}
+                </p>
+              </div>
+            ) : null}
+          </div>
+          {auth.isLoggedIn && !sidenavCollapsed ? (
+            <NotificationBell
+              buttonRef={desktopNotificationsRef}
+              count={unreadCount}
+              countError={unreadCountError}
+              expanded={notificationsOpen}
+              onClick={toggleDesktopNotifications}
+            />
+          ) : null}
         </div>
         <nav className="flex-1 overflow-y-auto py-2">{renderNavGroups()}</nav>
         {desktop && auth.user ? (
@@ -268,19 +318,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   name={auth.user.name}
                   className="h-10 w-10 text-[40px] leading-none"
                 />
-                {unreadCount > 0 ? (
-                  <span
-                    className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[var(--sidebar-bg)] bg-[var(--destructive)] px-1 text-[10px] font-bold leading-none text-white"
-                    aria-hidden="true"
-                  >
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </span>
-                ) : null}
-                <span className="sr-only" aria-live="polite" aria-atomic="true">
-                  {unreadCount === 1
-                    ? "1 notificação não lida"
-                    : `${unreadCount} notificações não lidas`}
-                </span>
               </span>
               {!sidenavCollapsed ? (
                 <>
@@ -304,24 +341,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className="mb-1 space-y-0.5 pl-3"
                 role="menu"
               >
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm text-[var(--sidebar-fg)] hover:bg-white/10"
-                  aria-expanded={notificationsOpen}
-                  aria-controls="notification-inbox"
-                  onClick={() => {
-                    notificationReturnFocusRef.current =
-                      desktopAccountRef.current;
-                    setDesktopUserMenuOpen(false);
-                    setNotificationsOpen(true);
-                  }}
-                >
-                  <span className="material-icons text-xl" aria-hidden="true">
-                    notifications
-                  </span>
-                  Notificações ({unreadCount})
-                </button>
                 <Link
                   href="/profile"
                   role="menuitem"
@@ -334,7 +353,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   Perfil
                 </Link>
                 <Link
-                  href="/settings"
+                  href="/configuracoes"
                   role="menuitem"
                   className="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm text-[var(--sidebar-fg)] no-underline hover:bg-white/10 hover:no-underline"
                   onClick={() => setDesktopUserMenuOpen(false)}
@@ -367,21 +386,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 className="absolute bottom-0 left-[calc(100%+0.5rem)] z-[110] min-w-48 rounded-lg border border-[var(--border)] bg-[var(--card)] py-1 shadow-lg"
                 role="menu"
               >
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="flex min-h-11 w-full items-center gap-3 px-4 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
-                  aria-expanded={notificationsOpen}
-                  aria-controls="notification-inbox"
-                  onClick={() => {
-                    notificationReturnFocusRef.current =
-                      desktopAccountRef.current;
-                    setDesktopUserMenuOpen(false);
-                    setNotificationsOpen(true);
-                  }}
-                >
-                  Notificações ({unreadCount})
-                </button>
                 <Link
                   href="/profile"
                   role="menuitem"
@@ -391,7 +395,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   Perfil
                 </Link>
                 <Link
-                  href="/settings"
+                  href="/configuracoes"
                   role="menuitem"
                   className="flex min-h-11 items-center gap-3 px-4 text-sm text-[var(--foreground)] no-underline hover:bg-[var(--accent)] hover:no-underline"
                   onClick={() => setDesktopUserMenuOpen(false)}
@@ -496,7 +500,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <button
                     type="button"
                     className="w-full flex items-center gap-3 px-4 py-3 text-sm"
-                    onClick={() => router.push("/settings")}
+                    onClick={() => router.push("/configuracoes")}
                   >
                     Configurações
                   </button>
@@ -556,7 +560,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <NotificationInbox
         open={notificationsOpen && auth.isLoggedIn}
-        mobile={!desktop}
         onClose={() => setNotificationsOpen(false)}
         onUnreadCountRefresh={refreshUnreadCount}
         countError={unreadCountError}
