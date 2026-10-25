@@ -42,7 +42,7 @@ const notificationManagementTabs: ResponsiveTabOption<NotificationManagementTab>
   [
     {
       value: "send",
-      label: "Enviar alerta",
+      label: "Nova notificação",
       icon: "campaign",
       tabId: "notification-send-tab",
       panelId: "notification-send-panel",
@@ -81,7 +81,7 @@ function NotificationManagement() {
       options={notificationManagementTabs}
       value={activePanel}
       onChange={setActivePanel}
-      className="mx-auto w-full max-w-3xl"
+      className="mx-auto w-full "
     >
       <div
         id="notification-send-panel"

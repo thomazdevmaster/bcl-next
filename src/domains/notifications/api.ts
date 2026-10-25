@@ -2,6 +2,8 @@ import { usesRemoteApi } from "@/config/environment";
 import { ApiError, apiFetch } from "@/lib/api";
 
 import type {
+  NotificationBulkAction,
+  NotificationCenterPage,
   NotificationEmailFailure,
   NotificationPage,
   NotificationPreferences,
@@ -46,14 +48,29 @@ export function getNotifications(
   );
 }
 
-export function getNotificationCenter(
-  cursor?: number | null,
-): Promise<NotificationPage> {
-  const query = new URLSearchParams({ limit: "10" });
-  if (cursor) query.set("cursor", String(cursor));
-  return notificationApiFetch<NotificationPage>(
+export function getNotificationCenter(options: {
+  page: number;
+  pageSize: number;
+  search: string;
+}): Promise<NotificationCenterPage> {
+  const query = new URLSearchParams({
+    page: String(options.page),
+    pageSize: String(options.pageSize),
+  });
+  if (options.search) query.set("search", options.search);
+  return notificationApiFetch<NotificationCenterPage>(
     `/notifications/center?${query.toString()}`,
   );
+}
+
+export function bulkUpdateNotifications(
+  ids: number[],
+  action: NotificationBulkAction,
+): Promise<void> {
+  return notificationApiFetch<void>("/notifications/batch", {
+    method: "POST",
+    body: JSON.stringify({ ids, action }),
+  });
 }
 
 export function markNotificationRead(id: number): Promise<void> {

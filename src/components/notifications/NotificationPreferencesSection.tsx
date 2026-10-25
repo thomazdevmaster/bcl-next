@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import {
+  IconSelect,
+  type IconSelectOption,
+} from "@/components/shared/IconSelect";
 import { useAuth } from "@/contexts/AuthContext";
 import { can } from "@/core/auth/permissions";
 import {
@@ -20,6 +24,35 @@ type Values = Record<
   NotificationType,
   { portalEnabled: boolean; emailEnabled: boolean }
 >;
+
+const NOTIFICATION_MODULES: Record<NotificationType, string> = {
+  signup_approval_pending: "Usuários",
+  signup_completed: "Usuários",
+  password_changed: "Conta",
+  admin_message: "Gestão",
+  blog_post_published: "Blog",
+  agenda_event_published: "Agenda",
+  repertoire_song_created: "Repertório",
+  board_message: "Diretoria",
+  rehearsal_reminder: "Ensaios",
+};
+
+type PreferenceVisibility = "account" | "users:approve" | "admin" | "required";
+
+const NOTIFICATION_PREFERENCE_VISIBILITY: Record<
+  NotificationType,
+  PreferenceVisibility
+> = {
+  signup_approval_pending: "users:approve",
+  signup_completed: "users:approve",
+  password_changed: "account",
+  admin_message: "required",
+  blog_post_published: "account",
+  agenda_event_published: "account",
+  repertoire_song_created: "admin",
+  board_message: "admin",
+  rehearsal_reminder: "admin",
+};
 
 function defaults(): Values {
   return Object.fromEntries(
@@ -45,16 +78,13 @@ export function NotificationPreferencesSection() {
   const auth = useAuth();
   const isAdmin = auth.roles.includes("admin");
   const canApproveUsers = can(auth.roles, "users", "approve", auth.permissions);
-  const visibleTypes = isAdmin
-    ? NOTIFICATION_TYPES
-    : NOTIFICATION_TYPES.filter(
-        (type) =>
-          type === "password_changed" ||
-          type === "admin_message" ||
-          type === "blog_post_published" ||
-          type === "agenda_event_published" ||
-          (type === "signup_approval_pending" && canApproveUsers),
-      );
+  const visibleTypes = NOTIFICATION_TYPES.filter((type) => {
+    const visibility = NOTIFICATION_PREFERENCE_VISIBILITY[type];
+    if (visibility === "required") return false;
+    if (isAdmin) return true;
+    if (visibility === "users:approve") return canApproveUsers;
+    return visibility === "account";
+  });
   const [values, setValues] = useState<Values | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -80,13 +110,17 @@ export function NotificationPreferencesSection() {
     return () => window.cancelAnimationFrame(frame);
   }, [load]);
 
-  const toggle = async (type: NotificationType) => {
-    if (!values || saving || type === "admin_message") return;
+  const saveSelection = async (selectedTypes: NotificationType[]) => {
+    if (!values || saving) return;
     const previous = values;
-    const next = {
-      ...values,
-      [type]: { ...values[type], portalEnabled: !values[type].portalEnabled },
-    };
+    const selectedSet = new Set(selectedTypes);
+    const next = { ...values };
+    visibleTypes.forEach((type) => {
+      next[type] = {
+        ...next[type],
+        portalEnabled: selectedSet.has(type),
+      };
+    });
     const parsed = notificationPreferencesSchema.safeParse(next);
     if (!parsed.success) {
       setError("Confira as preferências selecionadas.");
@@ -114,6 +148,13 @@ export function NotificationPreferencesSection() {
     }
   };
 
+  const options: IconSelectOption<NotificationType>[] = visibleTypes.map(
+    (type) => ({
+      value: type,
+      label: `${NOTIFICATION_MODULES[type]} · ${NOTIFICATION_TYPE_LABELS[type]}`,
+    }),
+  );
+
   return (
     <section
       className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-[var(--shadow-soft)] sm:p-6"
@@ -127,18 +168,10 @@ export function NotificationPreferencesSection() {
           Notificações
         </h2>
         <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-          Escolha os tipos de avisos automáticos que aparecem no portal. Alertas
-          enviados pela gestão sempre aparecem no portal.
+          Escolha quais avisos quer receber no portal. As opções disponíveis
+          dependem das permissões da sua conta.
         </p>
       </div>
-      <p
-        id="notification-email-disabled-note"
-        className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--background)] p-3 text-sm text-[var(--muted)]"
-        role="note"
-      >
-        O envio por e-mail está desabilitado temporariamente. As notificações
-        continuam disponíveis no portal.
-      </p>
 
       {error ? (
         <p
@@ -170,47 +203,26 @@ export function NotificationPreferencesSection() {
       ) : null}
 
       {values ? (
-        <div
-          className="mt-5 divide-y divide-[var(--border)]"
-          aria-busy={saving}
-        >
-          {visibleTypes.map((type) => (
-            <fieldset
-              key={type}
-              className="grid gap-3 py-4 first:pt-0 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
-            >
-              <legend className="sr-only">
-                {NOTIFICATION_TYPE_LABELS[type]}
-              </legend>
-              <p className="font-medium">{NOTIFICATION_TYPE_LABELS[type]}</p>
-              <label className="flex min-h-11 items-center gap-3 rounded-lg px-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="h-5 w-5 accent-[var(--primary)]"
-                  checked={values[type].portalEnabled}
-                  disabled={saving || type === "admin_message"}
-                  onChange={() => {
-                    void toggle(type);
-                  }}
-                />
-                <span>
-                  Portal{type === "admin_message" ? " (obrigatório)" : ""}
-                </span>
-              </label>
-              <label
-                className="flex min-h-11 items-center gap-3 rounded-lg px-2 text-sm text-[var(--muted)]"
-                aria-describedby="notification-email-disabled-note"
-              >
-                <input
-                  type="checkbox"
-                  className="h-5 w-5 accent-[var(--primary)]"
-                  checked={false}
-                  disabled
-                />
-                <span>E-mail (temporariamente indisponível)</span>
-              </label>
-            </fieldset>
-          ))}
+        <div className="mt-5" aria-busy={saving}>
+          <IconSelect
+            label="Avisos que quero receber"
+            options={options}
+            value={visibleTypes.filter((type) => values[type].portalEnabled)}
+            multiple
+            allowEmptySelection
+            selectedSummary={(selected) =>
+              selected.length === 0
+                ? "Nenhum aviso selecionado"
+                : `${selected.length} ${selected.length === 1 ? "aviso selecionado" : "avisos selecionados"}`
+            }
+            disabled={saving}
+            onChange={(selectedTypes) => {
+              void saveSelection(selectedTypes);
+            }}
+          />
+          <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
+            Os avisos marcados na lista serão recebidos no portal.
+          </p>
         </div>
       ) : null}
     </section>

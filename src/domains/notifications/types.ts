@@ -43,6 +43,16 @@ export type NotificationPage = {
   hasMore: boolean;
 };
 
+export type NotificationCenterPage = {
+  items: NotificationItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export type NotificationBulkAction = "read" | "unread" | "remove";
+
 export type NotificationPreferences = {
   type: NotificationType;
   portalEnabled: boolean;

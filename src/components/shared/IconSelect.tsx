@@ -25,6 +25,10 @@ type MultipleSelectProps<Value extends string> = {
   multiple: true;
   value: readonly Value[];
   onChange: (value: Value[]) => void;
+  allowEmptySelection?: boolean;
+  selectedSummary?: (
+    selectedOptions: readonly IconSelectOption<Value>[],
+  ) => string;
 };
 
 type IconSelectProps<Value extends string> = {
@@ -54,9 +58,10 @@ export function IconSelect<Value extends string>(
     selectedValues.includes(option.value),
   );
   const selectedLabel = props.multiple
-    ? selectedOptions.length === 1
-      ? selectedOptions[0].label
-      : `${selectedOptions.length} perfis ativos`
+    ? (props.selectedSummary?.(selectedOptions) ??
+      (selectedOptions.length === 1
+        ? selectedOptions[0].label
+        : `${selectedOptions.length} perfis ativos`))
     : options.find((option) => option.value === props.value)?.label;
   const selectedIcon = selectedOptions[0]?.icon;
 
@@ -75,29 +80,40 @@ export function IconSelect<Value extends string>(
       const rect = trigger.getBoundingClientRect();
       const viewportMargin = 8;
       const gap = 8;
+      const dialog =
+        portalContainer instanceof HTMLDialogElement ? portalContainer : null;
+      const dialogRect = dialog?.getBoundingClientRect();
+      const bounds = {
+        top: viewportMargin,
+        right: window.innerWidth - viewportMargin,
+        bottom: window.innerHeight - viewportMargin,
+        left: viewportMargin,
+      };
+      const boundsWidth = Math.max(0, bounds.right - bounds.left);
       const menuWidth = Math.min(
-        Math.max(rect.width, 176),
-        window.innerWidth - viewportMargin * 2,
+        Math.max(rect.width, Math.min(176, boundsWidth)),
+        boundsWidth,
       );
       const left = Math.min(
-        Math.max(rect.left, viewportMargin),
-        window.innerWidth - viewportMargin - menuWidth,
+        Math.max(rect.left, bounds.left),
+        bounds.right - menuWidth,
       );
       const desiredHeight = Math.min(options.length * 44 + 8, 320);
-      const spaceAbove = Math.max(0, rect.top - gap - viewportMargin);
-      const spaceBelow = Math.max(
-        0,
-        window.innerHeight - rect.bottom - gap - viewportMargin,
-      );
+      const spaceAbove = Math.max(0, rect.top - gap - bounds.top);
+      const spaceBelow = Math.max(0, bounds.bottom - rect.bottom - gap);
       const openUpward = spaceBelow < desiredHeight && spaceAbove > spaceBelow;
       const availableHeight = openUpward ? spaceAbove : spaceBelow;
       const menuHeight = Math.min(desiredHeight, availableHeight);
+      const viewportTop = openUpward
+        ? rect.top - gap - menuHeight
+        : rect.bottom + gap;
 
       setMenuStyle({
-        left,
-        top: openUpward ? rect.top - gap - menuHeight : rect.bottom + gap,
+        left: dialogRect ? left - dialogRect.left : left,
+        top: dialogRect ? viewportTop - dialogRect.top : viewportTop,
         width: menuWidth,
         maxHeight: menuHeight,
+        position: dialogRect ? "absolute" : "fixed",
       });
     };
 
@@ -108,7 +124,7 @@ export function IconSelect<Value extends string>(
       window.removeEventListener("resize", updateMenuPosition);
       window.removeEventListener("scroll", updateMenuPosition, true);
     };
-  }, [isOpen, options.length]);
+  }, [isOpen, options.length, portalContainer]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -197,7 +213,7 @@ export function IconSelect<Value extends string>(
                 }
               }}
               style={menuStyle}
-              className="fixed z-[100] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--card)] p-1 shadow-[var(--shadow-soft)]"
+              className="z-[100] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--card)] p-1 shadow-[var(--shadow-soft)]"
             >
               {options.map((option) => {
                 const selected = selectedValues.includes(option.value);
@@ -209,7 +225,12 @@ export function IconSelect<Value extends string>(
                     aria-checked={selected}
                     onClick={() => {
                       if (props.multiple) {
-                        if (selected && selectedValues.length === 1) return;
+                        if (
+                          selected &&
+                          selectedValues.length === 1 &&
+                          !props.allowEmptySelection
+                        )
+                          return;
                         const nextValues = selected
                           ? selectedValues.filter(
                               (selectedValue) => selectedValue !== option.value,
@@ -221,7 +242,8 @@ export function IconSelect<Value extends string>(
                       props.onChange(option.value);
                       closeMenu();
                     }}
-                    className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)] ${selected ? "bg-[var(--card-secondary)] text-[var(--foreground)]" : "text-[var(--muted)] hover:bg-[var(--card-secondary)]"}`}
+                    disabled={disabled}
+                    className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-60 ${selected ? "bg-[var(--card-secondary)] text-[var(--foreground)]" : "text-[var(--muted)] hover:bg-[var(--card-secondary)]"}`}
                   >
                     {option.icon ? (
                       <span
