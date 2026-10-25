@@ -1,6 +1,7 @@
 'use client';
 
 import { useTheme } from '@/contexts/ThemeContext';
+import { NotificationPreferencesSection } from '@/components/notifications/NotificationPreferencesSection';
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
@@ -83,6 +84,8 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      <NotificationPreferencesSection />
     </div>
   );
 }
