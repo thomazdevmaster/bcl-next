@@ -37,7 +37,7 @@ O produto reúne comunicação pública, gestão da associação e estudo de mú
 
 - Portal público: `/` (início), `/agenda`, `/blog`, `/blog/[slug]`, `/sobre` e `/historia`. O botão Entrar leva à autenticação.
 - Área interna: `/gestao`, com módulos de usuários, pessoas, músicas, patrimônio, instrumentos, apresentações, blog e mídias; o acesso a ações e módulos depende das permissões.
-- Também existem `/profile` para dados da sessão e `/settings` para tema e preferências.
+- Também existem `/profile` para dados da sessão e `/configuracoes` para tema e preferências; `/settings` redireciona para a rota pt-BR.
 - A gestão é organizada por domínios e usa workspace genérico. Instrumentos são registros de patrimônio com `category: "instrument"`, não uma coleção independente.
 - Cadastros de pessoas aceitam aluno, músico ou os dois. Menores de idade exigem responsável cadastrado. Telefone usa máscara; e-mail e documento são únicos onde a regra estiver implementada.
 

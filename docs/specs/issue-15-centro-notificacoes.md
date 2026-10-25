@@ -108,7 +108,7 @@ Maestro/admin não recebem sinal claro quando há **cadastro pendente de aprova�
 
 - O App Router é o fluxo oficial do frontend. O shell atual fica em `src/layouts/AppShell.tsx`; o avatar abre menu de conta em mobile e desktop.
 - As permissões do frontend são a união das permissões dos papéis. No backend, permissões são concedidas a papéis pela tabela `RolePermission`; não há concessão por conta individual.
-- A página de preferências existente é `/settings`. Rotas de gestão ficam sob `/gestao`.
+- A página de preferências é `/configuracoes` em pt-BR; `/settings` redireciona para ela. Rotas de gestão ficam sob `/gestao`.
 - O fluxo de aprovação já consulta a permissão efetiva `users:approve` (`src/components/domain/UserApprovals.tsx`).
 - O frontend será integrado à API real `bcl-api`. Não criar json-server, mock local ou outro backend de desenvolvimento para este recurso.
 - O backend usa Spring Boot/Java 21, PostgreSQL e migrations Flyway. O envio de e-mail já tem infraestrutura SMTP, mas a entrega individual e a outbox deste recurso são novas.
@@ -126,35 +126,37 @@ Maestro/admin não recebem sinal claro quando há **cadastro pendente de aprova�
 9. Admins consultam globalmente notificações automáticas, inclusive as de alteração de senha. Cada pessoa tem estado de leitura próprio; ler uma cópia não altera as demais.
 10. Um alerta manual é visível apenas à conta remetente e às contas destinatárias; outros admins não têm acesso global a alertas manuais de terceiros.
 11. “Todos” significa contas ativas e aprovadas, com remetente excluído por padrão. Destinatários específicos também devem estar ativos e aprovados.
-12. Uma conta autorizada envia título, corpo em texto simples e link interno opcional, imediatamente; sem anexos nem agendamento.
+12. Uma conta autorizada envia título, corpo em texto simples e link opcional (caminho do portal ou URL externa `http(s)` válida), imediatamente; sem anexos nem agendamento.
 13. Criar a permissão `notifications:create`, atribuída ao papel admin por padrão e delegável a outros papéis. A concessão é feita ao papel; todas as contas desse papel recebem a permissão efetiva pela união de papéis.
-14. Alertas manuais enviados por uma conta autorizada são obrigatórios no portal, independentemente da preferência do destinatário; a preferência controla o canal de e-mail. Para demais tipos, cada conta configura canais e tipos que deseja receber.
-15. Preferências ficam em `/settings`; tipos e canais começam ligados. Mudanças nas preferências aplicam-se a notificações futuras.
-16. E-mail usa outbox persistida, com até cinco tentativas em intervalos crescentes. Após a falha final, a pessoa remetente vê o estado de falha e pode reenviar o e-mail manualmente sem duplicar o aviso no portal.
-17. No mobile, sino independente à esquerda do avatar, contador no sino e abertura direta da inbox. No desktop, contador sobreposto ao avatar; o avatar abre o menu de conta com “Notificações (X)” junto de Perfil, Configurações e Sair, e não abre a inbox diretamente.
-18. A inbox abre como popover no desktop e sheet de largura total no mobile. O sheet não deve cobrir navegação crítica.
+14. Alertas manuais enviados por uma conta autorizada são obrigatórios no portal, independentemente da preferência do destinatário; e-mail está desabilitado neste MVP. Para demais tipos, cada conta configura a preferência do portal; a preferência de e-mail fica reservada para ativação futura.
+15. Preferências ficam em `/configuracoes`; preferências do portal começam ligadas. Mudanças aplicam-se a notificações futuras.
+16. A estrutura prevista para e-mail usa outbox persistida, com até cinco tentativas e reenvio manual; o processamento só será ativado futuramente por configuração explícita.
+17. No mobile, sino independente à esquerda do avatar, contador no sino e abertura direta da inbox. No desktop, o sino fica à direita do bloco de marca/perfil na navegação; quando recolhida, fica acima do primeiro item. A contagem aparece no sino, nunca sobre o avatar, e clicar no avatar não abre a inbox.
+18. A inbox abre em modal centralizado usando o diálogo compartilhado, com largura ampla (aproximadamente metade da tela em desktop) e dimensões/rolagem adaptadas ao celular.
 19. Modelo aprovado: um registro por acontecimento com acesso/leitura independentes por pessoa; estado de leitura global de admin é próprio. A outbox de e-mail é separada.
 20. `notifications:create` pode ser delegada a outros papéis, não a contas individuais, conforme o modelo de autorização vigente.
 
 ### Ampliação acordada em relação à issue original
 
 - Inclui alertas manuais em massa ou a destinatários específicos e a tela `/gestao/notificacao` para contas com `notifications:create`.
-- Inclui preferências por tipo e canal em `/settings`.
-- Inclui entrega de e-mail com outbox, retry e reenvio manual. Isso diverge explicitamente de “e-mail” fora do escopo no corpo original.
+- Inclui preferências por tipo em `/configuracoes`; e-mail permanece explicitamente desabilitado no MVP.
+- Mantém a estrutura de outbox, retry e reenvio de e-mail para futura ativação. Por decisão posterior, o canal e o processamento ficam desabilitados neste MVP.
 - A área de envio aceita apenas contas ativas e aprovadas; autor não é incluído automaticamente como destinatário.
 
 ## 4. Desenho funcional
 
 ### 4.1 Tipos e gatilhos
 
-| Tipo                      | Gatilho e público                                                                           | Link                  | Preferências                                 |
-| ------------------------- | ------------------------------------------------------------------------------------------- | --------------------- | -------------------------------------------- |
-| `signup_approval_pending` | Signup cria uma conta pendente; entregar aos usuários com permissão efetiva `users:approve` | `/gestao/usuarios`    | Preferência individual por tipo/canal        |
-| `signup_completed`        | Signup é concluído; entregar a admins                                                       | `/gestao/usuarios`    | Preferência individual por tipo/canal        |
-| `password_changed`        | A senha é efetivamente atualizada; entregar somente à conta afetada                         | `/profile`            | Preferência individual por tipo/canal        |
-| `admin_message`           | Pessoa com `notifications:create` envia a contas escolhidas ou a todas as elegíveis         | Link interno opcional | Portal obrigatório; e-mail segue preferência |
+| Tipo                      | Gatilho e público                                                                           | Link               | Preferências                                   |
+| ------------------------- | ------------------------------------------------------------------------------------------- | ------------------ | ---------------------------------------------- |
+| `signup_approval_pending` | Signup cria uma conta pendente; entregar aos usuários com permissão efetiva `users:approve` | `/gestao/usuarios` | Preferência individual por tipo/canal          |
+| `signup_completed`        | Signup é concluído; entregar a admins                                                       | `/gestao/usuarios` | Preferência individual por tipo/canal          |
+| `password_changed`        | A senha é efetivamente atualizada; entregar somente à conta afetada                         | `/profile`         | Preferência individual por tipo/canal          |
+| `admin_message`           | Pessoa com `notifications:create` envia a contas escolhidas ou a todas as elegíveis         | Link opcional      | Portal obrigatório; e-mail desabilitado no MVP |
+| `blog_post_published`     | Post criado ou promovido a publicado com a opção marcada; contas ativas e aprovadas         | `/blog/[slug]`     | Preferência individual do portal               |
+| `agenda_event_published`  | Apresentação pública criada ou promovida a agendada com a opção marcada                     | `/agenda`          | Preferência individual do portal               |
 
-Tipos futuros ficam modelados sem gatilhos neste MVP: `repertoire_song_created`, `board_message` e `rehearsal_reminder`.
+Tipos futuros permanecem modelados sem gatilhos: `repertoire_song_created`, `board_message` e `rehearsal_reminder`.
 
 ### 4.2 Visibilidade e leitura
 
@@ -167,79 +169,109 @@ Tipos futuros ficam modelados sem gatilhos neste MVP: `repertoire_song_created`,
 
 ### 4.3 Preferências e canais
 
-- Preferências são próprias de cada conta e organizadas por tipo e canal (`portal`, `email`), com defaults ligados.
-- Para eventos automáticos, aplicar as preferências da pessoa destinatária no momento do evento. Desativar portal impede o item de aparecer no inbox/badge dessa pessoa; e-mail desligado impede criar job de e-mail para ela. Admin mantém visibilidade global dos avisos automáticos conforme regra acima.
-- Para `admin_message`, sempre criar a visualização no portal para cada destinatário; somente e-mail respeita a preferência.
+- Preferências são próprias de cada conta e organizadas por tipo e canal (`portal`, `email`). No MVP, o canal e-mail fica forçado para desligado; portal segue a preferência por tipo, respeitando as exceções abaixo.
+- Em `/configuracoes`, admins podem ver todos os tipos; as demais contas veem somente avisos que podem receber no fluxo atual (senha alterada, alertas da gestão, blog e agenda; aviso de aprovação somente se tiverem `users:approve`).
+- Para eventos automáticos, aplicar a preferência de portal da pessoa destinatária no momento do evento. O canal de e-mail não cria jobs enquanto `bcl.notifications.email-enabled` estiver falso. Admin mantém visibilidade global dos avisos automáticos conforme regra acima.
+- Para `admin_message`, sempre criar a visualização no portal para cada destinatário; e-mail permanece desabilitado no MVP.
 - Não enviar a eventos passados retroativamente quando uma pessoa altera suas preferências.
 
 ### 4.4 Envio manual
 
 - A tela `/gestao/notificacao` exige `notifications:create`, tanto no frontend quanto na API.
 - O autor seleciona destinatários específicos ou “todos”. “Todos” resolve contas ativas e aprovadas na hora do envio e exclui o autor. Destinatários específicos obedecem à mesma elegibilidade.
-- Validar título, corpo simples, limites de tamanho e link interno permitido no cliente e no servidor. Não aceitar HTML arbitrário ou URL externa como link interno.
+- Validar título, corpo simples, limites de tamanho e link opcional no cliente e no servidor. Aceitar caminhos do portal e URLs `http(s)` externas válidas; rejeitar esquemas inseguros, links malformados e URLs com credenciais.
 - Persistir a notificação e todos os destinatários no mesmo commit. Se a seleção contiver ID inexistente ou inelegível, rejeitar o envio integral e não entregar parcialmente.
-- Ao concluir, mostrar confirmação do número de contas destinatárias. Erros gerais devem ser acessíveis. O autor pode consultar estado de e-mail com falha e solicitar reenvio, sem recriar a notificação nem resetar leituras.
+- Ao concluir, mostrar confirmação do número de contas destinatárias. Erros gerais devem ser acessíveis. O envio por e-mail é indicado como temporariamente desabilitado.
+
+### 4.5 Central de notificações na Gestão
+
+- Manter o sino/inbox junto ao perfil e acrescentar uma visualização independente na página `/gestao/notificacao`, além do formulário atual de envio.
+- A central mostra as notificações que a conta autenticada pode consultar segundo as regras da inbox: automáticas globais para admin, notificações destinadas à conta e alertas manuais enviados pela própria conta. Não revela alertas manuais de outros remetentes.
+- A central inclui itens não lidos, lidos e removidos da inbox principal. Abrir um item já lido permite reler seu conteúdo sem alterar a data de leitura; abrir um não lido pode marcá-lo como lido.
+- “Remover da caixa” é uma ocultação por visualizador, não exclusão física. A notificação permanece disponível na central da Gestão e pode ser restaurada para a inbox principal. A leitura e a ocultação são estados independentes por pessoa.
+- Para alertas manuais enviados pela própria conta, a central permite consultar a lista de destinatários e o estado lida/não lida de cada um. Somente o remetente pode consultar esses recibos; eles não ficam visíveis a outros gestores.
+- A central é protegida por `notifications:create`, lista em lotes de 10 com paginação, e mantém estados de carregamento, erro e vazio. A API valida a visibilidade e a autorização em cada operação.
+
+### 4.6 Canal de e-mail temporariamente desabilitado
+
+- O envio de notificações por e-mail fica desabilitado no MVP. A interface informa isso explicitamente em Gestão e nas preferências da conta; nenhum controle permite habilitá-lo.
+- Alertas continuam sendo gravados e entregues no portal, sem depender da preferência de e-mail.
+- Mantemos o contrato `emailEnabled`, as preferências persistidas, as tabelas/outbox e a estrutura de entrega como scaffolding para uma ativação futura. Enquanto desabilitado, a API preserva as preferências existentes, mas não cria novas entradas na outbox nem executa entregas pendentes.
+- O canal só volta a ser oferecido após ativação explícita da configuração de backend e atualização da interface.
+
+### 4.7 Avisos de novas publicações
+
+- Ao criar ou publicar um post do blog, a opção “Notificar todas as contas” vem marcada por padrão; desmarcá-la suprime o aviso daquele post.
+- Ao criar ou tornar pública/agendada uma apresentação, a mesma opção vem marcada por padrão; rascunhos e apresentações privadas não enviam aviso.
+- O backend cria um aviso automático para as contas ativas e aprovadas, incluindo quem publicou, respeitando a preferência de portal de cada conta. A notificação é persistida na mesma transação da publicação.
+- Edições de um post já publicado ou de uma apresentação já agendada e pública não criam avisos repetidos.
 
 ## 5. Desenho técnico e contrato
 
 ### `bcl-api`
 
-- Adicionar domínio, persistência, migration Flyway, serviço, controller/DTOs e autorização para notificações, preferências e outbox de e-mail, seguindo os módulos e convenções existentes.
-- Estrutura lógica: `Notification` contém tipo, ator opcional, título/corpo ou payload tipado, link interno opcional e instante de criação; registros de acesso identificam remetente/destinatários e guardam `readAt` por visualizador. Para leitura de automáticas globais por admins, registrar leitura por viewer sem conceder acesso a notificações manuais de outras pessoas.
+- Adicionar domínio, persistência, migration Flyway, serviço, controller/DTOs e autorização para notificações e preferências, seguindo os módulos e convenções existentes. A estrutura da outbox de e-mail fica preservada, mas desabilitada por configuração no MVP.
+- Estrutura lógica: `Notification` contém tipo, ator opcional, título/corpo ou payload tipado, link opcional e instante de criação; registros de acesso identificam remetente/destinatários e guardam `readAt` por visualizador. Para leitura de automáticas globais por admins, registrar leitura por viewer sem conceder acesso a notificações manuais de outras pessoas.
 - Preferências persistidas por conta, tipo e canal. Ausência de linha significa default habilitado.
-- Outbox persiste destinatário, referência à notificação, status, contador de tentativas, próximo horário, última falha e metadados de auditoria. Processamento fora do request de signup/alteração de senha; tentativas limitadas a cinco com espera crescente. Falha final é visível ao remetente autorizado e permite reenvio manual.
+- Outbox mantém destinatário, referência à notificação, status, contador de tentativas, próximo horário, última falha e metadados de auditoria como estrutura futura. Não processar nem criar jobs enquanto o canal estiver desabilitado.
 - Criar chaves no catálogo backend para `notifications:create`, associadas a admin por padrão e delegáveis via gestão de papéis.
-- Expor operações para: listar notificações visíveis com cursor/limite; obter contagem não lida; marcar a visualização atual como lida; ler/atualizar preferências; enviar aviso manual; consultar falhas de e-mail do autor e reenviar. Os nomes finais dos endpoints e DTOs devem seguir o padrão já usado no `bcl-api`, sem mudar a semântica deste contrato.
-- Disparos automáticos participam da transação da operação de negócio. A outbox de e-mail é registrada transacionalmente com a notificação; envio SMTP é assíncrono e não reverte signup/troca de senha após commit.
+- Expor operações para: listar notificações visíveis com cursor/limite; obter contagem não lida; marcar a visualização atual como lida; ler/atualizar preferências; enviar aviso manual. O contrato da outbox e as operações de reenvio ficam preservados para ativação futura, sem processamento enquanto `bcl.notifications.email-enabled` estiver falso.
+- Expor operações autorizadas para listar a central incluindo notificações arquivadas por visualizador, arquivar/restaurar a visualização atual e consultar recibos dos destinatários de alertas manuais próprios.
+- Disparos automáticos no portal participam da transação da operação de negócio. A estrutura da outbox permanece no código, mas não recebe novos itens nem é processada enquanto o canal estiver desabilitado.
 
 ### `bcl-next`
 
 - Estender o catálogo de permissões e tela de gestão de papéis com `notifications:create`; seguir o modelo de permissões já existente.
 - Criar `/gestao/notificacao` usando as composições e validações de formulário compartilhadas definidas em `AGENTS.md`.
 - Integrar shell autenticado, inbox e preferências via API real. Estado de leitura não fica em `localStorage`.
-- No mobile, deixar alvo de toque mínimo de 44 px, sheet com altura máxima e scroll interno; preservar navegação e ações. Em desktop, popover associado ao menu de conta conforme decisão visual.
+- Acrescentar à página `/gestao/notificacao` uma central paginada, com abertura para reler, recuperação de itens removidos da inbox e recibos dos alertas enviados pela própria conta.
+- Permitir remover/restaurar da inbox sem apagar o registro de notificação; manter a remoção separada do estado de leitura.
+- No mobile, deixar alvo de toque mínimo de 44 px, modal com altura máxima e scroll interno; preservar navegação e ações. Em desktop, abrir modal centralizado associado ao sino e ao diálogo compartilhado.
 - Usar Tailwind nas classes dos componentes novos/alterados. A contagem deve ter nome acessível e `aria-live`; lista, sheet/popover, estados vazio, loading e erro devem funcionar com teclado e leitor de tela.
 
 ### Fluxo resumido
 
 1. Evento de negócio inicia transação.
-2. API decide o tipo, destinatários e canais segundo permissões/preferências; persiste acontecimento, acessos/read states e jobs de e-mail aplicáveis.
-3. Commit libera a operação; worker tenta enviar e-mail da outbox sem bloquear a operação original.
+2. API decide tipo e destinatários segundo permissões/preferências; persiste acontecimento e acessos/read states. O canal de e-mail não cria jobs no MVP.
+3. Commit libera a operação; o worker de e-mail permanece desativado até futura ativação.
 4. Shell carrega a contagem. Abrir inbox pede a primeira página (10) e “Carregar mais” usa cursor; leitura atualiza somente o viewer atual.
-5. Reenvio manual altera somente o job de e-mail associado.
+5. A estrutura de reenvio manual fica preservada para ativação futura.
+6. Gestão lista, em sua central autorizada, o escopo pessoal visível, incluindo estados lidos/arquivados; remetentes consultam recibos somente dos próprios alertas manuais.
 
 ## 6. Erros, segurança e acessibilidade
 
-- API é autoridade para visibilidade, destinatários elegíveis, permissão de envio, alterações de leitura e reenvios.
+- API é autoridade para visibilidade, destinatários elegíveis, permissão de envio e alterações de leitura. Operações de e-mail permanecem sem processamento até futura ativação.
 - Respostas de listagem/contagem não devem vazar título, corpo, remetente ou existência de alerta manual privado para outros admins.
-- Falha ao persistir notificação automática desfaz a operação de negócio na mesma transação. Falha de SMTP não desfaz o portal nem a operação original.
+- A central de Gestão usa o mesmo escopo de visibilidade por visualizador da inbox; recibos de leitura de alertas manuais só são retornados ao remetente.
+- Falha ao persistir notificação automática desfaz a operação de negócio na mesma transação. Quando e-mail for futuramente ativado, falha SMTP não desfará o portal nem a operação original.
 - Falha de rede ao carregar contagem/lista deve preservar o shell e mostrar estado de erro recuperável. Repetir uma chamada de leitura não cria cópias.
 - Mensagem vazia exata: “Nenhuma notificação”.
-- Contagem acessível com `aria-live`; controles com foco/teclado e labels; popover/sheet com fechamento e foco adequados.
-- Verificar browser em viewport mobile de aproximadamente 360 px e desktop de pelo menos 960 px, incluindo sheet, scroll, badge, menu de avatar, lista longa e fluxo de envio.
+- Contagem acessível com `aria-live` no sino; controles com foco/teclado e labels; modal com fechamento e foco adequados.
+- Verificar browser em viewport mobile de aproximadamente 360 px e desktop de pelo menos 960 px, incluindo modal, scroll, badge no sino, menu de avatar, lista longa e fluxo de envio.
 
 ## 7. Fora de escopo
 
 - Push do navegador, WhatsApp, polling e SSE.
 - Gatilhos de notificações para música nova, mensagens da diretoria ou lembretes de ensaio (somente tipos modelados).
-- Agendamento, anexos, HTML rico, URLs externas e reenvio de alertas do portal como novas notificações.
+- Agendamento, anexos, HTML rico, esquemas de URL inseguros e reenvio de alertas do portal como novas notificações.
 - Criar log de segurança independente ou retomar qualquer mock local/json-server.
 
 ## 8. Critérios de aceite acordados
 
-- [ ] Usuário autenticado tem acesso à contagem/inbox, segundo o layout de mobile/desktop acordado.
+- [ ] Usuário autenticado tem acesso à contagem no sino e inbox modal, segundo o layout de mobile/desktop acordado.
 - [ ] Signup pendente, signup concluído e alteração efetiva de senha geram os respectivos avisos reais e links corretos.
 - [ ] Usuários com `users:approve` recebem aviso de aprovação; apenas admins recebem aviso informativo de signup; alteração de senha avisa apenas a conta afetada.
 - [ ] Admin vê todos os avisos automáticos, com leitura pessoal; mensagens manuais são visíveis somente ao remetente e destinatários.
 - [ ] Marcar como lida persiste no backend e afeta apenas a visualização da pessoa atual.
-- [ ] Contagem considera todas as não lidas acessíveis; inbox carrega 10 e pagina em blocos de 10; empty state é “Nenhuma notificação”.
+- [ ] Contagem fica apenas no sino, considera todas as não lidas acessíveis; inbox modal carrega 10 e pagina em blocos de 10; empty state é “Nenhuma notificação”.
 - [ ] `notifications:create` é aplicada por papel e protege UI/API; admin recebe por padrão e pode delegar a papéis.
 - [ ] Envio manual individual/massa valida contas ativas/aprovadas; “todos” exclui remetente; texto/link conforme regras; alertas aparecem no portal.
-- [ ] Preferências de tipo/canal começam ligadas, salvam em `/settings`, e afetam eventos futuros; mensagens manuais continuam obrigatórias no portal.
-- [ ] Jobs de e-mail são persistidos, tentam no máximo cinco vezes com intervalo crescente, mostram falha ao remetente e permitem reenvio manual sem duplicar a notificação.
+- [ ] Preferências de tipo salvam em `/configuracoes` e afetam eventos futuros; canal e-mail aparece explicitamente desabilitado; mensagens manuais continuam obrigatórias no portal.
+- [ ] Estrutura de outbox e reenvio fica preservada para o futuro, mas não cria jobs nem processa e-mails enquanto `NOTIFICATIONS_EMAIL_ENABLED=false`.
 - [ ] Contrato documenta tipos, payload e extensão futura; não há mock local.
 - [ ] UI é acessível e utilizável no browser em mobile (360 px) e desktop (>=960 px).
 - [ ] O PR de `bcl-api` cita esta issue com referência não fechadora e fica separado do PR frontend.
+- [ ] Gestão oferece uma central adicional à inbox do perfil, com notificações recebidas/enviadas visíveis à conta, incluindo lidas e removidas da inbox, possibilidade de reler/restaurar e recibos de leitura dos destinatários nos envios próprios.
 
 ## 9. Revisão da SPEC
 
