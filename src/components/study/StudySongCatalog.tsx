@@ -1,37 +1,39 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import { MusicLoader } from "@/components/MusicLoader";
+import { EntityDialog } from "@/components/shared/EntityDialog";
+import { StudyPublicRepertoireNotice } from "@/components/study/StudyPublicRepertoireNotice";
 import { TableView } from "@/components/tables/core/TableView";
 import type { TableColumnDef } from "@/components/tables/core/table-features";
-import {
-  filterSongsForCatalog,
-  isSongVisibleInCatalog,
-} from "@/domains/songs/catalogAccess";
-import type { Song } from "@/domains/songs/types";
-import { useAuth } from "@/contexts/AuthContext";
-import { apiFetch, fetchAuthedAsset } from "@/lib/api";
-import { failureMessage } from "@/lib/userMessages";
-import {
-  extractInstrumentsFromXml,
-  type InstrumentInfo,
-} from "@/study/studyUtils";
-import {
-  defaultPartIds,
-  fetchSongParts,
-  partToInstrument,
-  readStoredSelection,
-} from "@/study/songParts";
-import type { Person } from "@/domains/people/types";
-import { youtubeWatchUrl } from "@/domains/songs/youtube";
 import {
   studyAudioReady,
   studyProcessingGateEnabled,
   studyProcessingLabel,
   studyScoreReady,
 } from "@/config/studyProcessing";
+import { useAuth } from "@/contexts/AuthContext";
+import type { Person } from "@/domains/people/types";
+import {
+  filterSongsForCatalog,
+  isSongVisibleInCatalog,
+} from "@/domains/songs/catalogAccess";
+import type { Song } from "@/domains/songs/types";
+import { youtubeWatchUrl } from "@/domains/songs/youtube";
+import { apiFetch, fetchAuthedAsset } from "@/lib/api";
+import { failureMessage } from "@/lib/userMessages";
+import {
+  defaultPartIds,
+  fetchSongParts,
+  partToInstrument,
+  readStoredSelection,
+} from "@/study/songParts";
 import { waitForStudyScoreReady } from "@/study/songParts";
-import { StudyPublicRepertoireNotice } from "@/components/study/StudyPublicRepertoireNotice";
+import {
+  type InstrumentInfo,
+  extractInstrumentsFromXml,
+} from "@/study/studyUtils";
 
 export interface StudyStartOptions {
   song: Song;
@@ -393,35 +395,15 @@ export function StudySongCatalog({
       ) : null}
 
       {setup && (
-        <div
-          className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/55 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="study-setup-title"
+        <EntityDialog
+          open
+          title={setup.song.title}
+          description="Preparar estudo"
+          size="xl"
+          placement="center"
+          onClose={() => setSetup(null)}
         >
-          <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl">
-            <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-[var(--border)] bg-[var(--card)] px-6 py-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Preparar estudo
-                </p>
-                <h2
-                  id="study-setup-title"
-                  className="mt-1 text-xl font-semibold"
-                >
-                  {setup.song.title}
-                </h2>
-              </div>
-              <button
-                type="button"
-                className="btn-ghost"
-                onClick={() => setSetup(null)}
-                aria-label="Fechar"
-              >
-                <span className="material-icons">close</span>
-              </button>
-            </header>
-
+          <div className="min-h-0">
             {setup.instruments.length > 0 ? (
               <div className="grid gap-6 p-6 md:grid-cols-2">
                 <InstrumentSelection
@@ -536,7 +518,7 @@ export function StudySongCatalog({
               </div>
             </footer>
           </div>
-        </div>
+        </EntityDialog>
       )}
     </>
   );

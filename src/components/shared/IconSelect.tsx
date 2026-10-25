@@ -1,7 +1,13 @@
 "use client";
 
+import {
+  type CSSProperties,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
 export type IconSelectOption<Value extends string> = {
   value: Value;
@@ -28,15 +34,25 @@ type IconSelectProps<Value extends string> = {
   disabled?: boolean;
 } & (SingleSelectProps<Value> | MultipleSelectProps<Value>);
 
-export function IconSelect<Value extends string>(props: IconSelectProps<Value>) {
-  const { label, options, className = "relative min-w-0 w-full", disabled = false } = props;
+export function IconSelect<Value extends string>(
+  props: IconSelectProps<Value>,
+) {
+  const {
+    label,
+    options,
+    className = "relative min-w-0 w-full",
+    disabled = false,
+  } = props;
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>();
+  const [portalContainer, setPortalContainer] = useState<Element | null>(null);
   const selectedValues = props.multiple ? props.value : [props.value];
-  const selectedOptions = options.filter((option) => selectedValues.includes(option.value));
+  const selectedOptions = options.filter((option) =>
+    selectedValues.includes(option.value),
+  );
   const selectedLabel = props.multiple
     ? selectedOptions.length === 1
       ? selectedOptions[0].label
@@ -59,11 +75,20 @@ export function IconSelect<Value extends string>(props: IconSelectProps<Value>) 
       const rect = trigger.getBoundingClientRect();
       const viewportMargin = 8;
       const gap = 8;
-      const menuWidth = Math.min(Math.max(rect.width, 176), window.innerWidth - viewportMargin * 2);
-      const left = Math.min(Math.max(rect.left, viewportMargin), window.innerWidth - viewportMargin - menuWidth);
+      const menuWidth = Math.min(
+        Math.max(rect.width, 176),
+        window.innerWidth - viewportMargin * 2,
+      );
+      const left = Math.min(
+        Math.max(rect.left, viewportMargin),
+        window.innerWidth - viewportMargin - menuWidth,
+      );
       const desiredHeight = Math.min(options.length * 44 + 8, 320);
       const spaceAbove = Math.max(0, rect.top - gap - viewportMargin);
-      const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - gap - viewportMargin);
+      const spaceBelow = Math.max(
+        0,
+        window.innerHeight - rect.bottom - gap - viewportMargin,
+      );
       const openUpward = spaceBelow < desiredHeight && spaceAbove > spaceBelow;
       const availableHeight = openUpward ? spaceAbove : spaceBelow;
       const menuHeight = Math.min(desiredHeight, availableHeight);
@@ -90,17 +115,26 @@ export function IconSelect<Value extends string>(props: IconSelectProps<Value>) 
 
     const closeOnOutsidePointer = (event: PointerEvent) => {
       if (!(event.target instanceof Node)) return;
-      if (rootRef.current?.contains(event.target) || menuRef.current?.contains(event.target)) return;
+      if (
+        rootRef.current?.contains(event.target) ||
+        menuRef.current?.contains(event.target)
+      )
+        return;
       setIsOpen(false);
     };
 
     document.addEventListener("pointerdown", closeOnOutsidePointer, true);
-    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
+    return () =>
+      document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
   }, [isOpen]);
 
   const closeWhenFocusLeaves = (relatedTarget: EventTarget | null) => {
     if (relatedTarget instanceof Node) {
-      if (rootRef.current?.contains(relatedTarget) || menuRef.current?.contains(relatedTarget)) return;
+      if (
+        rootRef.current?.contains(relatedTarget) ||
+        menuRef.current?.contains(relatedTarget)
+      )
+        return;
     }
     setIsOpen(false);
   };
@@ -108,7 +142,11 @@ export function IconSelect<Value extends string>(props: IconSelectProps<Value>) 
   if (!selectedLabel) return null;
 
   return (
-    <div ref={rootRef} className={className} onBlur={(event) => closeWhenFocusLeaves(event.relatedTarget)}>
+    <div
+      ref={rootRef}
+      className={className}
+      onBlur={(event) => closeWhenFocusLeaves(event.relatedTarget)}
+    >
       <button
         ref={triggerRef}
         type="button"
@@ -116,7 +154,14 @@ export function IconSelect<Value extends string>(props: IconSelectProps<Value>) 
         aria-haspopup="menu"
         aria-expanded={isOpen}
         disabled={disabled}
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={() => {
+          if (!isOpen) {
+            setPortalContainer(
+              rootRef.current?.closest("dialog") ?? document.body,
+            );
+          }
+          setIsOpen((open) => !open);
+        }}
         onKeyDown={(event) => {
           if (event.key === "Escape" && isOpen) {
             event.preventDefault();
@@ -131,11 +176,14 @@ export function IconSelect<Value extends string>(props: IconSelectProps<Value>) 
           </span>
         ) : null}
         <span className="min-w-0 flex-1 truncate">{selectedLabel}</span>
-        <span className="material-icons text-lg text-[var(--muted)]" aria-hidden="true">
+        <span
+          className="material-icons text-lg text-[var(--muted)]"
+          aria-hidden="true"
+        >
           expand_more
         </span>
       </button>
-      {isOpen && menuStyle
+      {isOpen && menuStyle && portalContainer
         ? createPortal(
             <div
               ref={menuRef}
@@ -163,7 +211,9 @@ export function IconSelect<Value extends string>(props: IconSelectProps<Value>) 
                       if (props.multiple) {
                         if (selected && selectedValues.length === 1) return;
                         const nextValues = selected
-                          ? selectedValues.filter((selectedValue) => selectedValue !== option.value)
+                          ? selectedValues.filter(
+                              (selectedValue) => selectedValue !== option.value,
+                            )
                           : [...selectedValues, option.value];
                         props.onChange(nextValues);
                         return;
@@ -174,13 +224,19 @@ export function IconSelect<Value extends string>(props: IconSelectProps<Value>) 
                     className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)] ${selected ? "bg-[var(--card-secondary)] text-[var(--foreground)]" : "text-[var(--muted)] hover:bg-[var(--card-secondary)]"}`}
                   >
                     {option.icon ? (
-                      <span className="material-icons text-lg" aria-hidden="true">
+                      <span
+                        className="material-icons text-lg"
+                        aria-hidden="true"
+                      >
                         {option.icon}
                       </span>
                     ) : null}
                     <span className="min-w-0 flex-1">{option.label}</span>
                     {selected ? (
-                      <span className="material-icons text-lg" aria-hidden="true">
+                      <span
+                        className="material-icons text-lg"
+                        aria-hidden="true"
+                      >
                         check
                       </span>
                     ) : null}
@@ -188,7 +244,7 @@ export function IconSelect<Value extends string>(props: IconSelectProps<Value>) 
                 );
               })}
             </div>,
-            document.body,
+            portalContainer,
           )
         : null}
     </div>
