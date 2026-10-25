@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { getApiUrl } from '@/config/environment';
 import { useAuth } from '@/contexts/AuthContext';
 import { useStudySession } from '@/study/useStudySession';
@@ -17,12 +17,21 @@ import { StudyMobileSheet } from '@/components/study/StudyMobileSheet';
 import { MobileScoreZoom } from '@/study/MobileScoreZoom';
 import { StudyPublicRepertoireNotice } from '@/components/study/StudyPublicRepertoireNotice';
 import { StudyScoreHeaderView } from '@/study/StudyScoreHeader';
+import { parseStudyRouteSongId } from '@/study/studyRouteSongId';
 
 export default function StudyPage() {
   const apiUrl = getApiUrl();
+  const router = useRouter();
   const { user } = useAuth();
   const params = useParams<{ slug?: string[] }>();
-  const focusSongId = params?.slug?.[0] ?? null;
+  const rawRouteSongId = params?.slug?.[0] ?? null;
+  const focusSongId = parseStudyRouteSongId(rawRouteSongId);
+
+  useEffect(() => {
+    if (rawRouteSongId && !focusSongId) {
+      router.replace('/study');
+    }
+  }, [focusSongId, rawRouteSongId, router]);
 
   const [snack, setSnack] = useState<string | null>(null);
   const { session, state, scoreContainerRef, osmdContainerRef } = useStudySession(

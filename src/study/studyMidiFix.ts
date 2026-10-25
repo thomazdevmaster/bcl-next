@@ -1,5 +1,6 @@
 /** Utilitários para MIDI de estudo (percussão GM / canal 10). */
 
+import { sumTimemapDurationMs, type MeasureTimemapEntry } from './studyTimemap';
 import { extractTempoInfoFromXml } from './studyUtils';
 
 export type StudySmfEvent = { tick: number; status: number; d1: number; d2: number };
@@ -34,7 +35,7 @@ function writeVariableLength(value: number): number[] {
   return bytes;
 }
 
-function isStandardMidiFile(midi: ArrayBuffer): boolean {
+export function isStandardMidiFile(midi: ArrayBuffer): boolean {
   if (midi.byteLength < 14) return false;
   return new DataView(midi).getUint32(0) === 0x4d546864;
 }
@@ -396,6 +397,21 @@ export function countDrumChannelNoteOns(midi: ArrayBuffer): number {
   return countMidiNoteOns(midi, DRUM_CHANNEL);
 }
 
+/** Note On no canal 10 com altura dentro do mapa GM (35–81) — audível no SpessaSynth. */
+export function countGmDrumChannelNoteOns(midi: ArrayBuffer): number {
+  const hist = drumChannelPitchHistogram(midi);
+  let total = 0;
+  for (const [pitch, count] of Object.entries(hist)) {
+    const p = Number(pitch);
+    if (p >= GM_DRUM_NOTE_MIN && p <= GM_DRUM_NOTE_MAX) total += count;
+  }
+  return total;
+}
+
+export function drumChannelUsesGmKitPitches(midi: ArrayBuffer): boolean {
+  return countGmDrumChannelNoteOns(midi) > 0;
+}
+
 /** Histograma GM (canal 10) para depurar timbres de bateria MuseScore. */
 export function drumChannelPitchHistogram(midi: ArrayBuffer): Record<number, number> {
   const hist: Record<number, number> = {};
@@ -474,19 +490,86 @@ export function prepareStudyMidiBuffer(
     if (!midiHasAudibleNotes(candidate)) continue;
     const notes = countMidiNoteOns(candidate);
     if (notes < before * 0.85) continue;
+    const gmDrums = countGmDrumChannelNoteOns(candidate);
     const drums = countDrumChannelNoteOns(candidate);
-    const score = drums * 1000 + notes;
+    if (drums > 0 && gmDrums === 0) continue;
+    const score = gmDrums * 10_000 + drums * 1000 + notes;
     if (score > bestScore) {
       bestScore = score;
       best = candidate;
     }
   }
-  return best;
+  if (countDrumChannelNoteOns(best) > 0 && countGmDrumChannelNoteOns(best) === 0) {
+    return best.slice(0);
+  }
+  return ensureGmDrumKitOnChannel10(best);
+}
+
+/**
+ * SpessaSynth (e a maioria dos players GM) precisa de Program Change 0 no canal 10
+ * para o mapa de percussão — Note On sem isso fica mudo (MIDI gerado no browser).
+ */
+/** Ordem de reprodução no mesmo tick (SpessaSynth exige PC/volume antes de Note On no canal 10). */
+function studySmfEventPlaybackOrder(ev: StudySmfEvent): number {
+  const hi = ev.status & 0xf0;
+  if (hi === 0xc0) return 0;
+  if (hi === 0xb0) {
+    if (ev.d1 === 0) return 1;
+    if (ev.d1 === 32) return 2;
+    if (ev.d1 === 7) return 3;
+    return 4;
+  }
+  if (hi === 0xe0) return 5;
+  if (hi === 0xa0) return 6;
+  if (hi === 0x90) return 7;
+  if (hi === 0x80) return 8;
+  if (hi === 0xd0) return 9;
+  return 10;
+}
+
+function sortStudySmfEventsForPlayback(events: StudySmfEvent[]): StudySmfEvent[] {
+  return [...events].sort(
+    (a, b) =>
+      a.tick - b.tick ||
+      studySmfEventPlaybackOrder(a) - studySmfEventPlaybackOrder(b) ||
+      (a.status & 0x0f) - (b.status & 0x0f) ||
+      a.d1 - b.d1 ||
+      a.status - b.status,
+  );
+}
+
+/**
+ * Regrava o SMF com kit GM no canal 10: Program Change 0 e volume antes das notas.
+ * Sem ordem correta no tick 0 o SpessaSynth mantém o canal mudo (drumNoteOns > 0).
+ */
+export function ensureGmDrumKitOnChannel10(midi: ArrayBuffer): ArrayBuffer {
+  if (!isStandardMidiFile(midi)) return midi;
+  if (countDrumChannelNoteOns(midi) === 0) return midi;
+  const { events, division } = extractTimedEventsFromSmf(midi);
+  const tempoBpm = readFirstSmfTempoBpm(midi) ?? 120;
+
+  const withoutTick0DrumSetup = events.filter((event) => {
+    if (event.tick !== 0) return true;
+    const hi = event.status & 0xf0;
+    const ch = event.status & 0x0f;
+    if (ch !== DRUM_CHANNEL) return true;
+    if (hi === 0xc0) return false;
+    if (hi === 0xb0 && event.d1 === 7) return false;
+    return true;
+  });
+
+  const withSetup: StudySmfEvent[] = [
+    { tick: 0, status: 0xc0 | DRUM_CHANNEL, d1: 0, d2: 0 },
+    { tick: 0, status: 0xb0 | DRUM_CHANNEL, d1: 7, d2: 127 },
+    ...withoutTick0DrumSetup,
+  ];
+
+  return smfFromTimedEvents(withSetup, tempoBpm, division || TARGET_DIVISION);
 }
 
 /** Preferir MIDI com notas no canal de bateria quando a seleção inclui percussão. */
 function smfFromTimedEvents(events: StudySmfEvent[], tempoBpm: number, division: number): ArrayBuffer {
-  const sorted = [...events].sort((a, b) => a.tick - b.tick || a.status - b.status);
+  const sorted = sortStudySmfEventsForPlayback(events);
   const bytes: number[] = [];
   let lastTick = 0;
   appendSetTempoMeta(bytes, tempoBpm);
@@ -596,7 +679,7 @@ function encodeTrackData(
   events: StudySmfEvent[],
   options: { tempoBpm: number; includeTempo: boolean },
 ): Uint8Array {
-  const sorted = [...events].sort((a, b) => a.tick - b.tick || a.status - b.status);
+  const sorted = sortStudySmfEventsForPlayback(events);
   const bytes: number[] = [];
   let lastTick = 0;
 
@@ -616,14 +699,20 @@ function encodeTrackData(
 export function mergeStudyMidiLayers(
   layers: { kind: 'percussion' | 'melodic'; buffer: ArrayBuffer }[],
   tempoBpm: number,
+  options?: { skipNormalize?: boolean },
 ): ArrayBuffer | null {
   if (layers.length === 0) return null;
   if (layers.length === 1) return layers[0].buffer;
 
   const merged: StudySmfEvent[] = [];
 
+  const mergedTempo = Math.max(30, Math.round(tempoBpm));
+
   for (const layer of layers) {
-    const { events, division } = extractTimedEventsFromSmf(layer.buffer);
+    const normalizedLayer = options?.skipNormalize
+      ? layer.buffer
+      : normalizeStudySmfTempo(layer.buffer, mergedTempo);
+    const { events, division } = extractTimedEventsFromSmf(normalizedLayer);
     let slice = scaleEvents(events, division, TARGET_DIVISION);
     if (layer.kind === 'melodic') {
       slice = slice.filter((e) => {
@@ -638,24 +727,10 @@ export function mergeStudyMidiLayers(
 
   if (merged.length === 0) return null;
 
-  const mergedTempo =
-    layers
-      .filter((layer) => layer.kind === 'melodic')
-      .map((layer) => readFirstSmfTempoBpm(layer.buffer))
-      .find((value) => value != null && value > 0) ??
-    layers
-      .map((layer) => readFirstSmfTempoBpm(layer.buffer))
-      .find((value) => value != null && value > 0) ??
-    tempoBpm;
-
-  return smfFromTimedEvents(merged, mergedTempo, TARGET_DIVISION);
+  return ensureGmDrumKitOnChannel10(smfFromTimedEvents(merged, mergedTempo, TARGET_DIVISION));
 }
 
-export type StudyTimemapEntry = {
-  measure?: number;
-  timestamp?: number;
-  duration?: number;
-};
+export type StudyTimemapEntry = MeasureTimemapEntry;
 
 /** Andamento do SMF (Set Tempo) — alinhado ao que Verovio/API geraram. */
 export function readFirstSmfTempoBpm(midi: ArrayBuffer): number | null {
@@ -712,12 +787,14 @@ export function readFirstSmfTempoBpm(midi: ArrayBuffer): number | null {
   return null;
 }
 
-/** Prioriza tempo do MIDI (API/Verovio); XML só como fallback. */
+/** Andamento inicial: metrônomo do primeiro compasso no XML; MIDI só se o XML não marcar. */
 export function resolveStudyPlaybackTempoBpm(options: {
   xml?: string | null;
   midi?: ArrayBuffer | null;
   referenceMidi?: ArrayBuffer | null;
 }): number {
+  const fromXml = options.xml ? extractTempoInfoFromXml(options.xml)?.bpm : null;
+  if (fromXml != null && fromXml > 0) return fromXml;
   const candidates = [
     options.midi ? readFirstSmfTempoBpm(options.midi) : null,
     options.referenceMidi ? readFirstSmfTempoBpm(options.referenceMidi) : null,
@@ -725,13 +802,7 @@ export function resolveStudyPlaybackTempoBpm(options: {
   for (const value of candidates) {
     if (value != null && value > 0) return value;
   }
-  const fromXml = options.xml ? extractTempoInfoFromXml(options.xml)?.bpm : null;
-  if (fromXml != null && fromXml > 0) return fromXml;
   return 120;
-}
-
-function sumTimemapDurationMs(timemap: StudyTimemapEntry[]): number {
-  return timemap.reduce((total, entry) => total + Math.max(0, entry.duration ?? 0), 0);
 }
 
 function ticksForTimemapDurationMs(
@@ -741,6 +812,68 @@ function ticksForTimemapDurationMs(
 ): number {
   if (durationMs <= 0 || tempoBpm <= 0 || division <= 0) return 0;
   return Math.round((durationMs * tempoBpm * division) / 60_000);
+}
+
+function smfWallDurationMs(maxTick: number, division: number, tempoBpm: number): number {
+  if (maxTick <= 0 || division <= 0 || tempoBpm <= 0) return 0;
+  return (maxTick / division) * (60_000 / tempoBpm);
+}
+
+/**
+ * Escala o SMF para a duração total do timemap (ms) no BPM da partitura.
+ * Corrige stems Verovio mais longos/curtos que o relógio do cursor — ex. Africa ♩=93.
+ */
+export function fitStudySmfToTimemap(
+  midi: ArrayBuffer,
+  timemap: StudyTimemapEntry[],
+  tempoBpm: number,
+  options?: { preserveTickTimeline?: boolean },
+): ArrayBuffer {
+  if (!isStandardMidiFile(midi) || timemap.length === 0) return midi;
+  const targetMs = sumTimemapDurationMs(timemap);
+  if (targetMs <= 0) return midi;
+
+  const targetBpm = Math.max(30, Math.round(tempoBpm));
+  let binary = options?.preserveTickTimeline
+    ? retargetStudySmfToCatalogTempo(midi, targetBpm)
+    : normalizeStudySmfTempo(midi, targetBpm);
+  const { events, division } = extractTimedEventsFromSmf(binary);
+  if (events.length === 0) return binary;
+
+  const maxTick = events.reduce((max, ev) => Math.max(max, ev.tick), 0);
+  const midiMs = smfWallDurationMs(maxTick, division, targetBpm);
+  if (midiMs <= 0) return binary;
+
+  let scaled = events;
+  const relDiff = Math.abs(midiMs - targetMs) / targetMs;
+  if (relDiff > 0.004) {
+    const scale = targetMs / midiMs;
+    scaled = events.map((ev) => ({
+      ...ev,
+      tick: Math.round(ev.tick * scale),
+    }));
+    binary = smfFromTimedEvents(scaled, targetBpm, TARGET_DIVISION);
+  }
+
+  return alignStudyPlaybackMidiToTimemap(binary, timemap, targetBpm);
+}
+
+/** Escala ticks do SMF (mesmo BPM) — usado para fechar duração com o SpessaSynth. */
+export function scaleStudySmfTicks(
+  midi: ArrayBuffer,
+  tickScale: number,
+  tempoBpm: number,
+): ArrayBuffer {
+  if (!isStandardMidiFile(midi) || tickScale <= 0 || !Number.isFinite(tickScale)) return midi;
+  if (Math.abs(tickScale - 1) < 0.0005) return midi;
+  const targetBpm = Math.max(30, Math.round(tempoBpm));
+  const { events, division } = extractTimedEventsFromSmf(midi);
+  if (events.length === 0) return midi;
+  const scaled = events.map((ev) => ({
+    ...ev,
+    tick: Math.round(ev.tick * tickScale),
+  }));
+  return smfFromTimedEvents(scaled, targetBpm, division || TARGET_DIVISION);
 }
 
 /**
@@ -788,14 +921,58 @@ export function shouldReencodeSmfForPlayback(midi: ArrayBuffer): boolean {
   return format !== 0 || tracks !== 1;
 }
 
-/** Regrava SMF válido (formato 0) para o SpessaSynth — corrige stems com meta/tempo malformados. */
-export function reencodeSmfForPlayback(midi: ArrayBuffer, fallbackTempoBpm: number): ArrayBuffer {
+/**
+ * Regrava Set Tempo e PPQ sem escalar ticks (evita melódico acelerado ao mesclar com percussão XML).
+ */
+export function retargetStudySmfToCatalogTempo(
+  midi: ArrayBuffer,
+  targetTempoBpm: number,
+): ArrayBuffer {
   if (!isStandardMidiFile(midi)) return midi;
+  const target = Math.max(30, Math.round(targetTempoBpm));
   const { events, division } = extractTimedEventsFromSmf(midi);
   if (events.length === 0) return midi.slice(0);
-  const tempoBpm = readFirstSmfTempoBpm(midi) ?? Math.max(30, fallbackTempoBpm);
   const scaled = scaleEvents(events, division, TARGET_DIVISION);
-  return smfFromTimedEvents(scaled, tempoBpm, TARGET_DIVISION);
+  return smfFromTimedEvents(scaled, target, TARGET_DIVISION);
+}
+
+/** Alinha um stem ao timemap antes do merge (cada naipe na mesma escala temporal). */
+export function alignStudyPlaybackLayerToTimemap(
+  midi: ArrayBuffer,
+  timemap: StudyTimemapEntry[],
+  tempoBpm: number,
+): ArrayBuffer {
+  if (!timemap.length) {
+    return retargetStudySmfToCatalogTempo(midi, tempoBpm);
+  }
+  return fitStudySmfToTimemap(midi, timemap, tempoBpm, { preserveTickTimeline: true });
+}
+
+/**
+ * Ajusta ticks e meta Set Tempo para o BPM da partitura (semínima/min).
+ * Preserva duração musical em ms quando o stem veio com andamento diferente (ex. Verovio).
+ */
+export function normalizeStudySmfTempo(midi: ArrayBuffer, targetTempoBpm: number): ArrayBuffer {
+  if (!isStandardMidiFile(midi)) return midi;
+  const target = Math.max(30, Math.round(targetTempoBpm));
+  const { events, division } = extractTimedEventsFromSmf(midi);
+  if (events.length === 0) return midi.slice(0);
+
+  const sourceTempo = readFirstSmfTempoBpm(midi) ?? target;
+  let scaled = scaleEvents(events, division, TARGET_DIVISION);
+  if (sourceTempo > 0 && Math.abs(sourceTempo - target) > 0.01) {
+    const ratio = target / sourceTempo;
+    scaled = scaled.map((event) => ({
+      ...event,
+      tick: Math.round(event.tick * ratio),
+    }));
+  }
+  return smfFromTimedEvents(scaled, target, TARGET_DIVISION);
+}
+
+/** Regrava SMF válido (formato 0) para o SpessaSynth — corrige stems com meta/tempo malformados. */
+export function reencodeSmfForPlayback(midi: ArrayBuffer, targetTempoBpm: number): ArrayBuffer {
+  return normalizeStudySmfTempo(midi, targetTempoBpm);
 }
 
 /** @deprecated Use mergeStudyMidiLayers */
