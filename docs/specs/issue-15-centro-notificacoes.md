@@ -170,7 +170,9 @@ Tipos futuros permanecem modelados sem gatilhos: `repertoire_song_created`, `boa
 ### 4.3 Preferências e canais
 
 - Preferências são próprias de cada conta e organizadas por tipo e canal (`portal`, `email`). No MVP, o canal e-mail fica forçado para desligado; portal segue a preferência por tipo, respeitando as exceções abaixo.
-- Em `/configuracoes`, admins podem ver todos os tipos; as demais contas veem somente avisos que podem receber no fluxo atual (senha alterada, alertas da gestão, blog e agenda; aviso de aprovação somente se tiverem `users:approve`).
+- Em `/configuracoes`, as preferências são apresentadas em seletor múltiplo compacto, com opções identificadas por módulo e aviso. Opções marcadas são recebidas no portal. Admins veem todos os tipos configuráveis; as demais contas veem somente avisos que podem receber, conforme o perfil e as permissões efetivas.
+- `signup_approval_pending` e `signup_completed` usam a permissão efetiva `users:approve`; o papel `admin` recebe essa permissão por padrão. Contas sem essa permissão não veem essas preferências. As regras atuais de entrega das notificações permanecem inalteradas.
+- `admin_message` é obrigatório no portal e não aparece como preferência configurável. E-mail não aparece na interface enquanto o canal estiver desabilitado; o campo `emailEnabled` continua preservado no contrato e nas preferências existentes.
 - Para eventos automáticos, aplicar a preferência de portal da pessoa destinatária no momento do evento. O canal de e-mail não cria jobs enquanto `bcl.notifications.email-enabled` estiver falso. Admin mantém visibilidade global dos avisos automáticos conforme regra acima.
 - Para `admin_message`, sempre criar a visualização no portal para cada destinatário; e-mail permanece desabilitado no MVP.
 - Não enviar a eventos passados retroativamente quando uma pessoa altera suas preferências.
@@ -194,7 +196,7 @@ Tipos futuros permanecem modelados sem gatilhos: `repertoire_song_created`, `boa
 
 ### 4.6 Canal de e-mail temporariamente desabilitado
 
-- O envio de notificações por e-mail fica desabilitado no MVP. A interface informa isso explicitamente em Gestão e nas preferências da conta; nenhum controle permite habilitá-lo.
+- O envio de notificações por e-mail fica desabilitado no MVP. Nenhuma interface de preferências oferece controles de e-mail.
 - Alertas continuam sendo gravados e entregues no portal, sem depender da preferência de e-mail.
 - Mantemos o contrato `emailEnabled`, as preferências persistidas, as tabelas/outbox e a estrutura de entrega como scaffolding para uma ativação futura. Enquanto desabilitado, a API preserva as preferências existentes, mas não cria novas entradas na outbox nem executa entregas pendentes.
 - O canal só volta a ser oferecido após ativação explícita da configuração de backend e atualização da interface.
@@ -260,13 +262,13 @@ Tipos futuros permanecem modelados sem gatilhos: `repertoire_song_created`, `boa
 
 - [ ] Usuário autenticado tem acesso à contagem no sino e inbox modal, segundo o layout de mobile/desktop acordado.
 - [ ] Signup pendente, signup concluído e alteração efetiva de senha geram os respectivos avisos reais e links corretos.
-- [ ] Usuários com `users:approve` recebem aviso de aprovação; apenas admins recebem aviso informativo de signup; alteração de senha avisa apenas a conta afetada.
+- [ ] As preferências de avisos de cadastro aparecem somente a contas com `users:approve`; alteração de senha avisa apenas a conta afetada.
 - [ ] Admin vê todos os avisos automáticos, com leitura pessoal; mensagens manuais são visíveis somente ao remetente e destinatários.
 - [ ] Marcar como lida persiste no backend e afeta apenas a visualização da pessoa atual.
 - [ ] Contagem fica apenas no sino, considera todas as não lidas acessíveis; inbox modal carrega 10 e pagina em blocos de 10; empty state é “Nenhuma notificação”.
 - [ ] `notifications:create` é aplicada por papel e protege UI/API; admin recebe por padrão e pode delegar a papéis.
 - [ ] Envio manual individual/massa valida contas ativas/aprovadas; “todos” exclui remetente; texto/link conforme regras; alertas aparecem no portal.
-- [ ] Preferências de tipo salvam em `/configuracoes` e afetam eventos futuros; canal e-mail aparece explicitamente desabilitado; mensagens manuais continuam obrigatórias no portal.
+- [ ] Preferências aparecem em seletor múltiplo compacto por módulo, salvam em `/configuracoes` e afetam eventos futuros; e-mail e `admin_message` não aparecem como controles; mensagens manuais continuam obrigatórias no portal.
 - [ ] Estrutura de outbox e reenvio fica preservada para o futuro, mas não cria jobs nem processa e-mails enquanto `NOTIFICATIONS_EMAIL_ENABLED=false`.
 - [ ] Contrato documenta tipos, payload e extensão futura; não há mock local.
 - [ ] UI é acessível e utilizável no browser em mobile (360 px) e desktop (>=960 px).
