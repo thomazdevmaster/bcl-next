@@ -3,7 +3,7 @@
 - **Issue:** [#15](https://github.com/thomazdevmaster/bcl-next/issues/15)
 - **SPEC:** [docs/specs/issue-15-centro-notificacoes.md](../specs/issue-15-centro-notificacoes.md) — aprovada pela pessoa usuária
 - **GitHub:** aberta, atribuída a `kjunda01`
-- **Status real do trabalho:** Implementação em andamento nas duas branches; PRs ainda não abertos
+- **Status real do trabalho:** Implementação entregue em PRs separados; revisão visual manual pendente
 - **Última verificação:** 2026-10-25
 - **Branches preparadas:** `bcl-next: feat/issue-15-centro-notificacoes` sobre `7b3cbe4`; `bcl-api: feat/issue-15-notifications` sobre `a31a3aa`
 - **Prioridade declarada:** P1
@@ -11,14 +11,14 @@
 - **Labels:** `enhancement`
 - **Milestone/campos de projeto acessíveis:** milestone ausente; `projectItems` vazio. A timeline registra eventos de projeto em 2026-10-21 e 2026-10-24, sem campos do item disponíveis na consulta.
 - **Comentários:** nenhum; confirmado por consulta paginada à API.
-- **PRs relacionadas:** Nenhuma PR encontrada na listagem completa das PRs de `kjunda01` (11 retornadas, limite 500). A timeline contém referência cruzada à issue #24, cujo corpo cita a #15 como dependência; não é uma PR.
+- **PRs relacionadas:** [bcl-next #96](https://github.com/thomazdevmaster/bcl-next/pull/96) e [bcl-api #5](https://github.com/thomazdevmaster/bcl-api/pull/5). O PR do backend cita `Refs: thomazdevmaster/bcl-next#15` sem fechar a issue.
 
 ## Implementação atual
 
 - Frontend: tipos e chamadas da API real, badge mobile/desktop, inbox com paginação e leitura individual, preferências em `/settings` e formulário protegido por `notifications:create` em `/gestao/notificacao`.
 - Backend: migration Flyway V14, persistência e endpoints, isolamento por audiência/leitura, preferências, autorização delegável, eventos de signup/senha e outbox de e-mail com retry/reenvio.
 - Verificações executadas: `npx tsc --noEmit`, ESLint nos arquivos alterados e `./mvnw -DskipTests compile` passaram. Nenhum teste foi executado e nenhuma migration foi aplicada a banco.
-- Ainda pendente: revisão visual manual no browser, commits/PRs dos dois repositórios e revisão final após abrir os PRs.
+- Ainda pendente: revisão visual manual no browser e revisão/aprovação dos dois PRs. O estado `MERGEABLE` foi confirmado pelo GitHub em 2026-10-25.
 
 ## Matriz inicial dos requisitos originais
 
@@ -67,8 +67,8 @@ Esta matriz registra o estado observado antes da implementação, em 2026-10-24.
 
 | Requisito acordado na entrevista                                                                                             | Status   | Evidência no código ou pendência                                                                                                                                                                                                                                                                                               |
 | ---------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Conta com `notifications:create` envia uma notificação a uma ou várias contas; somente remetente e destinatários podem vê-la | Pendente | Acréscimo aprovado durante a entrevista. Público “todos”: contas ativas/aprovadas, remetente excluído por padrão. Conteúdo: título, corpo simples, link interno opcional; envio imediato. O `bcl-api` ainda não tem recurso de notificações.                                                                                   |
-| Preferências por tipo configuram portal e/ou e-mail                                                                          | Pendente | Acréscimo aprovado durante a entrevista; e-mail era explicitamente fora do escopo original. Cada conta ajusta suas preferências em `/settings`; defaults portal/e-mail ligados. Alertas enviados por autorizados permanecem obrigatórios no portal; e-mail respeita a preferência. `bcl-api` ainda não tem entrega individual. |
-| Cada destinatário mantém sua própria leitura; leitura de uma pessoa não altera a cópia das demais                            | Pendente | Decisão aprovada durante a entrevista. O backend ainda não tem modelo de notificação/leitura.                                                                                                                                                                                                                                  |
-| Área Gestão > Notificação (`/gestao/notificacao`) para enviar alertas, protegida por permissão                               | Pendente | Acréscimo aprovado durante a entrevista. Permissão acordada: `notifications:create`, atribuída a admin por padrão e delegável a outros papéis. Não existe recurso ou permissão de notificações no frontend nem no `bcl-api`.                                                                                                   |
-| Badge e inbox disponíveis a todas as contas autenticadas; sino independente no mobile e contador no avatar/menu desktop      | Pendente | Acréscimo aprovado durante a entrevista. Mobile: sino à esquerda do avatar, contador no sino e abertura direta da inbox. Desktop: contador sobre o avatar; o menu aberto pelo avatar contém “Notificações (X)” junto de Perfil, Configurações e Sair. `src/layouts/AppShell.tsx` ainda não tem notificações.                   |
+| Conta com `notifications:create` envia uma notificação a uma ou várias contas; somente remetente e destinatários podem vê-la | Implementado | API valida permissão, destinatários ativos/aprovados e texto/link interno; inbox limita visibilidade ao remetente e destinatários. PR [bcl-api #5](https://github.com/thomazdevmaster/bcl-api/pull/5). |
+| Preferências por tipo configuram portal e/ou e-mail                                                                          | Implementado | `/settings` salva preferências com defaults ligados; alertas manuais continuam obrigatórios no portal. Front PR [#96](https://github.com/thomazdevmaster/bcl-next/pull/96), backend PR [#5](https://github.com/thomazdevmaster/bcl-api/pull/5). |
+| Cada destinatário mantém sua própria leitura; leitura de uma pessoa não altera a cópia das demais                            | Implementado | Tabela de leitura independente por visualizador e endpoint autenticado de marcar como lida no backend, PR [bcl-api #5](https://github.com/thomazdevmaster/bcl-api/pull/5). |
+| Área Gestão > Notificação (`/gestao/notificacao`) para enviar alertas, protegida por permissão                               | Implementado | Rota e navegação protegidas por `notifications:create`, com autorização também no backend. Front PR [#96](https://github.com/thomazdevmaster/bcl-next/pull/96), backend PR [#5](https://github.com/thomazdevmaster/bcl-api/pull/5). |
+| Badge e inbox disponíveis a todas as contas autenticadas; sino independente no mobile e contador no avatar/menu desktop      | Implementado | `AppShell` contém sino móvel, contador no avatar desktop, menu, inbox paginada e estados acessíveis; revisão visual no browser pendente. Front PR [#96](https://github.com/thomazdevmaster/bcl-next/pull/96). |
