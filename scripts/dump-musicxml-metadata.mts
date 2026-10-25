@@ -88,24 +88,26 @@ function extractMarkedTempoBpmFromXml(xml: string): number | null {
   return peak > 0 ? peak : null;
 }
 
+type ScorePartMatch = [chunk: string, id: string];
+
 /** Espelha `extractInstrumentsFromXml`. */
 function extractInstrumentsFromXml(xml: string) {
   const partList = xml.match(/<part-list>([\s\S]*?)<\/part-list>/i)?.[1] ?? '';
-  const parts = [
+  const parts: ScorePartMatch[] = [
     ...partList.matchAll(/<score-part id="([^"]+)"[\s\S]*?(?=<score-part id=|<\/part-list>)/g),
-  ];
+  ].map((match) => [match[0], match[1]] as ScorePartMatch);
   const lastOpen = partList.lastIndexOf('<score-part id="');
   if (lastOpen >= 0) {
     const tail = partList.slice(lastOpen);
     const lastId = tail.match(/^<score-part id="([^"]+)"/)?.[1];
     if (lastId && !parts.some((p) => p[1] === lastId)) {
-      parts.push([tail, lastId] as RegExpMatchArray);
+      parts.push([tail, lastId]);
     }
   }
   return parts
     .map((match) => {
-      const id = match[1];
       const chunk = match[0];
+      const id = match[1];
       const partName = chunk.match(/<part-name>([^<]+)/)?.[1]?.trim() ?? '';
       const instrumentName =
         chunk.match(/<score-instrument[\s\S]*?<instrument-name>([^<]+)/)?.[1]?.trim() ?? '';
