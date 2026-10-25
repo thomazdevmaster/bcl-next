@@ -28,9 +28,16 @@ import { StudyPlayerController } from './studyPlayerController';
 import {
   findTimemapIndexAtPosition,
   getPlaybackPositionFromTimemap,
+  getPlaybackPositionFromUniformTempo,
+  visualCursorOffsetInMeasure,
   getStudyPlaybackPositionMs,
+  measureDurationMsFromTempo,
+  normalizeStudyTimemapEntries,
+  normalizeTimemapTimestamps,
   readPlayerTimemap,
   setSequencerFromTimemapMs,
+  sumTimemapDurationMs,
+  type MeasureTimemapEntry,
 } from './studyTimemap';
 import {
   buildStudyScoreHeader,
@@ -56,15 +63,21 @@ import {
 } from './studyUnrollMusicXml';
 import {
   countDrumChannelNoteOns,
+  countGmDrumChannelNoteOns,
   drumChannelPitchHistogram,
-  alignStudyPlaybackMidiToTimemap,
+  drumChannelUsesGmKitPitches,
+  ensureGmDrumKitOnChannel10,
+  fitStudySmfToTimemap,
+  normalizeStudySmfTempo,
+  scaleStudySmfTicks,
   prepareStudyMidiBuffer,
   reencodeSmfForPlayback,
   resolveStudyPlaybackTempoBpm,
   shouldReencodeSmfForPlayback,
 } from './studyMidiFix';
-import { composeStudyPlaybackMidi } from './studyPlaybackMidi';
+import { assembleStudyPlaybackMidi } from './studyPlaybackMidi';
 import { fetchFilteredXml, fetchPartMidi, selectionStorageKey } from './songParts';
+import { fetchStudyTimemap, fetchUnrolledStudyXml } from './studyTimemapApi';
 
 /**
  * O WASM do Verovio embarcado no musicxml-player traz 652 dos 1043 glifos que
@@ -260,6 +273,13 @@ export class StudySession {
   private appliedServerMidiKey: string | null = null;
   /** Verovio auxiliar — não reutiliza o converter do Player (reinit quebraria timemap/áudio). */
   private auxiliaryVerovioConverter: VerovioConverter | null = null;
+  /** Timemap gerado no backend (mesmo XML desdobrado do estudo). */
+  private serverStudyTimemap: MeasureTimemapEntry[] | null = null;
+  private serverTimemapKey: string | null = null;
+  /** Origem do último buffer enviado ao sequenciador (afeta ajuste timemap). */
+  private lastPlaybackMidiSource: 'server' | 'client-compose' | 'fallback' = 'fallback';
+  /** Montagem já aplicou fit por camada — não reescalar no sequenciador. */
+  private playbackMidiTimemapPreAligned = false;
 
   /** UI fields mirrored in snapshot */
   private scoreLoading = false;
@@ -503,6 +523,8 @@ export class StudySession {
     this.sourceXml = enrichedXml;
     this.mobileMeasuresOverride = null;
     this.lastRenderedSelectionKey = null;
+    this.serverStudyTimemap = null;
+    this.serverTimemapKey = null;
     this.destroyPlayer();
     this.clearOsmdContainer();
 
@@ -531,6 +553,8 @@ export class StudySession {
     this.sourceXml = null;
     this.musicXmlCatalog = null;
     this.lastRenderedSelectionKey = null;
+    this.serverStudyTimemap = null;
+    this.serverTimemapKey = null;
     this.xmlLoaded = false;
     this.scoreLoading = false;
     this.scoreError = null;
@@ -785,6 +809,87 @@ export class StudySession {
     this.emit();
   }
 
+  /** Partitura desdobrada (voltas) — preferência API; fallback unroll no cliente. */
+  private async resolveUnrolledStudyXml(
+    songId: string,
+    partIds: string[],
+  ): Promise<string | null> {
+    if (partIds.length === 0) return null;
+    if (/^\d+$/.test(songId)) {
+      try {
+        const fromApi = await fetchUnrolledStudyXml(songId, partIds);
+        if (fromApi?.includes('<')) return fromApi;
+      } catch {
+        /* fallback local */
+      }
+    }
+    const filtered = await this.resolveXmlForPartIds(songId, partIds);
+    if (!filtered.includes('<')) return null;
+    try {
+      return await unrollMusicXmlForPlayback(prepareMusicXmlForStudyPlayback(filtered));
+    } catch {
+      return filtered;
+    }
+  }
+
+  private timemapStorageKey(songId: string, partIds: string[]): string {
+    return `${songId}::${[...partIds].sort().join('|')}`;
+  }
+
+  private async loadServerStudyTimemap(
+    songId: string,
+    partIds: string[],
+    token: number,
+  ): Promise<void> {
+    if (!/^\d+$/.test(songId) || partIds.length === 0) return;
+    const key = this.timemapStorageKey(songId, partIds);
+    if (this.serverTimemapKey === key && this.serverStudyTimemap?.length) {
+      this.applyServerStudyTimemapToPlayer(true);
+      return;
+    }
+    const measures = await fetchStudyTimemap(songId, partIds);
+    if (token !== this.loadToken) return;
+    if (!measures?.length) {
+      this.serverStudyTimemap = null;
+      this.serverTimemapKey = null;
+      if (this.player) {
+        const p = this.player as { __bclTimemapFromServer?: boolean; __bclStudyTimemap?: unknown };
+        p.__bclTimemapFromServer = false;
+        p.__bclStudyTimemap = undefined;
+        this.applyStudyTimemapNormalization();
+      }
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[study] timemap do servidor indisponível; usando timemap do player');
+      }
+      return;
+    }
+    this.serverStudyTimemap = measures;
+    this.serverTimemapKey = key;
+    this.applyServerStudyTimemapToPlayer(true);
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[study] timemap do servidor', {
+        entries: measures.length,
+        totalMs: sumTimemapDurationMs(measures),
+      });
+    }
+  }
+
+  private applyServerStudyTimemapToPlayer(invalidateMidi: boolean): void {
+    if (!this.player || !this.serverStudyTimemap?.length) return;
+    const p = this.player as {
+      __bclStudyTimemap?: MeasureTimemapEntry[];
+      __bclTimemapFromServer?: boolean;
+      __bclTimemapAligned?: boolean;
+    };
+    p.__bclStudyTimemap = this.serverStudyTimemap;
+    p.__bclTimemapFromServer = true;
+    p.__bclTimemapAligned = undefined;
+    if (invalidateMidi) {
+      this.appliedServerMidiKey = null;
+      this.midiLoaded = false;
+    }
+  }
+
   /** XML filtrado por naipe: recorte local quando o XML completo já está na sessão; senão API. */
   private async resolveXmlForPartIds(songId: string, partIds: string[]): Promise<string> {
     const source = this.sourceXml;
@@ -832,7 +937,7 @@ export class StudySession {
 
     this.loading = true;
     if (!scoreUnchanged) this.scoreLoading = true;
-    if (!midiUnchanged) this.destroyPlayer();
+    if (!scoreUnchanged || !midiUnchanged) this.destroyPlayer();
     this.emit();
 
     try {
@@ -863,19 +968,36 @@ export class StudySession {
         midiSelectedIds.length < available.length;
 
       if (!scoreUnchanged) {
-        const scoreXml = shouldFilter
-          ? await this.resolveXmlForPartIds(id, selectedIds)
-          : this.sourceXml;
-        await this.renderScoreWithOsmd(sanitizeMusicXmlPartList(scoreXml), token);
+        const scoreXmlRaw = shouldFilter
+          ? await this.resolveUnrolledStudyXml(id, selectedIds)
+          : await this.resolveUnrolledStudyXml(id, available.map((i) => i.id));
+        const scoreXml = prepareMusicXmlForStudyPlayback(
+          sanitizeMusicXmlPartList(scoreXmlRaw ?? this.sourceXml ?? ''),
+        );
+        await this.renderScoreWithOsmd(scoreXml, token);
         if (token !== this.loadToken) return;
+        const timemapPartIds =
+          midiSelectedIds.length > 0 ? midiSelectedIds : selectedIds;
+        await this.loadServerStudyTimemap(id, timemapPartIds, token);
+      } else if (!midiUnchanged) {
+        await this.loadServerStudyTimemap(id, midiSelectedIds, token);
       }
 
-      if (!midiUnchanged) {
+      if (!scoreUnchanged || !midiUnchanged) {
         const serverMidi = this.prefetchServerMidi(id, midiSelectedIds);
-        const midiXml = shouldFilterMidi
-          ? await this.resolveXmlForPartIds(id, midiSelectedIds)
-          : this.sourceXml;
-        await this.initVerovioPlayerInHiddenContainer(prepareMusicXmlForStudyPlayback(midiXml), id, token);
+        const midiXmlRaw =
+          sameIdSet(selectedIds, midiSelectedIds) && !shouldFilterMidi
+            ? null
+            : await this.resolveUnrolledStudyXml(id, midiSelectedIds);
+        const midiXml = prepareMusicXmlForStudyPlayback(
+          sanitizeMusicXmlPartList(
+            midiXmlRaw ??
+              (shouldFilterMidi
+                ? await this.resolveXmlForPartIds(id, midiSelectedIds)
+                : this.sourceXml ?? ''),
+          ),
+        );
+        await this.initVerovioPlayerInHiddenContainer(midiXml, id, token);
         await serverMidi;
         if (token !== this.loadToken) return;
         await this.syncServerMidiIntoPlayer(id, midiSelectedIds, token);
@@ -1160,6 +1282,11 @@ export class StudySession {
         return;
       }
       this.playerController.player = this.player;
+      if (this.serverStudyTimemap?.length) {
+        this.applyServerStudyTimemapToPlayer(true);
+      } else {
+        this.applyStudyTimemapNormalization();
+      }
       this.patchPlayerPlayForStudySync();
       this.playerReady = true;
       this.capturePlayerFallbackMidi();
@@ -1332,60 +1459,74 @@ export class StudySession {
     token: number,
   ): Promise<ArrayBuffer | null> {
     const xml = this.sourceXml;
-    const includesPercussion = xml ? selectionIncludesPercussion(xml, partIds) : false;
+    const catalogXml = this.musicXmlCatalog ?? xml;
     const tempo = resolveStudyPlaybackTempoBpm({
-      xml: this.musicXmlCatalog ?? xml,
+      xml: catalogXml ?? xml,
       midi: serverMidi,
       referenceMidi: this.playerFallbackMidi,
     });
 
-    if (xml && includesPercussion) {
-      const catalogXml = this.musicXmlCatalog ?? xml;
-      const composed = await composeStudyPlaybackMidi({
-        catalogXml,
-        songId,
-        partIds,
-        tempoBpm: tempo,
-        fetchPartMidi: async (sid, ids) => {
-          const key = this.midiCacheKey(sid, ids);
-          let buf = this.midiCache.get(key) ?? null;
-          if (!buf) {
-            buf = await fetchPartMidi(sid, ids);
-            if (buf) this.midiCache.set(key, buf);
-          }
-          return buf;
+    const fetchStem = async (sid: string, ids: string[]): Promise<ArrayBuffer | null> => {
+      const key = this.midiCacheKey(sid, ids);
+      let buf = this.midiCache.get(key) ?? null;
+      if (!buf) {
+        buf = await fetchPartMidi(sid, ids);
+        if (buf) this.midiCache.set(key, buf);
+      }
+      return buf;
+    };
+
+    if (catalogXml?.includes('<score') && /^\d+$/.test(songId)) {
+      const assembled = await assembleStudyPlaybackMidi(
+        {
+          catalogXml,
+          songId,
+          partIds,
+          tempoBpm: tempo,
+          fetchPartMidi: fetchStem,
+          resolvePartXml: async (ids) => {
+            if (ids.length === partIds.length) {
+              return (await this.resolvePreparedMidiXml(songId, partIds)) ?? '';
+            }
+            return this.resolveXmlForPartIds(songId, ids);
+          },
         },
-        resolvePartXml: async (ids) => {
-          if (ids.length === partIds.length) {
-            return (await this.resolvePreparedMidiXml(songId, partIds)) ?? '';
-          }
-          return this.resolveXmlForPartIds(songId, ids);
-        },
-      });
+        serverMidi,
+        this.serverStudyTimemap,
+      );
       if (token !== this.loadToken) return null;
-      if (composed) {
+      if (assembled) {
+        this.lastPlaybackMidiSource =
+          assembled.source === 'client-compose' ? 'client-compose' : 'server';
+        this.playbackMidiTimemapPreAligned = assembled.timemapPreAligned;
         if (process.env.NODE_ENV === 'development') {
           (window as unknown as { __studyPlaybackMidiStats?: unknown }).__studyPlaybackMidiStats = {
+            source: assembled.source,
             partIds,
-            drumNoteOns: countDrumChannelNoteOns(composed),
-            drumPitches: drumChannelPitchHistogram(composed),
-            bytes: composed.byteLength,
-            catalogHasUnpitched: (this.musicXmlCatalog ?? xml).includes('midi-unpitched'),
+            drumNoteOns: countDrumChannelNoteOns(assembled.buffer),
+            gmDrumNoteOns: countGmDrumChannelNoteOns(assembled.buffer),
+            drumPitches: drumChannelPitchHistogram(assembled.buffer),
+            bytes: assembled.buffer.byteLength,
+            timemapPreAligned: assembled.timemapPreAligned,
           };
         }
-        return composed;
+        return assembled.buffer;
       }
-      return null;
+      this.playbackMidiTimemapPreAligned = false;
     }
 
     if (serverMidi) {
+      this.lastPlaybackMidiSource = 'server';
+      this.playbackMidiTimemapPreAligned = false;
       return prepareStudyMidiBuffer(serverMidi, {
         percussionOnly: xml ? selectionIsPercussionOnly(xml, partIds) : false,
       });
     }
     if (this.playerFallbackMidi) {
+      this.lastPlaybackMidiSource = 'fallback';
       return prepareStudyMidiBuffer(this.playerFallbackMidi, { percussionOnly: false });
     }
+    this.lastPlaybackMidiSource = 'fallback';
     return null;
   }
 
@@ -1395,6 +1536,38 @@ export class StudySession {
       | undefined;
     if (seq && 'skipToFirstNoteOn' in seq) {
       seq.skipToFirstNoteOn = false;
+    }
+  }
+
+  /** Verovio timemap batida-a-batida → compassos; invalida MIDI alinhado ao mapa bruto. */
+  private applyStudyTimemapNormalization(): void {
+    if (!this.player) return;
+    if ((this.player as { __bclTimemapFromServer?: boolean }).__bclTimemapFromServer) return;
+    const converter = (
+      this.player as { _options?: { converter?: { timemap?: MeasureTimemapEntry[] } } }
+    )?._options?.converter;
+    const raw = converter?.timemap;
+    if (!Array.isArray(raw) || raw.length === 0) return;
+    const fixed = normalizeStudyTimemapEntries(
+      raw,
+      this.beatsPerMeasure,
+      this.baseBpm,
+    );
+    (this.player as { __bclStudyTimemap?: MeasureTimemapEntry[] }).__bclStudyTimemap = fixed;
+    (this.player as { __bclTimemapAligned?: boolean }).__bclTimemapAligned = undefined;
+    this.appliedServerMidiKey = null;
+    this.midiLoaded = false;
+    if (process.env.NODE_ENV === 'development') {
+      const rawMs = sumTimemapDurationMs(normalizeTimemapTimestamps(raw));
+      const fixedMs = sumTimemapDurationMs(fixed);
+      console.warn('[study] timemap normalizado', {
+        rawEntries: raw.length,
+        fixedEntries: fixed.length,
+        rawMs,
+        fixedMs,
+        bpm: this.baseBpm,
+        beats: this.beatsPerMeasure,
+      });
     }
   }
 
@@ -1470,6 +1643,16 @@ export class StudySession {
     if (!this.player) return;
     const p = this.player as { velocity?: number };
     if ('velocity' in p) p.velocity = this.tempo;
+    const seq = this.getStudyPlayerInternals()?._sequencer as
+      | { playbackRate?: number; rate?: number }
+      | undefined;
+    if (seq) {
+      if ('playbackRate' in seq && typeof seq.playbackRate === 'number') {
+        seq.playbackRate = this.tempo;
+      } else if ('rate' in seq && typeof seq.rate === 'number') {
+        seq.rate = this.tempo;
+      }
+    }
     if (this.metronomeEnabled && this.isPlaying) this.restartMetronome();
   }
 
@@ -1479,7 +1662,7 @@ export class StudySession {
    */
   private applyStudyTempoFromCatalog(intrinsicBpm?: number) {
     const catalogXml = this.musicXmlCatalog ?? this.sourceXml;
-    const xmlForFirstTempo = this.sourceXml ?? catalogXml;
+    const xmlForFirstTempo = catalogXml ?? this.sourceXml;
     const firstMeasureBpm = xmlForFirstTempo
       ? extractTempoInfoFromXml(xmlForFirstTempo)?.bpm
       : null;
@@ -1530,8 +1713,8 @@ export class StudySession {
 
   private computeLoopTimestamps() {
     if (!this.player) return;
-    const timemap = (this.player as { _options?: { converter?: { timemap?: Array<{ measure?: number; timestamp?: number; duration?: number }> } } })?._options?.converter?.timemap;
-    if (!Array.isArray(timemap) || timemap.length === 0 || !this.loopStartMeasure || !this.loopEndMeasure) {
+    const timemap = readPlayerTimemap(this.player);
+    if (!timemap?.length || !this.loopStartMeasure || !this.loopEndMeasure) {
       this.loopStartTs = null;
       this.loopEndTs = null;
       return;
@@ -1543,8 +1726,8 @@ export class StudySession {
       this.loopEndTs = null;
       return;
     }
-    const startEntry = timemap.find((t) => t.measure === startMeasure);
-    const endEntry = timemap.find((t) => t.measure === endMeasure);
+    const startEntry = timemap[startMeasure] ?? timemap.find((t) => t.measure === startMeasure);
+    const endEntry = timemap[endMeasure] ?? timemap.find((t) => t.measure === endMeasure);
     this.loopStartTs = startEntry?.timestamp ?? null;
     const endStart = endEntry?.timestamp ?? null;
     const endDur = endEntry?.duration ?? 0;
@@ -1575,26 +1758,31 @@ export class StudySession {
 
   private applyCursorAtTimemapMs(clampedMs: number): void {
     const timemap = readPlayerTimemap(this.player);
-    if (!timemap?.length) return;
-    const pos = getPlaybackPositionFromTimemap(timemap, clampedMs, this.beatsPerMeasure);
+    const pos = timemap?.length
+      ? getPlaybackPositionFromTimemap(timemap, clampedMs, this.beatsPerMeasure)
+      : getPlaybackPositionFromUniformTempo(
+          clampedMs,
+          this.beatsPerMeasure,
+          this.baseBpm,
+        );
     if (!pos) return;
 
-    const index = findTimemapIndexAtPosition(timemap, clampedMs);
-    const entry = timemap[index];
-    if (!entry) return;
-
-    const measureStartMs = entry.timestamp ?? 0;
-    let duration = entry.duration ?? 0;
-    if (duration <= 0 && timemap[index + 1]) {
-      duration = (timemap[index + 1].timestamp ?? 0) - measureStartMs;
-    }
-    const offsetMs = Math.max(0, clampedMs - measureStartMs);
+    const index = timemap?.length
+      ? findTimemapIndexAtPosition(timemap, clampedMs)
+      : pos.measureIndex;
+    const entry = timemap?.[index];
+    const measureMs =
+      entry && (entry.duration ?? 0) > 0
+        ? entry.duration
+        : measureDurationMsFromTempo(this.beatsPerMeasure, this.baseBpm);
+    const measureStartMs = entry?.timestamp ?? pos.measureIndex * measureMs;
+    const offsetMs = visualCursorOffsetInMeasure(clampedMs, measureStartMs, pos.beat);
 
     this.osmdPlaybackRenderer?.moveTo(
       pos.measureIndex,
       measureStartMs,
       offsetMs,
-      duration > 0 ? duration : undefined,
+      measureMs,
     );
 
     this.lastCursorMeasure = pos.measure;
@@ -1681,19 +1869,24 @@ export class StudySession {
     measureOffsetMs: number;
   } | null {
     const timemap = readPlayerTimemap(this.player);
-    if (!timemap) return null;
-    const measureIndex = Math.max(0, measure - 1);
-    const entry =
-      timemap.find((item) => item.measure === measureIndex) ?? timemap[measureIndex];
+    if (!timemap?.length) return null;
+    const measureIndex = Math.max(0, Math.min(timemap.length - 1, measure - 1));
+    const entry = timemap[measureIndex];
     if (!entry) return null;
     const measureStartMs = entry.timestamp ?? 0;
-    let duration = entry.duration ?? 0;
-    if (duration <= 0 && timemap[measureIndex + 1]) {
-      duration = (timemap[measureIndex + 1].timestamp ?? 0) - measureStartMs;
+    let measureMs = entry.duration ?? 0;
+    if (measureMs <= 0 && timemap[measureIndex + 1]) {
+      measureMs = (timemap[measureIndex + 1].timestamp ?? 0) - measureStartMs;
+    }
+    if (measureMs <= 0) {
+      measureMs = measureDurationMsFromTempo(this.beatsPerMeasure, this.baseBpm);
     }
     const beats = Math.max(1, this.beatsPerMeasure);
-    const beatDuration = duration > 0 ? duration / beats : 0;
-    const measureOffsetMs = Math.min(duration, Math.max(0, beatInMeasure * beatDuration));
+    const beatDuration = measureMs / beats;
+    const measureOffsetMs = Math.min(
+      measureMs,
+      Math.max(0, beatInMeasure * beatDuration),
+    );
     return { measureIndex, measureStartMs, measureOffsetMs };
   }
 
@@ -1719,6 +1912,20 @@ export class StudySession {
     const posMs = this.getPlayerPositionMs();
     if (posMs == null) return;
     this.applyCursorAtTimemapMs(posMs);
+    if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+      const timemap = readPlayerTimemap(this.player);
+      const seq = this.getStudyPlayerInternals()?._sequencer;
+      (window as unknown as { __studySync?: unknown }).__studySync = {
+        posMs,
+        timemapMs: timemap ? sumTimemapDurationMs(timemap) : 0,
+        seqCurrentSec: seq?.currentTime ?? 0,
+        seqDurationSec: seq?.duration ?? 0,
+        bpm: this.bpm,
+        baseBpm: this.baseBpm,
+        tempo: this.tempo,
+        aligned: (this.player as { __bclTimemapAligned?: boolean })?.__bclTimemapAligned,
+      };
+    }
     this.emit();
   }
 
@@ -1804,6 +2011,13 @@ export class StudySession {
         this.seekPlaybackMs(0);
       }
       pl.play?.();
+      const anchorMs = moveTo
+        ? moveTo.measureStartMs + moveTo.measureOffsetMs
+        : 0;
+      requestAnimationFrame(() => {
+        if (!this.isPlaying || token !== this.loadToken) return;
+        this.seekPlaybackMs(anchorMs, { keepPlaying: true });
+      });
       this.startLoopMonitor();
       this.startCursorSync();
       this.syncPlaybackCursor();
@@ -1871,20 +2085,79 @@ export class StudySession {
     });
     let playbackBinary = shouldReencodeSmfForPlayback(midi)
       ? reencodeSmfForPlayback(midi, tempoBpm)
-      : midi;
+      : midi.slice(0);
     const timemap = readPlayerTimemap(this.player);
-    if (timemap && timemap.length > 0) {
-      playbackBinary = alignStudyPlaybackMidiToTimemap(
-        playbackBinary,
-        timemap,
-        tempoBpm,
-      );
+    const preAligned = this.playbackMidiTimemapPreAligned;
+    if (timemap && timemap.length > 0 && !preAligned) {
+      playbackBinary = fitStudySmfToTimemap(playbackBinary, timemap, tempoBpm);
+    } else if (!preAligned) {
+      playbackBinary = normalizeStudySmfTempo(playbackBinary, tempoBpm);
     }
-    load.call(p._sequencer, [{ binary: playbackBinary, fileName: 'study.mid' }]);
-    this.configureSequencerForStudyPlayback();
-    void p._context?.resume();
-    const durSec = await this.waitForSequencerMidiReady();
-    if (durSec <= 0) return false;
+
+    const midiPartIds = this.selectedMidiInstrumentIds;
+    const catalogForPerc = this.musicXmlCatalog ?? this.sourceXml;
+    if (
+      catalogForPerc &&
+      midiPartIds.length > 0 &&
+      selectionIncludesPercussion(catalogForPerc, midiPartIds)
+    ) {
+      playbackBinary = ensureGmDrumKitOnChannel10(playbackBinary);
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      const stats = (window as unknown as { __studyPlaybackMidiStats?: Record<string, unknown> })
+        .__studyPlaybackMidiStats;
+      if (stats) {
+        stats.drumNoteOnsAfterFit = countDrumChannelNoteOns(playbackBinary);
+        stats.gmDrumNoteOnsAfterFit = countGmDrumChannelNoteOns(playbackBinary);
+        stats.drumPitchesAfterFit = drumChannelPitchHistogram(playbackBinary);
+        stats.percussionGmOk = drumChannelUsesGmKitPitches(playbackBinary);
+      }
+    }
+
+    const timemapMs = timemap?.length ? sumTimemapDurationMs(timemap) : 0;
+    let aligned = preAligned;
+    let lastSeqMs = 0;
+    const maxAttempts = preAligned ? 1 : 4;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      load.call(p._sequencer, [{ binary: playbackBinary, fileName: 'study.mid' }]);
+      this.configureSequencerForStudyPlayback();
+      void p._context?.resume();
+      const durSec = await this.waitForSequencerMidiReady();
+      if (durSec <= 0) return false;
+      lastSeqMs = durSec * 1000;
+      if (timemapMs <= 0) {
+        aligned = true;
+        break;
+      }
+      const rel = Math.abs(lastSeqMs - timemapMs) / timemapMs;
+      aligned = preAligned ? rel <= 0.06 : rel <= 0.02;
+      if (aligned || attempt === maxAttempts - 1) break;
+      const tickScale = timemapMs / lastSeqMs;
+      playbackBinary = scaleStudySmfTicks(playbackBinary, tickScale, tempoBpm);
+      if (timemap && !preAligned) {
+        playbackBinary = fitStudySmfToTimemap(playbackBinary, timemap, tempoBpm);
+      }
+    }
+
+    if (this.player) {
+      (this.player as { __bclTimemapAligned?: boolean }).__bclTimemapAligned = aligned;
+    }
+    if (process.env.NODE_ENV === 'development' && timemapMs > 0 && !aligned) {
+      console.warn('[study] MIDI vs timemap fora de tolerância (2%)', {
+        timemapMs,
+        seqMs: lastSeqMs,
+      });
+    }
+    if (process.env.NODE_ENV === 'development' && timemap?.length) {
+      console.warn('[study] timemap carregado', {
+        entries: timemap.length,
+        timemapMs,
+        seqMs: lastSeqMs,
+        aligned,
+      });
+    }
+
     this.applyStudyTempoFromCatalog(tempoBpm);
     this.syncPlayerDurationFromSequencer();
     p._sequencer?.pause?.();

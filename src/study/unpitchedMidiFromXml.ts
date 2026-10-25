@@ -1,5 +1,9 @@
 import { extractTempoInfoFromXml } from './studyUtils';
-import { countDrumChannelNoteOns, countMidiNoteOns, midiHasAudibleNotes } from './studyMidiFix';
+import {
+  countGmDrumChannelNoteOns,
+  countMidiNoteOns,
+  midiHasAudibleNotes,
+} from './studyMidiFix';
 import {
   gmFromMuseScoreDisplay,
   gmFromMuseScoreInstrumentName,
@@ -193,6 +197,8 @@ function encodeTrack(events: TimedEvent[], tempoBpm: number): Uint8Array {
   bytes.push(...writeVarLen(0));
   const microPerQuarter = Math.round(60_000_000 / Math.max(30, tempoBpm));
   bytes.push(0xff, 0x51, 0x03, (microPerQuarter >> 16) & 0xff, (microPerQuarter >> 8) & 0xff, microPerQuarter & 0xff);
+  bytes.push(...writeVarLen(0));
+  bytes.push(0xc0 | DRUM_CHANNEL, 0);
 
   for (const ev of sorted) {
     const delta = Math.max(0, ev.tick - lastTick);
@@ -267,6 +273,6 @@ export function buildUnpitchedMidiFromXml(
 
   const track = encodeTrack(allEvents, tempo);
   const midi = buildSmf(track, smfDivision);
-  if (!midiHasAudibleNotes(midi) || countDrumChannelNoteOns(midi) === 0) return null;
+  if (!midiHasAudibleNotes(midi) || countGmDrumChannelNoteOns(midi) === 0) return null;
   return midi;
 }
