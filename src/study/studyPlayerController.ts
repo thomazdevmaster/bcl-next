@@ -1,5 +1,6 @@
 import {
-  findTimemapIndexAtPosition,
+  getPlaybackPositionFromTimemap,
+  getPlaybackPositionFromUniformTempo,
   getStudyPlaybackPositionMs,
   readPlayerTimemap,
 } from './studyTimemap';
@@ -55,7 +56,10 @@ export class StudyPlayerController {
       if (!this.player) return;
       const posMs = this.getPlayerPositionMs();
       if (posMs == null) return;
-      const beatInfo = this.getBeatIndexFromTimemap(posMs, beatsPerMeasure);
+      const timemap = readPlayerTimemap(this.player);
+      const beatInfo = timemap?.length
+        ? this.getBeatIndexFromTimemap(posMs, timemap, beatsPerMeasure)
+        : this.getBeatIndexFromUniformTempo(posMs, beatsPerMeasure, _bpm);
       if (!beatInfo) return;
       if (this.metronomeLastBeatIndex === beatInfo.globalBeat) return;
       const accent = beatInfo.beatInMeasure === 0;
@@ -105,41 +109,42 @@ export class StudyPlayerController {
     return getStudyPlaybackPositionMs(this.player);
   }
 
-  private getBeatIndexFromTimemap(posMs: number, beatsPerMeasure: number): {
+  private getBeatIndexFromTimemap(
+    posMs: number,
+    timemap: NonNullable<ReturnType<typeof readPlayerTimemap>>,
+    beatsPerMeasure: number,
+  ): {
     globalBeat: number;
     beatInMeasure: number;
     measureIndex: number;
   } | null {
-    const timemap = readPlayerTimemap(this.player);
-    if (!timemap) return null;
+    const pos = getPlaybackPositionFromTimemap(timemap, posMs, beatsPerMeasure);
+    if (!pos) return null;
     const beats = Math.max(1, beatsPerMeasure);
+    const globalBeat = pos.measureIndex * beats + pos.beatInMeasure;
+    return {
+      globalBeat,
+      beatInMeasure: pos.beatInMeasure,
+      measureIndex: pos.measureIndex,
+    };
+  }
 
-    let index = this.metronomeLastMeasureIndex ?? 0;
-    if (index >= timemap.length) index = 0;
-
-    const forward =
-      index < timemap.length - 1 && posMs >= (timemap[index + 1]?.timestamp ?? Infinity);
-    const backward = index < timemap.length && posMs < (timemap[index]?.timestamp ?? 0);
-
-    if (forward || backward) {
-      index = findTimemapIndexAtPosition(timemap, posMs);
-    }
-
-    const current = timemap[index];
-    if (!current) return null;
-    const measureStart = current.timestamp ?? 0;
-    let durationMs = current.duration ?? 0;
-    if (durationMs <= 0 && timemap[index + 1]) {
-      durationMs = (timemap[index + 1].timestamp ?? 0) - measureStart;
-    }
-    if (durationMs <= 0) return null;
-
-    const beatDuration = durationMs / beats;
-    const beatInMeasure = Math.min(
-      beats - 1,
-      Math.max(0, Math.floor((posMs - measureStart) / beatDuration)),
-    );
-    const globalBeat = index * beats + beatInMeasure;
-    return { globalBeat, beatInMeasure, measureIndex: index };
+  private getBeatIndexFromUniformTempo(
+    posMs: number,
+    beatsPerMeasure: number,
+    tempoBpm: number,
+  ): {
+    globalBeat: number;
+    beatInMeasure: number;
+    measureIndex: number;
+  } | null {
+    const pos = getPlaybackPositionFromUniformTempo(posMs, beatsPerMeasure, tempoBpm);
+    const beats = Math.max(1, beatsPerMeasure);
+    const globalBeat = pos.measureIndex * beats + pos.beatInMeasure;
+    return {
+      globalBeat,
+      beatInMeasure: pos.beatInMeasure,
+      measureIndex: pos.measureIndex,
+    };
   }
 }

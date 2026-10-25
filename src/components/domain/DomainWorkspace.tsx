@@ -114,7 +114,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
 
   useEffect(() => {
     // A listagem precisa iniciar quando o workspace monta.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     void fetchItems();
   }, [fetchItems]);
 
@@ -730,7 +730,7 @@ function formatCell(
 ): string {
   const value = getValue(row, column.path);
   if (column.path === "hasScore") return songHasScore(row) ? "Sim" : "Não";
-  if (column.path === "updatedBy") return value == null || value === "" ? "system" : String(value);
+  if (column.path === "createdBy") return value == null || value === "" ? "system" : String(value);
   if (column.path === "visibility") {
     if (value === "public") return "Pública";
     const who = [row.visibleToStudents ? "alunos" : "", row.visibleToMusicians ? "músicos" : ""].filter(Boolean);

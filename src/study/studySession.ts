@@ -35,6 +35,8 @@ import {
   normalizeStudyTimemapEntries,
   normalizeTimemapTimestamps,
   readPlayerTimemap,
+  clearStudyTimemapPlaybackCalibration,
+  syncStudyTimemapToSequencerDuration,
   setSequencerFromTimemapMs,
   sumTimemapDurationMs,
   type MeasureTimemapEntry,
@@ -863,7 +865,11 @@ export class StudySession {
       }
       return;
     }
-    this.serverStudyTimemap = measures;
+    this.serverStudyTimemap = normalizeStudyTimemapEntries(
+      measures,
+      this.beatsPerMeasure,
+      this.baseBpm,
+    );
     this.serverTimemapKey = key;
     this.applyServerStudyTimemapToPlayer(true);
     if (process.env.NODE_ENV === 'development') {
@@ -884,6 +890,7 @@ export class StudySession {
     p.__bclStudyTimemap = this.serverStudyTimemap;
     p.__bclTimemapFromServer = true;
     p.__bclTimemapAligned = undefined;
+    clearStudyTimemapPlaybackCalibration(p);
     if (invalidateMidi) {
       this.appliedServerMidiKey = null;
       this.midiLoaded = false;
@@ -1254,7 +1261,7 @@ export class StudySession {
           converter,
           renderer,
           followCursor: false,
-          velocity: this.tempo,
+          velocity: 1,
           repeat: this.loopEnabled ? -1 : 1,
         });
         return true;
@@ -1555,6 +1562,7 @@ export class StudySession {
     );
     (this.player as { __bclStudyTimemap?: MeasureTimemapEntry[] }).__bclStudyTimemap = fixed;
     (this.player as { __bclTimemapAligned?: boolean }).__bclTimemapAligned = undefined;
+    clearStudyTimemapPlaybackCalibration(this.player);
     this.appliedServerMidiKey = null;
     this.midiLoaded = false;
     if (process.env.NODE_ENV === 'development') {
@@ -1642,7 +1650,7 @@ export class StudySession {
   private applyTempo() {
     if (!this.player) return;
     const p = this.player as { velocity?: number };
-    if ('velocity' in p) p.velocity = this.tempo;
+    if ('velocity' in p) p.velocity = 1;
     const seq = this.getStudyPlayerInternals()?._sequencer as
       | { playbackRate?: number; rate?: number }
       | undefined;
@@ -1653,7 +1661,21 @@ export class StudySession {
         seq.rate = this.tempo;
       }
     }
+    this.resyncPlaybackTimemapCalibration();
+    if (this.isPlaying) this.syncPlaybackCursor();
     if (this.metronomeEnabled && this.isPlaying) this.restartMetronome();
+  }
+
+  /** Recalibra eixo cursor ↔ sequenciador após mudar playbackRate (andamento). */
+  private resyncPlaybackTimemapCalibration(): void {
+    if (!this.player) return;
+    const seq = this.getStudyPlayerInternals()?._sequencer;
+    const durSec = seq?.duration ?? 0;
+    if (durSec <= 0) return;
+    const sourceTimemap = (this.player as { __bclStudyTimemap?: MeasureTimemapEntry[] })
+      .__bclStudyTimemap;
+    if (!sourceTimemap?.length) return;
+    syncStudyTimemapToSequencerDuration(this.player, sourceTimemap, durSec * 1000);
   }
 
   /**
@@ -1776,7 +1798,7 @@ export class StudySession {
         ? entry.duration
         : measureDurationMsFromTempo(this.beatsPerMeasure, this.baseBpm);
     const measureStartMs = entry?.timestamp ?? pos.measureIndex * measureMs;
-    const offsetMs = visualCursorOffsetInMeasure(clampedMs, measureStartMs, pos.beat);
+    const offsetMs = visualCursorOffsetInMeasure(clampedMs, measureStartMs);
 
     this.osmdPlaybackRenderer?.moveTo(
       pos.measureIndex,
@@ -2142,6 +2164,14 @@ export class StudySession {
 
     if (this.player) {
       (this.player as { __bclTimemapAligned?: boolean }).__bclTimemapAligned = aligned;
+      const sourceTimemap =
+        (this.player as { __bclStudyTimemap?: MeasureTimemapEntry[] }).__bclStudyTimemap ??
+        timemap;
+      if (sourceTimemap?.length && lastSeqMs > 0) {
+        syncStudyTimemapToSequencerDuration(this.player, sourceTimemap, lastSeqMs);
+      } else {
+        clearStudyTimemapPlaybackCalibration(this.player);
+      }
     }
     if (process.env.NODE_ENV === 'development' && timemapMs > 0 && !aligned) {
       console.warn('[study] MIDI vs timemap fora de tolerância (2%)', {

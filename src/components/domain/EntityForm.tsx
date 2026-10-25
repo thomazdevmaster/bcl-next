@@ -104,6 +104,9 @@ export function EntityForm({
     if (metadata.arranger) onChange("arranger", metadata.arranger);
     if (metadata.genre) onChange("genre", metadata.genre);
     if (metadata.key) onChange("key", metadata.key);
+    if (metadata.durationSeconds != null) {
+      onChange("durationSeconds", metadata.durationSeconds);
+    }
     const encoded = `data:${file.type || "application/xml"};base64,${btoa(unescape(encodeURIComponent(content)))}`;
     onChange(field.name, encoded);
     onChange("scoreFileName", file.name);

@@ -163,9 +163,38 @@ export function readPlayerTimemap(player: unknown): MeasureTimemapEntry[] | null
       typeof (entry as MeasureTimemapEntry).duration === 'number',
   );
   if (filtered.length === 0) return null;
+  const playback = (player as { __bclStudyTimemapPlayback?: MeasureTimemapEntry[] })
+    .__bclStudyTimemapPlayback;
+  if (playback?.length) return playback;
   const study = (player as { __bclStudyTimemap?: MeasureTimemapEntry[] }).__bclStudyTimemap;
   if (study?.length) return study;
   return normalizeTimemapTimestamps(filtered);
+}
+
+export function syncStudyTimemapToSequencerDuration(
+  player: unknown,
+  sourceTimemap: MeasureTimemapEntry[],
+  sequencerDurationMs: number,
+): void {
+  if (!sourceTimemap.length || sequencerDurationMs <= 0) return;
+  const p = player as {
+    __bclStudyTimemapPlayback?: MeasureTimemapEntry[];
+    __bclPlaybackTimelineMs?: number;
+  };
+  p.__bclStudyTimemapPlayback = scaleTimemapDurationsToTarget(
+    sourceTimemap,
+    sequencerDurationMs,
+  );
+  p.__bclPlaybackTimelineMs = sequencerDurationMs;
+}
+
+export function clearStudyTimemapPlaybackCalibration(player: unknown): void {
+  const p = player as {
+    __bclStudyTimemapPlayback?: MeasureTimemapEntry[];
+    __bclPlaybackTimelineMs?: number;
+  };
+  p.__bclStudyTimemapPlayback = undefined;
+  p.__bclPlaybackTimelineMs = undefined;
 }
 
 /** Posição atual do player — sempre em milissegundos (contrato do musicxml-player). */
@@ -179,6 +208,23 @@ export function sumTimemapDurationMs(timemap: MeasureTimemapEntry[]): number {
   return timemap.reduce((total, entry) => total + Math.max(0, entry.duration ?? 0), 0);
 }
 
+/** Escala durações para bater com o sequenciador (evita cursor adiantado/atrasado no desenrolar). */
+export function scaleTimemapDurationsToTarget(
+  entries: MeasureTimemapEntry[],
+  targetTotalMs: number,
+): MeasureTimemapEntry[] {
+  const normalized = normalizeTimemapTimestamps(entries);
+  const sourceTotal = sumTimemapDurationMs(normalized);
+  if (sourceTotal <= 0 || targetTotalMs <= 0) return normalized;
+  if (Math.abs(sourceTotal - targetTotalMs) / targetTotalMs < 0.001) return normalized;
+  const factor = targetTotalMs / sourceTotal;
+  const scaled = normalized.map((entry) => ({
+    ...entry,
+    duration: Math.max(0, (entry.duration ?? 0) * factor),
+  }));
+  return normalizeTimemapTimestamps(scaled);
+}
+
 function readSequencerTiming(player: unknown): { currentSec: number; durationSec: number } | null {
   const seq = (player as { _sequencer?: { currentTime?: number; duration?: number } })?._sequencer;
   if (!seq) return null;
@@ -188,22 +234,6 @@ function readSequencerTiming(player: unknown): { currentSec: number; durationSec
   return { currentSec, durationSec };
 }
 
-function isTimemapSequencerDurationAligned(
-  player: unknown,
-  timemapMs: number,
-): boolean {
-  const flagged = (player as { __bclTimemapAligned?: boolean }).__bclTimemapAligned;
-  if (flagged === true) return true;
-  if (flagged === false) return false;
-  const timing = readSequencerTiming(player);
-  if (!timing || timemapMs <= 0) return false;
-  const seqMs = timing.durationSec * 1000;
-  return seqMs > 0 && Math.abs(seqMs - timemapMs) / timemapMs <= 0.06;
-}
-
-/** Compensa atraso visual do cursor em relação ao áudio (OSMD + rAF). */
-export const STUDY_CURSOR_AUDIO_LEAD_MS = 55;
-
 /** Converte posição do sequenciador (MIDI real) para eixo do timemap (partitura). */
 export function mapSequencerPositionToTimemapMs(
   player: unknown,
@@ -211,23 +241,20 @@ export function mapSequencerPositionToTimemapMs(
 ): number | null {
   if (!timemap?.length) return getPlayerPositionMs(player);
   const timing = readSequencerTiming(player);
-  const timemapMs = sumTimemapDurationMs(timemap);
-  if (!timing || timemapMs <= 0) return getPlayerPositionMs(player);
+  if (!timing) return getPlayerPositionMs(player);
+  const timelineMs =
+    (player as { __bclPlaybackTimelineMs?: number }).__bclPlaybackTimelineMs ??
+    sumTimemapDurationMs(timemap);
+  if (timelineMs <= 0) return getPlayerPositionMs(player);
   const ratio = Math.max(0, Math.min(1, timing.currentSec / timing.durationSec));
-  const mapped = ratio * timemapMs;
-  const lead = isTimemapSequencerDurationAligned(player, timemapMs)
-    ? STUDY_CURSOR_AUDIO_LEAD_MS
-    : 0;
-  return Math.min(timemapMs, mapped + lead);
+  return Math.min(timelineMs, ratio * timelineMs);
 }
 
-/** No tempo 1, cursor no início do compasso (evita “arrastar” atrás do áudio). */
+/** Offset do cursor dentro do compasso (1:1 com o eixo do timemap/áudio). */
 export function visualCursorOffsetInMeasure(
   posMs: number,
   measureStartMs: number,
-  beatOneBased: number,
 ): number {
-  if (beatOneBased <= 1) return 0;
   return Math.max(0, posMs - measureStartMs);
 }
 
