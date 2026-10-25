@@ -712,12 +712,14 @@ export function readFirstSmfTempoBpm(midi: ArrayBuffer): number | null {
   return null;
 }
 
-/** Prioriza tempo do MIDI (API/Verovio); XML só como fallback. */
+/** Andamento inicial: metrônomo do primeiro compasso no XML; MIDI só se o XML não marcar. */
 export function resolveStudyPlaybackTempoBpm(options: {
   xml?: string | null;
   midi?: ArrayBuffer | null;
   referenceMidi?: ArrayBuffer | null;
 }): number {
+  const fromXml = options.xml ? extractTempoInfoFromXml(options.xml)?.bpm : null;
+  if (fromXml != null && fromXml > 0) return fromXml;
   const candidates = [
     options.midi ? readFirstSmfTempoBpm(options.midi) : null,
     options.referenceMidi ? readFirstSmfTempoBpm(options.referenceMidi) : null,
@@ -725,8 +727,6 @@ export function resolveStudyPlaybackTempoBpm(options: {
   for (const value of candidates) {
     if (value != null && value > 0) return value;
   }
-  const fromXml = options.xml ? extractTempoInfoFromXml(options.xml)?.bpm : null;
-  if (fromXml != null && fromXml > 0) return fromXml;
   return 120;
 }
 

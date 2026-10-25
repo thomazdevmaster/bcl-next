@@ -20,15 +20,17 @@ type OsmdEngravingRules = {
 function engravingRules(osmd: OpenSheetMusicDisplay): OsmdEngravingRules {
   return (osmd as unknown as { EngravingRules: OsmdEngravingRules }).EngravingRules;
 }
-import { Player, VerovioConverter } from '@music-i18n/musicxml-player';
+import { Player, PlayerState, VerovioConverter } from '@music-i18n/musicxml-player';
 import { fetchAuthedAsset } from '@/lib/api';
 import { failureMessage } from '@/lib/userMessages';
 import { OsmdPlaybackRenderer } from './osmdPlaybackRenderer';
 import { StudyPlayerController } from './studyPlayerController';
 import {
+  findTimemapIndexAtPosition,
   getPlaybackPositionFromTimemap,
-  getPlayerPositionMs,
+  getStudyPlaybackPositionMs,
   readPlayerTimemap,
+  setSequencerFromTimemapMs,
 } from './studyTimemap';
 import {
   buildStudyScoreHeader,
@@ -48,6 +50,10 @@ import {
   selectionIsPercussionOnly,
   type InstrumentInfo,
 } from './studyUtils';
+import {
+  prepareMusicXmlForMidiPlayback,
+  unrollMusicXmlForPlayback,
+} from './studyUnrollMusicXml';
 import {
   countDrumChannelNoteOns,
   drumChannelPitchHistogram,
@@ -158,6 +164,7 @@ type StudyPlayerSequencer = {
   isLoading?: boolean;
   duration?: number;
   currentTime?: number;
+  play?: () => void;
   pause?: () => void;
 };
 
@@ -228,7 +235,7 @@ export class StudySession {
   private loopTimer: number | null = null;
   private loopStartTs: number | null = null;
   private loopEndTs: number | null = null;
-  private cursorSyncTimer: number | null = null;
+  private cursorSyncRaf: number | null = null;
   private lastCursorMeasure = -1;
   private lastCursorBeat = -1;
 
@@ -1153,8 +1160,10 @@ export class StudySession {
         return;
       }
       this.playerController.player = this.player;
+      this.patchPlayerPlayForStudySync();
       this.playerReady = true;
       this.capturePlayerFallbackMidi();
+      void this.refreshPlayerFallbackMidi(xml, token);
       // midiLoaded só após syncServerMidiIntoPlayer (MIDI do worker é assíncrono no worklet).
       this.applyTempo();
       this.applyLoop();
@@ -1261,6 +1270,14 @@ export class StudySession {
     }
   }
 
+  /** Substitui o MIDI linear do Player pelo Verovio sobre XML desdobrado (voltas). */
+  private async refreshPlayerFallbackMidi(studyPreparedXml: string, token: number): Promise<void> {
+    const buf = await this.resolveClientMidiFromConverter(studyPreparedXml, token);
+    if (token === this.loadToken && buf) {
+      this.playerFallbackMidi = buf;
+    }
+  }
+
   private sequencerHasAudibleMidi(): boolean {
     return (this.getStudyPlayerInternals()?._sequencer?.duration ?? 0) > 0;
   }
@@ -1273,7 +1290,7 @@ export class StudySession {
     const xml = shouldFilter
       ? await this.resolveXmlForPartIds(songId, partIds)
       : this.sourceXml;
-    return prepareMusicXmlForStudyPlayback(xml);
+    return prepareMusicXmlForMidiPlayback(xml);
   }
 
   private async resolveClientMidiFromConverter(
@@ -1287,9 +1304,11 @@ export class StudySession {
       this.auxiliaryVerovioConverter = new VerovioConverter();
     }
     try {
+      const midiXml = await unrollMusicXmlForPlayback(preparedXml);
+      if (token !== this.loadToken) return null;
       await this.withoutVerovioFontNoise(async () => {
         await this.auxiliaryVerovioConverter!.initialize(
-          preparedXml,
+          midiXml,
           playerOptions as never,
         );
       });
@@ -1455,27 +1474,24 @@ export class StudySession {
   }
 
   /**
-   * `intrinsicBpm`: relógio do MIDI/Verovio (velocity = 1).
-   * Andamento de prática: maior marcação no catálogo (ex.: ♩ = 284).
+   * Relógio de referência e andamento inicial vêm do metrônomo do primeiro compasso (XML).
+   * Outras marcações no score só ampliam o limite máximo do controle de BPM.
    */
   private applyStudyTempoFromCatalog(intrinsicBpm?: number) {
     const catalogXml = this.musicXmlCatalog ?? this.sourceXml;
     const xmlForFirstTempo = this.sourceXml ?? catalogXml;
-    const firstMeasure =
-      (xmlForFirstTempo ? extractTempoInfoFromXml(xmlForFirstTempo)?.bpm : null) ??
-      intrinsicBpm ??
-      this.baseBpm;
+    const firstMeasureBpm = xmlForFirstTempo
+      ? extractTempoInfoFromXml(xmlForFirstTempo)?.bpm
+      : null;
     const intrinsic = Math.max(
       30,
-      intrinsicBpm ?? firstMeasure ?? this.baseBpm ?? 120,
+      Math.round(firstMeasureBpm ?? intrinsicBpm ?? this.baseBpm ?? 120),
     );
-    const marked =
-      (catalogXml ? extractMarkedTempoBpmFromXml(catalogXml) : null) ?? intrinsic;
-    const targetBpm = Math.max(intrinsic, Math.round(marked));
+    const targetBpm = intrinsic;
 
     this.baseBpm = intrinsic;
     this.bpm = targetBpm;
-    this.tempo = this.bpm / this.baseBpm;
+    this.tempo = 1;
     this.updateBpmRange();
     this.applyTempo();
     if (this.scoreHeader) {
@@ -1541,11 +1557,7 @@ export class StudySession {
       if (!this.player) return;
       const posMs = this.getPlayerPositionMs();
       if (posMs != null && this.loopEndTs != null && posMs >= this.loopEndTs) {
-        const measureIndex = Math.max(0, (this.loopStartMeasure ?? 1) - 1);
-        const startMs = this.loopStartTs ?? 0;
-        const p = this.player as { moveTo?: (a: number, b: number, c: number) => void };
-        p.moveTo?.(measureIndex, startMs, 0);
-        if (this.metronomeEnabled) this.restartMetronome();
+        this.seekPlaybackMs(this.loopStartTs ?? 0, { keepPlaying: true });
       }
     }, 120);
   }
@@ -1558,7 +1570,109 @@ export class StudySession {
   }
 
   private getPlayerPositionMs(): number | null {
-    return getPlayerPositionMs(this.player);
+    return getStudyPlaybackPositionMs(this.player);
+  }
+
+  private applyCursorAtTimemapMs(clampedMs: number): void {
+    const timemap = readPlayerTimemap(this.player);
+    if (!timemap?.length) return;
+    const pos = getPlaybackPositionFromTimemap(timemap, clampedMs, this.beatsPerMeasure);
+    if (!pos) return;
+
+    const index = findTimemapIndexAtPosition(timemap, clampedMs);
+    const entry = timemap[index];
+    if (!entry) return;
+
+    const measureStartMs = entry.timestamp ?? 0;
+    let duration = entry.duration ?? 0;
+    if (duration <= 0 && timemap[index + 1]) {
+      duration = (timemap[index + 1].timestamp ?? 0) - measureStartMs;
+    }
+    const offsetMs = Math.max(0, clampedMs - measureStartMs);
+
+    this.osmdPlaybackRenderer?.moveTo(
+      pos.measureIndex,
+      measureStartMs,
+      offsetMs,
+      duration > 0 ? duration : undefined,
+    );
+
+    this.lastCursorMeasure = pos.measure;
+    this.lastCursorBeat = pos.beatInMeasure;
+    this.playbackPosition = {
+      measure: pos.measure,
+      beat: pos.beat,
+      timeSignature: this.timeSignature,
+    };
+    this.playbackCursorX = null;
+  }
+
+  /** O Player original move o cursor com `position` bruto; no estudo usamos timemap + rAF próprio. */
+  private patchPlayerPlayForStudySync(): void {
+    const player = this.player as
+      | ({
+          play?: () => void;
+          pause?: () => void;
+          _context?: AudioContext;
+          _sequencer?: { play?: () => void };
+          _state?: number;
+        } & { __bclStudyPlayPatch?: boolean })
+      | null;
+    if (!player || player.__bclStudyPlayPatch) return;
+    player.__bclStudyPlayPatch = true;
+    player.play = () => {
+      void player._context?.resume().then(() => {
+        player._state = PlayerState.Playing;
+        player._sequencer?.play?.();
+      });
+    };
+  }
+
+  /**
+   * Posiciona sequenciador (áudio) e linha do OSMD no mesmo instante do timemap.
+   * Evita divergência do `Player.moveTo` ao voltar (loop, retomar após pausa).
+   */
+  private seekPlaybackMs(posMs: number, options?: { keepPlaying?: boolean }): void {
+    const timemap = readPlayerTimemap(this.player);
+    if (!timemap?.length) return;
+
+    const lastEntry = timemap[timemap.length - 1];
+    const endMs =
+      (lastEntry?.timestamp ?? 0) + Math.max(0, lastEntry?.duration ?? 0);
+    const clamped = Math.max(0, Math.min(posMs, endMs > 0 ? endMs : posMs));
+
+    const pos = getPlaybackPositionFromTimemap(timemap, clamped, this.beatsPerMeasure);
+    if (!pos) return;
+
+    const index = findTimemapIndexAtPosition(timemap, clamped);
+    const entry = timemap[index];
+    if (!entry) return;
+
+    const measureStartMs = entry.timestamp ?? 0;
+    let duration = entry.duration ?? 0;
+    if (duration <= 0 && timemap[index + 1]) {
+      duration = (timemap[index + 1].timestamp ?? 0) - measureStartMs;
+    }
+    const offsetMs = Math.max(0, clamped - measureStartMs);
+
+    const seq = this.getStudyPlayerInternals()?._sequencer;
+    const wasPlaying = this.isPlaying;
+    if (seq) {
+      if (!options?.keepPlaying) {
+        seq.pause?.();
+      }
+      setSequencerFromTimemapMs(this.player, timemap, clamped);
+    }
+
+    this.applyCursorAtTimemapMs(clamped);
+    this.emit();
+
+    if (options?.keepPlaying && wasPlaying) {
+      void seq?.play?.();
+    }
+    if (this.metronomeEnabled) {
+      this.restartMetronome();
+    }
   }
 
   private getMoveToFromMeasureBeat(measure: number, beatInMeasure: number): {
@@ -1600,34 +1714,31 @@ export class StudySession {
     }
   }
 
-  /** Rótulo “Compasso X, tempo Y” (a linha visual vem do player → OsmdPlaybackRenderer.moveTo). */
+  /** Cursor e rótulo seguem o áudio mapeado para o timemap da partitura. */
   private syncPlaybackCursor() {
     const posMs = this.getPlayerPositionMs();
-    const timemap = readPlayerTimemap(this.player);
-    if (posMs == null || !timemap) return;
-    const pos = getPlaybackPositionFromTimemap(timemap, posMs, this.beatsPerMeasure);
-    if (!pos) return;
-
-    this.lastCursorMeasure = pos.measure;
-    this.lastCursorBeat = pos.beatInMeasure;
-    this.playbackPosition = {
-      measure: pos.measure,
-      beat: pos.beat,
-      timeSignature: this.timeSignature,
-    };
-    this.playbackCursorX = null;
+    if (posMs == null) return;
+    this.applyCursorAtTimemapMs(posMs);
     this.emit();
   }
 
   private startCursorSync() {
-    if (this.cursorSyncTimer) return;
-    this.cursorSyncTimer = window.setInterval(() => this.syncPlaybackCursor(), 50);
+    if (this.cursorSyncRaf != null) return;
+    const tick = () => {
+      if (!this.isPlaying) {
+        this.cursorSyncRaf = null;
+        return;
+      }
+      this.syncPlaybackCursor();
+      this.cursorSyncRaf = requestAnimationFrame(tick);
+    };
+    this.cursorSyncRaf = requestAnimationFrame(tick);
   }
 
   private stopCursorSyncTimer() {
-    if (this.cursorSyncTimer) {
-      window.clearInterval(this.cursorSyncTimer);
-      this.cursorSyncTimer = null;
+    if (this.cursorSyncRaf != null) {
+      cancelAnimationFrame(this.cursorSyncRaf);
+      this.cursorSyncRaf = null;
     }
   }
 
@@ -1640,6 +1751,7 @@ export class StudySession {
   }
 
   pause() {
+    this.syncPlaybackCursor();
     const p = this.player as { pause?: () => void } | null;
     p?.pause?.();
     this.isPlaying = false;
@@ -1677,9 +1789,7 @@ export class StudySession {
       const beat = this.lastCursorBeat >= 0 ? this.lastCursorBeat : 0;
       const moveTo = this.getMoveToFromMeasureBeat(measure, beat);
       const pl = this.player as {
-        moveTo?: (a: number, b: number, c: number) => void;
         play?: () => void;
-        rewind?: () => void;
         duration?: number;
         position?: number;
         _context?: AudioContext;
@@ -1688,8 +1798,10 @@ export class StudySession {
       void pl._context?.resume();
       this.applyAudioVolume();
       this.isPlaying = true;
-      if (moveTo && pl.moveTo) {
-        pl.moveTo(moveTo.measureIndex, moveTo.measureStartMs, moveTo.measureOffsetMs);
+      if (moveTo) {
+        this.seekPlaybackMs(moveTo.measureStartMs + moveTo.measureOffsetMs);
+      } else {
+        this.seekPlaybackMs(0);
       }
       pl.play?.();
       this.startLoopMonitor();
@@ -1890,7 +2002,7 @@ export class StudySession {
   }
 
   private midiCacheKey(id: string, partIds: string[]) {
-    return `${id}::${[...partIds].sort().join('|')}`;
+    return `unroll-v2::${id}::${[...partIds].sort().join('|')}`;
   }
 
   private prefetchServerMidi(id: string, partIds: string[]) {

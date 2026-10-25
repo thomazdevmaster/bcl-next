@@ -74,7 +74,7 @@ function readInitialScoreTempoBpm(doc: Document): number | null {
       if (!Number.isNaN(parsed) && parsed > 0) return parsed;
     }
     const metronome = direction.querySelector('metronome');
-    if (metronome && !soundEl) {
+    if (metronome) {
       const fromMetronome = quarterBpmFromMetronome(metronome);
       if (fromMetronome != null && fromMetronome > 0) return fromMetronome;
     }

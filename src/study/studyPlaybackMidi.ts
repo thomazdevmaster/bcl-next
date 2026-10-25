@@ -7,6 +7,7 @@ import {
   prepareStudyMidiBuffer,
   readFirstSmfTempoBpm,
 } from './studyMidiFix';
+import { prepareMusicXmlForMidiPlayback } from './studyUnrollMusicXml';
 import {
   enrichPercussionPartListFromCatalog,
   filterXmlByPartIds,
@@ -30,10 +31,13 @@ export type StudyPlaybackMidiLayer = {
   buffer: ArrayBuffer;
 };
 
-function buildPercussionXmlFromCatalog(catalogXml: string, percIds: string[]): string {
+async function buildPercussionXmlFromCatalog(
+  catalogXml: string,
+  percIds: string[],
+): Promise<string> {
   if (!catalogXml.includes('<score') || percIds.length === 0) return '';
   const filtered = filterXmlByPartIds(catalogXml, percIds);
-  return prepareMusicXmlForStudyPlayback(
+  return prepareMusicXmlForMidiPlayback(
     enrichPercussionPartListFromCatalog(filtered, catalogXml, percIds),
   );
 }
@@ -43,12 +47,12 @@ async function loadPercussionLayer(
   percIds: string[],
   tempoBpm: number,
 ): Promise<ArrayBuffer | null> {
-  let percXml = buildPercussionXmlFromCatalog(input.catalogXml, percIds);
+  let percXml = await buildPercussionXmlFromCatalog(input.catalogXml, percIds);
 
   if (!percXml.includes('<score')) {
     percXml = prepareMusicXmlForStudyPlayback(await input.resolvePartXml(percIds));
     percXml = enrichPercussionPartListFromCatalog(percXml, input.catalogXml, percIds);
-    percXml = prepareMusicXmlForStudyPlayback(percXml);
+    percXml = await prepareMusicXmlForMidiPlayback(percXml);
   }
 
   if (percXml.includes('<score')) {

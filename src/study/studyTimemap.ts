@@ -23,6 +23,58 @@ export function getPlayerPositionMs(player: unknown): number | null {
   return Number(pos);
 }
 
+export function sumTimemapDurationMs(timemap: MeasureTimemapEntry[]): number {
+  return timemap.reduce((total, entry) => total + Math.max(0, entry.duration ?? 0), 0);
+}
+
+function readSequencerTiming(player: unknown): { currentSec: number; durationSec: number } | null {
+  const seq = (player as { _sequencer?: { currentTime?: number; duration?: number } })?._sequencer;
+  if (!seq) return null;
+  const durationSec = seq.duration ?? 0;
+  if (durationSec <= 0) return null;
+  const currentSec = Math.max(0, seq.currentTime ?? 0);
+  return { currentSec, durationSec };
+}
+
+/** Converte posição do sequenciador (MIDI real) para eixo do timemap (partitura). */
+export function mapSequencerPositionToTimemapMs(
+  player: unknown,
+  timemap: MeasureTimemapEntry[] | null,
+): number | null {
+  if (!timemap?.length) return getPlayerPositionMs(player);
+  const timing = readSequencerTiming(player);
+  const timemapMs = sumTimemapDurationMs(timemap);
+  if (!timing || timemapMs <= 0) return getPlayerPositionMs(player);
+  const ratio = Math.max(0, Math.min(1, timing.currentSec / timing.durationSec));
+  return ratio * timemapMs;
+}
+
+/** Posição unificada para cursor, loop e metrônomo no modo estudo. */
+export function getStudyPlaybackPositionMs(player: unknown): number | null {
+  const timemap = readPlayerTimemap(player);
+  if (timemap?.length) {
+    return mapSequencerPositionToTimemapMs(player, timemap);
+  }
+  return getPlayerPositionMs(player);
+}
+
+/** Define o sequenciador a partir de um instante no eixo do timemap. */
+export function setSequencerFromTimemapMs(
+  player: unknown,
+  timemap: MeasureTimemapEntry[],
+  timemapMs: number,
+): void {
+  const timing = readSequencerTiming(player);
+  const totalMs = sumTimemapDurationMs(timemap);
+  if (!timing || totalMs <= 0) return;
+  const clamped = Math.max(0, Math.min(timemapMs, totalMs));
+  const ratio = clamped / totalMs;
+  const seq = (player as { _sequencer?: { currentTime?: number } })._sequencer;
+  if (seq) {
+    seq.currentTime = ratio * timing.durationSec;
+  }
+}
+
 export function findTimemapIndexAtPosition(
   timemap: MeasureTimemapEntry[],
   posMs: number,

@@ -1,6 +1,6 @@
 import {
   findTimemapIndexAtPosition,
-  getPlayerPositionMs,
+  getStudyPlaybackPositionMs,
   readPlayerTimemap,
 } from './studyTimemap';
 
@@ -102,7 +102,7 @@ export class StudyPlayerController {
   }
 
   private getPlayerPositionMs(): number | null {
-    return getPlayerPositionMs(this.player);
+    return getStudyPlaybackPositionMs(this.player);
   }
 
   private getBeatIndexFromTimemap(posMs: number, beatsPerMeasure: number): {
