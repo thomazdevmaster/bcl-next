@@ -61,9 +61,9 @@ function documentStatus(value: unknown): AdministrativeCompletionStatus {
 }
 
 export function enrichPersonForAdministrativeCompletion(
-  person: PersonRecord,
+  person: Record<string, unknown>,
   roles?: unknown,
-): PersonRecord {
+): Record<string, unknown> {
   const roleList = Array.isArray(roles) ? roles.map(String) : [];
   return {
     ...person,

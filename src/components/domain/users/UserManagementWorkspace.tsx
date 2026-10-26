@@ -993,16 +993,14 @@ export function UserManagementWorkspace({
             String(item.id) === String(selected.id) ? stored : item,
           ),
         );
-        setCompletionStatuses((current) =>
-          new Map(current).set(
-            String(selected.id),
-            evaluateAdministrativeCompletion(
-              enrichPersonForAdministrativeCompletion(
-                savedPerson,
-                updatedAccount.roles ?? saveValues.roles,
-              ),
-            ),
+        const completionStatus = evaluateAdministrativeCompletion(
+          enrichPersonForAdministrativeCompletion(
+            savedPerson,
+            updatedAccount.roles ?? saveValues.roles,
           ),
+        );
+        setCompletionStatuses((current) =>
+          new Map(current).set(String(selected.id), completionStatus),
         );
         refreshPeopleChoices(savedPerson);
         setDialogMode(null);
@@ -1226,27 +1224,27 @@ export function UserManagementWorkspace({
       if (dialogMode === "create") onCreated?.();
     } catch (caught) {
       if (updatedPerson && selected) {
-        setCompletionStatuses((current) =>
-          new Map(current).set(
-            String(selected.id),
-            evaluateAdministrativeCompletion(
-              enrichPersonForAdministrativeCompletion(
-                updatedPerson,
-                selected.roles,
-              ),
-            ),
+        const personAfterSave = updatedPerson;
+        const selectedAccount = selected;
+        const completionStatus = evaluateAdministrativeCompletion(
+          enrichPersonForAdministrativeCompletion(
+            personAfterSave,
+            selectedAccount.roles,
           ),
         );
+        setCompletionStatuses((current) =>
+          new Map(current).set(String(selectedAccount.id), completionStatus),
+        );
         const name =
-          `${String(updatedPerson.firstName ?? "")} ${String(updatedPerson.lastName ?? "")}`.trim();
+          `${String(personAfterSave.firstName ?? "")} ${String(personAfterSave.lastName ?? "")}`.trim();
         setItems((current) =>
           current.map((item) =>
-            String(item.id) === String(selected.id)
-              ? { ...item, name, email: updatedPerson?.email }
+            String(item.id) === String(selectedAccount.id)
+              ? { ...item, name, email: personAfterSave.email }
               : item,
           ),
         );
-        refreshPeopleChoices(updatedPerson);
+        refreshPeopleChoices(personAfterSave);
         setError(
           `Os dados pessoais foram salvos, mas não foi possível concluir a atualização da conta. ${userFacingError(caught)}`,
         );
