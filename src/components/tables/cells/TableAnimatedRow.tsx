@@ -1,20 +1,30 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { ReactNode } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 
 interface TableAnimatedRowProps {
   children: ReactNode;
   index: number;
+  onClick?: (event: MouseEvent<HTMLTableRowElement>) => void;
+  onKeyDown?: (event: KeyboardEvent<HTMLTableRowElement>) => void;
+  label?: string;
 }
 
-export function TableAnimatedRow({ children, index }: TableAnimatedRowProps) {
+export function TableAnimatedRow({
+  children,
+  index,
+  onClick,
+  onKeyDown,
+  label,
+}: TableAnimatedRowProps) {
   const rowRef = useRef<HTMLTableRowElement>(null);
   const initialIndex = useRef(index);
 
   useEffect(() => {
     const row = rowRef.current;
-    if (!row || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!row || window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+      return;
 
     const rowAnimation = row.animate(
       [
@@ -37,7 +47,14 @@ export function TableAnimatedRow({ children, index }: TableAnimatedRowProps) {
   }, []);
 
   return (
-    <tr ref={rowRef} className="group">
+    <tr
+      ref={rowRef}
+      className={`group ${onClick ? "cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--ring)]" : ""}`}
+      onClick={onClick}
+      onKeyDown={onKeyDown}
+      tabIndex={onClick ? 0 : undefined}
+      aria-label={onClick ? label : undefined}
+    >
       {children}
     </tr>
   );

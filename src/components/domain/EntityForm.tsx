@@ -1,6 +1,12 @@
 "use client";
 
-import { type ChangeEvent, type FormEvent, type ReactNode, useState } from "react";
+import {
+  type ChangeEvent,
+  type FormEvent,
+  type ReactNode,
+  useState,
+} from "react";
+
 import { MusicLoader } from "@/components/MusicLoader";
 import type { CrudField, CrudOption } from "@/domains/crudConfig";
 import {
@@ -29,6 +35,7 @@ export interface EntityFormProps {
   onChange: (name: string, value: unknown) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  extraContent?: ReactNode;
   onEdit?: () => void;
 }
 
@@ -50,9 +57,12 @@ export function EntityForm({
   onChange,
   onClose,
   onSubmit,
+  extraContent,
   onEdit,
 }: EntityFormProps) {
-  const visibleFields = fields.filter((field) => !field.showWhen || field.showWhen(values));
+  const visibleFields = fields.filter(
+    (field) => !field.showWhen || field.showWhen(values),
+  );
   const hasSections = visibleFields.some((field) => field.section);
   const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
 
@@ -68,7 +78,10 @@ export function EntityForm({
     });
   };
 
-  const handleFile = async (event: ChangeEvent<HTMLInputElement>, field: CrudField) => {
+  const handleFile = async (
+    event: ChangeEvent<HTMLInputElement>,
+    field: CrudField,
+  ) => {
     const input = event.target;
     const file = input.files?.[0];
     if (!file) return;
@@ -114,202 +127,268 @@ export function EntityForm({
   };
 
   return (
-      <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
-        <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4 sm:p-6 md:grid-cols-2">
-          {visibleFields.map((field, index) => {
-            const value = values[field.name];
-            const options = optionsForField(field, values, roleChoices, dynamicChoices);
-            const fieldLocked =
-              readOnly || (field.name === "roles" && rolesLocked) || (editing && Boolean(field.lockOnEdit));
-            const previousSection = visibleFields[index - 1]?.section;
-            const heading = hasSections && field.section && field.section !== previousSection ? field.section : null;
-            const wide = field.type === "textarea" || field.type === "xml" || field.type === "multiselect";
-            const videoWatch = field.name === "videoUrl" ? youtubeWatchUrl(String(value ?? "")) : null;
-            const videoEmbed = field.name === "videoUrl" ? youtubeEmbedUrl(String(value ?? "")) : null;
+    <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+      <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4 sm:p-6 md:grid-cols-2">
+        {visibleFields.map((field, index) => {
+          const value = values[field.name];
+          const options = optionsForField(
+            field,
+            values,
+            roleChoices,
+            dynamicChoices,
+          );
+          const fieldLocked =
+            readOnly ||
+            (field.name === "roles" && rolesLocked) ||
+            (editing && Boolean(field.lockOnEdit));
+          const previousSection = visibleFields[index - 1]?.section;
+          const heading =
+            hasSections && field.section && field.section !== previousSection
+              ? field.section
+              : null;
+          const wide =
+            field.type === "textarea" ||
+            field.type === "xml" ||
+            field.type === "multiselect";
+          const videoWatch =
+            field.name === "videoUrl"
+              ? youtubeWatchUrl(String(value ?? ""))
+              : null;
+          const videoEmbed =
+            field.name === "videoUrl"
+              ? youtubeEmbedUrl(String(value ?? ""))
+              : null;
 
-            return (
-              <FieldSlot key={field.name} heading={heading} wide={wide}>
-                {field.type === "checkbox" ? (
-                  <label className="flex min-h-11 items-center gap-3 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(value)}
-                      disabled={fieldLocked}
-                      className="h-5 w-5 transition-transform duration-150 ease-out active:scale-90 motion-reduce:transition-none motion-reduce:active:scale-100"
-                      onChange={(event) => onChange(field.name, event.target.checked)}
-                    />
-                    <span className="font-medium">{field.label}</span>
-                  </label>
-                ) : (
-                  <span className="font-medium">
-                    {field.label}
-                    {field.required && <span className="text-red-600"> *</span>}
-                  </span>
-                )}
-
-                {field.type === "checkbox" ? null : field.type === "multiselect" ? (
-                  options.length === 0 ? (
-                    <p className="rounded-md border border-dashed border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)]">
-                      Nenhuma opção disponível.
-                    </p>
-                  ) : (
-                    <div className="grid gap-1 rounded-md border border-[var(--border)] p-2 sm:grid-cols-2">
-                      {options.map((option) => {
-                        const selectedValues = Array.isArray(value) ? value.map(String) : [];
-                        return (
-                          <label key={option.value} className="flex min-h-11 items-center gap-2 px-1">
-                            <input
-                              type="checkbox"
-                              className="h-5 w-5 transition-transform duration-150 ease-out active:scale-90 motion-reduce:transition-none motion-reduce:active:scale-100"
-                              checked={selectedValues.includes(option.value)}
-                              disabled={fieldLocked}
-                              onChange={(event) =>
-                                onChange(
-                                  field.name,
-                                  event.target.checked
-                                    ? [...selectedValues, option.value]
-                                    : selectedValues.filter((item) => item !== option.value),
-                                )
-                              }
-                            />
-                            <span>{option.label}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )
-                ) : field.type === "select" ? (
-                  <select
-                    value={String(value ?? "")}
-                    disabled={fieldLocked}
-                    className={`min-h-11 ${controlMotion}`}
-                    onChange={(event) => onChange(field.name, event.target.value)}
-                  >
-                    {options.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : field.type === "textarea" ? (
-                  <textarea
-                    rows={4}
-                    value={String(value ?? "")}
-                    readOnly={fieldLocked}
-                    placeholder={field.placeholder}
-                    onChange={(event) => onChange(field.name, event.target.value)}
-                    className={`rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 ${controlMotion}`}
-                  />
-                ) : field.name === "videoUrl" && readOnly ? (
-                  videoWatch && videoEmbed ? (
-                    <div className="flex flex-col items-start gap-2">
-                      <div className="aspect-video w-full max-w-80 overflow-hidden rounded-md bg-black">
-                        <iframe
-                          className="h-full w-full"
-                          src={videoEmbed}
-                          title="Vídeo da música"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                          allowFullScreen
-                        />
-                      </div>
-                      <a
-                        href={videoWatch}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-[var(--color-brand-strong)]"
-                      >
-                        <span className="material-icons text-lg" aria-hidden>smart_display</span>
-                        Abrir no YouTube
-                      </a>
-                    </div>
-                  ) : (
-                    <p className="rounded-md bg-[var(--card-secondary)] px-3 py-2">Nenhum vídeo</p>
-                  )
-                ) : field.type === "xml" ? (
-                  readOnly ? (
-                    <p className="rounded-md bg-[var(--card-secondary)] px-3 py-2">
-                      {String(values.scoreFileName || "Nenhuma partitura anexada")}
-                    </p>
-                  ) : (
-                    <div className="flex flex-col items-start gap-2">
-                      <label className={`btn-primary inline-flex min-h-11 cursor-pointer items-center px-4 ${buttonMotion}`}>
-                        Enviar arquivo
-                        <input
-                          type="file"
-                          accept={field.accept}
-                          className="sr-only"
-                          onChange={(event) => void handleFile(event, field)}
-                        />
-                      </label>
-                      {Boolean(values.scoreFileName) && (
-                        <p className="text-xs text-[var(--muted)]">Arquivo: {String(values.scoreFileName)}</p>
-                      )}
-                    </div>
-                  )
-                ) : (
+          return (
+            <FieldSlot key={field.name} heading={heading} wide={wide}>
+              {field.type === "checkbox" ? (
+                <label className="flex min-h-11 items-center gap-3 text-sm">
                   <input
-                    type={field.type ?? "text"}
-                    value={String(value ?? "")}
-                    readOnly={fieldLocked}
-                    placeholder={field.placeholder}
-                    className={`min-h-11 ${controlMotion}`}
-                    autoComplete={field.type === "password" ? "new-password" : undefined}
-                    inputMode={field.type === "tel" ? "tel" : undefined}
-                    step={field.type === "number" ? "0.01" : undefined}
+                    type="checkbox"
+                    checked={Boolean(value)}
+                    disabled={fieldLocked}
+                    className="h-5 w-5 transition-transform duration-150 ease-out active:scale-90 motion-reduce:transition-none motion-reduce:active:scale-100"
                     onChange={(event) =>
-                      onChange(
-                        field.name,
-                        field.type === "tel"
-                          ? formatPhoneNumber(event.target.value)
-                          : field.format
-                            ? field.format(event.target.value, values)
-                            : event.target.value,
-                      )
+                      onChange(field.name, event.target.checked)
                     }
                   />
-                )}
-                {field.helpText && <span className="text-xs text-[var(--muted)]">{field.helpText}</span>}
-                {field.name === "roles" && rolesLocked && (
-                  <span className="text-xs text-[var(--muted)]">
-                    Somente um administrador vincula ou desvincula papéis.
-                  </span>
-                )}
-                {editing && field.lockOnEdit && (
-                  <span className="text-xs text-[var(--muted)]">Definido na criação; não pode ser alterado.</span>
-                )}
-                {(errors[field.name] || fileErrors[field.name]) && (
-                  <span className="text-xs text-red-600" role="alert">
-                    {errors[field.name] ?? fileErrors[field.name]}
-                  </span>
-                )}
-              </FieldSlot>
-            );
-          })}
-        </div>
-        <div className="flex shrink-0 justify-end gap-3 border-t border-[var(--border)] bg-[var(--card)] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
+                  <span className="font-medium">{field.label}</span>
+                </label>
+              ) : (
+                <span className="font-medium">
+                  {field.label}
+                  {field.required && <span className="text-red-600"> *</span>}
+                </span>
+              )}
+
+              {field.type === "checkbox" ? null : field.type ===
+                "multiselect" ? (
+                options.length === 0 ? (
+                  <p className="rounded-md border border-dashed border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)]">
+                    Nenhuma opção disponível.
+                  </p>
+                ) : (
+                  <div className="grid gap-1 rounded-md border border-[var(--border)] p-2 sm:grid-cols-2">
+                    {options.map((option) => {
+                      const selectedValues = Array.isArray(value)
+                        ? value.map(String)
+                        : [];
+                      return (
+                        <label
+                          key={option.value}
+                          className="flex min-h-11 items-center gap-2 px-1"
+                        >
+                          <input
+                            type="checkbox"
+                            className="h-5 w-5 transition-transform duration-150 ease-out active:scale-90 motion-reduce:transition-none motion-reduce:active:scale-100"
+                            checked={selectedValues.includes(option.value)}
+                            disabled={fieldLocked}
+                            onChange={(event) =>
+                              onChange(
+                                field.name,
+                                event.target.checked
+                                  ? [...selectedValues, option.value]
+                                  : selectedValues.filter(
+                                      (item) => item !== option.value,
+                                    ),
+                              )
+                            }
+                          />
+                          <span>{option.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )
+              ) : field.type === "select" ? (
+                <select
+                  value={String(value ?? "")}
+                  disabled={fieldLocked}
+                  className={`min-h-11 ${controlMotion}`}
+                  onChange={(event) => onChange(field.name, event.target.value)}
+                >
+                  {options.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              ) : field.type === "textarea" ? (
+                <textarea
+                  rows={4}
+                  value={String(value ?? "")}
+                  readOnly={fieldLocked}
+                  placeholder={field.placeholder}
+                  onChange={(event) => onChange(field.name, event.target.value)}
+                  className={`rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 ${controlMotion}`}
+                />
+              ) : field.name === "videoUrl" && readOnly ? (
+                videoWatch && videoEmbed ? (
+                  <div className="flex flex-col items-start gap-2">
+                    <div className="aspect-video w-full max-w-80 overflow-hidden rounded-md bg-black">
+                      <iframe
+                        className="h-full w-full"
+                        src={videoEmbed}
+                        title="Vídeo da música"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                      />
+                    </div>
+                    <a
+                      href={videoWatch}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-[var(--color-brand-strong)]"
+                    >
+                      <span className="material-icons text-lg" aria-hidden>
+                        smart_display
+                      </span>
+                      Abrir no YouTube
+                    </a>
+                  </div>
+                ) : (
+                  <p className="rounded-md bg-[var(--card-secondary)] px-3 py-2">
+                    Nenhum vídeo
+                  </p>
+                )
+              ) : field.type === "xml" ? (
+                readOnly ? (
+                  <p className="rounded-md bg-[var(--card-secondary)] px-3 py-2">
+                    {String(
+                      values.scoreFileName || "Nenhuma partitura anexada",
+                    )}
+                  </p>
+                ) : (
+                  <div className="flex flex-col items-start gap-2">
+                    <label
+                      className={`btn-primary inline-flex min-h-11 cursor-pointer items-center px-4 ${buttonMotion}`}
+                    >
+                      Enviar arquivo
+                      <input
+                        type="file"
+                        accept={field.accept}
+                        className="sr-only"
+                        onChange={(event) => void handleFile(event, field)}
+                      />
+                    </label>
+                    {Boolean(values.scoreFileName) && (
+                      <p className="text-xs text-[var(--muted)]">
+                        Arquivo: {String(values.scoreFileName)}
+                      </p>
+                    )}
+                  </div>
+                )
+              ) : (
+                <input
+                  type={field.type ?? "text"}
+                  value={String(value ?? "")}
+                  readOnly={fieldLocked}
+                  placeholder={field.placeholder}
+                  className={`min-h-11 ${controlMotion}`}
+                  autoComplete={
+                    field.type === "password" ? "new-password" : undefined
+                  }
+                  inputMode={field.type === "tel" ? "tel" : undefined}
+                  step={field.type === "number" ? "0.01" : undefined}
+                  onChange={(event) =>
+                    onChange(
+                      field.name,
+                      field.type === "tel"
+                        ? formatPhoneNumber(event.target.value)
+                        : field.format
+                          ? field.format(event.target.value, values)
+                          : event.target.value,
+                    )
+                  }
+                />
+              )}
+              {field.helpText && (
+                <span className="text-xs text-[var(--muted)]">
+                  {field.helpText}
+                </span>
+              )}
+              {field.name === "roles" && rolesLocked && (
+                <span className="text-xs text-[var(--muted)]">
+                  Somente um administrador vincula ou desvincula papéis.
+                </span>
+              )}
+              {editing && field.lockOnEdit && (
+                <span className="text-xs text-[var(--muted)]">
+                  Definido na criação; não pode ser alterado.
+                </span>
+              )}
+              {(errors[field.name] || fileErrors[field.name]) && (
+                <span className="text-xs text-red-600" role="alert">
+                  {errors[field.name] ?? fileErrors[field.name]}
+                </span>
+              )}
+            </FieldSlot>
+          );
+        })}
+        {extraContent ? (
+          <div className="col-span-full">{extraContent}</div>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 justify-end gap-3 border-t border-[var(--border)] bg-[var(--card)] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
+        <button
+          type="button"
+          className={`btn-ghost min-h-11 ${buttonMotion}`}
+          disabled={saving}
+          onClick={onClose}
+        >
+          Fechar
+        </button>
+        {readOnly && onEdit ? (
           <button
             type="button"
-            className={`btn-ghost min-h-11 ${buttonMotion}`}
-            disabled={saving}
-            onClick={onClose}
+            className={`btn-primary min-h-11 ${buttonMotion}`}
+            onClick={onEdit}
           >
-            Fechar
+            Editar
           </button>
-          {readOnly && onEdit ? (
-            <button type="button" className={`btn-primary min-h-11 ${buttonMotion}`} onClick={onEdit}>
-              Editar
-            </button>
-          ) : !readOnly ? (
-            <button type="submit" className={`btn-primary min-h-11 ${buttonMotion}`} disabled={saving}>
-              {saving ? <MusicLoader compact label="Salvando…" /> : "Salvar"}
-            </button>
-          ) : null}
-        </div>
-      </form>
+        ) : !readOnly ? (
+          <button
+            type="submit"
+            className={`btn-primary min-h-11 ${buttonMotion}`}
+            disabled={saving}
+          >
+            {saving ? <MusicLoader compact label="Salvando…" /> : "Salvar"}
+          </button>
+        ) : null}
+      </div>
+    </form>
   );
 }
 
-function FieldSlot({ heading, wide, children }: { heading: string | null; wide: boolean; children: ReactNode }) {
+function FieldSlot({
+  heading,
+  wide,
+  children,
+}: {
+  heading: string | null;
+  wide: boolean;
+  children: ReactNode;
+}) {
   return (
     <>
       {heading && (
@@ -317,7 +396,11 @@ function FieldSlot({ heading, wide, children }: { heading: string | null; wide: 
           {heading}
         </h3>
       )}
-      <div className={`flex flex-col gap-1.5 text-sm ${wide ? "md:col-span-2" : ""}`}>{children}</div>
+      <div
+        className={`flex flex-col gap-1.5 text-sm ${wide ? "md:col-span-2" : ""}`}
+      >
+        {children}
+      </div>
     </>
   );
 }
@@ -347,13 +430,20 @@ function optionsForField(
   const people = dynamic.people ?? [];
   const filtered = people.filter((person) => {
     if (person.value === selfId) return false;
-    return field.optionsSource !== "people-without-user" || !person.hasUser || person.value === selectedValue;
+    return (
+      field.optionsSource !== "people-without-user" ||
+      !person.hasUser ||
+      person.value === selectedValue
+    );
   });
   const options: CrudOption[] = [
     { value: "", label: field.required ? "Selecione…" : "Nenhuma" },
     ...filtered.map(({ value: id, label }) => ({ value: id, label })),
   ];
-  if (selectedValue && !options.some((option) => option.value === selectedValue))
+  if (
+    selectedValue &&
+    !options.some((option) => option.value === selectedValue)
+  )
     options.push({ value: selectedValue, label: `Pessoa #${selectedValue}` });
   return options;
 }
@@ -362,6 +452,7 @@ function formatPhoneNumber(value: string): string {
   const digits = value.replace(/\D/g, "").slice(0, 11);
   if (digits.length <= 2) return digits ? `(${digits}` : "";
   if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  if (digits.length <= 10)
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }

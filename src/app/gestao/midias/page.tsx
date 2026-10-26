@@ -3,9 +3,10 @@
 import { createColumnHelper } from "@tanstack/react-table";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { EntityDialog } from "@/components/shared/EntityDialog";
-import { TableView } from "@/components/tables/core/TableView";
+
+import { ConfirmationDialog } from "@/components/shared/ConfirmationDialog";
 import { TableRowActions } from "@/components/tables/core/TableRowActions";
+import { TableView } from "@/components/tables/core/TableView";
 import { createCrudTableRowActions } from "@/components/tables/core/table-actions";
 import { tableFeatures } from "@/components/tables/core/table-features";
 import type { TableColumnDef } from "@/components/tables/core/table-features";
@@ -13,8 +14,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { can } from "@/core/auth/permissions";
 import { parseMediaPost } from "@/domains/media/blocks";
 import type { MediaPost } from "@/domains/media/types";
-import { mediaKindLabel } from "@/lib/publicPortal";
 import { apiFetch } from "@/lib/api";
+import { mediaKindLabel } from "@/lib/publicPortal";
 import { failureMessage } from "@/lib/userMessages";
 
 const columnHelper = createColumnHelper<typeof tableFeatures, MediaPost>();
@@ -33,7 +34,8 @@ const columns: TableColumnDef<MediaPost>[] = [
   columnHelper.accessor((post): unknown => post.status, {
     id: "status",
     header: "Status",
-    cell: ({ row }) => (row.original.status === "published" ? "Publicado" : "Rascunho"),
+    cell: ({ row }) =>
+      row.original.status === "published" ? "Publicado" : "Rascunho",
   }),
   columnHelper.accessor((post): unknown => post.publishedAt ?? "", {
     id: "publishedAt",
@@ -89,7 +91,8 @@ export default function MidiasPage() {
           ? {
               label: "Editar post",
               href: `/gestao/midias/${post.id}`,
-              onSelect: () => window.location.assign(`/gestao/midias/${post.id}`),
+              onSelect: () =>
+                window.location.assign(`/gestao/midias/${post.id}`),
             }
           : undefined,
         remove: canDelete
@@ -107,14 +110,20 @@ export default function MidiasPage() {
     setDeleting(true);
     setError(null);
     const results = await Promise.allSettled(
-      deleteTargets.map((post) => apiFetch<void>(`/media/${String(post.id)}`, { method: "DELETE" })),
+      deleteTargets.map((post) =>
+        apiFetch<void>(`/media/${String(post.id)}`, { method: "DELETE" }),
+      ),
     );
     const deletedIds = deleteTargets
       .filter((_, index) => results[index].status === "fulfilled")
       .map((post) => String(post.id));
-    const failedTargets = deleteTargets.filter((_, index) => results[index].status === "rejected");
+    const failedTargets = deleteTargets.filter(
+      (_, index) => results[index].status === "rejected",
+    );
     if (deletedIds.length > 0) {
-      setPosts((current) => current.filter((post) => !deletedIds.includes(String(post.id))));
+      setPosts((current) =>
+        current.filter((post) => !deletedIds.includes(String(post.id))),
+      );
     }
     if (failedTargets.length > 0) {
       const failure = results.find((result) => result.status === "rejected");
@@ -135,9 +144,12 @@ export default function MidiasPage() {
     <section className="mx-auto w-full space-y-5">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-[var(--foreground)] sm:text-3xl">Posts</h1>
+          <h1 className="text-2xl font-semibold text-[var(--foreground)] sm:text-3xl">
+            Posts
+          </h1>
           <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
-            Crie matérias com texto, fotos, vídeos e áudios, na ordem da publicação.
+            Crie matérias com texto, fotos, vídeos e áudios, na ordem da
+            publicação.
           </p>
         </div>
         {canCreate ? (
@@ -176,7 +188,9 @@ export default function MidiasPage() {
             </Link>
           ) : undefined
         }
-        renderRowActions={(post) => <TableRowActions actions={getRowActions(post)} />}
+        renderRowActions={(post) => (
+          <TableRowActions actions={getRowActions(post)} />
+        )}
         renderMobileRowActions={getRowActions}
         mobileSelectionEnabled={canDelete}
         onDeleteSelected={(targets, clearSelection) => {
@@ -187,34 +201,19 @@ export default function MidiasPage() {
         toolbarLabels={{ section: "Controles de posts" }}
       />
 
-      <EntityDialog
+      <ConfirmationDialog
         open={deleteTargets !== null}
         title={`Excluir ${deleteTargets?.length ?? 0} post(s)?`}
         description="Esta ação não pode ser desfeita."
         closeOnBackdropClick={!deleting}
+        confirmLabel={deleting ? "Excluindo…" : "Excluir"}
+        danger
+        busy={deleting}
         onClose={() => {
           if (!deleting) setDeleteTargets(null);
         }}
-      >
-        <div className="flex justify-end gap-3 border-t border-[var(--border)] p-4">
-          <button
-            type="button"
-            className="btn-ghost min-h-11 px-4"
-            disabled={deleting}
-            onClick={() => setDeleteTargets(null)}
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            className="btn-danger min-h-11 px-4"
-            disabled={deleting}
-            onClick={() => void confirmDelete()}
-          >
-            {deleting ? "Excluindo…" : "Excluir"}
-          </button>
-        </div>
-      </EntityDialog>
+        onConfirm={() => void confirmDelete()}
+      />
     </section>
   );
 }

@@ -1,14 +1,24 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '@/contexts/ThemeContext';
-import { roleLabels } from '@/core/auth/roles';
-import { getAuthenticatedNavGroups, titleForPath, type AuthenticatedNavGroup } from '@/core/navigation/menus';
-import { UserAvatar } from '@/components/auth/UserAvatar';
+import Image from "next/image";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+
+import { UserAvatar } from "@/components/auth/UserAvatar";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { NotificationInbox } from "@/components/notifications/NotificationInbox";
+import { useUnreadNotifications } from "@/components/notifications/useUnreadNotifications";
+import { useTheme } from "@/contexts/ThemeContext";
+import { roleLabels } from "@/core/auth/roles";
+import {
+  type AuthenticatedNavGroup,
+  getAuthenticatedNavGroups,
+  titleForPath,
+} from "@/core/navigation/menus";
+import { UNREAD_COUNT_CHANGED_EVENT } from "@/domains/notifications/api";
+
+import { useAuth } from "../contexts/AuthContext";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [desktop, setDesktop] = useState(false);
@@ -16,32 +26,62 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [desktopUserMenuOpen, setDesktopUserMenuOpen] = useState(false);
-  const pathname = usePathname() ?? '/';
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const desktopAccountRef = useRef<HTMLButtonElement>(null);
+  const desktopNotificationsRef = useRef<HTMLButtonElement>(null);
+  const mobileNotificationsRef = useRef<HTMLButtonElement>(null);
+  const notificationReturnFocusRef = useRef<HTMLButtonElement | null>(null);
+  const pathname = usePathname() ?? "/";
   const router = useRouter();
   const auth = useAuth();
   const { theme, setTheme } = useTheme();
   const navGroups = getAuthenticatedNavGroups(auth.roles, auth.permissions);
+  const {
+    count: unreadCount,
+    countError: unreadCountError,
+    refreshCount: refreshUnreadCount,
+  } = useUnreadNotifications(auth.isHydrated && auth.isLoggedIn, auth.user?.id);
 
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 960px)');
+    const handleUnreadCountChange = () => {
+      void refreshUnreadCount();
+    };
+    window.addEventListener(
+      UNREAD_COUNT_CHANGED_EVENT,
+      handleUnreadCountChange,
+    );
+    return () =>
+      window.removeEventListener(
+        UNREAD_COUNT_CHANGED_EVENT,
+        handleUnreadCountChange,
+      );
+  }, [refreshUnreadCount]);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 960px)");
     const onMediaChange = () => setDesktop(mq.matches);
     const hydrateState = () => {
       setDesktop(mq.matches);
-      setSidenavCollapsed(window.localStorage.getItem('app.sidenavCollapsed') === 'true');
+      setSidenavCollapsed(
+        window.localStorage.getItem("app.sidenavCollapsed") === "true",
+      );
     };
     requestAnimationFrame(hydrateState);
-    mq.addEventListener('change', onMediaChange);
-    return () => mq.removeEventListener('change', onMediaChange);
+    mq.addEventListener("change", onMediaChange);
+    return () => mq.removeEventListener("change", onMediaChange);
   }, []);
 
   useEffect(() => {
     if (!auth.isHydrated || !auth.isLoggedIn) return;
-    if (auth.user?.mustChangePassword && pathname !== '/alterar-senha') {
-      router.replace('/alterar-senha');
+    if (auth.user?.mustChangePassword && pathname !== "/alterar-senha") {
+      router.replace("/alterar-senha");
       return;
     }
-    if (auth.user?.needsProfileCompletion && pathname !== '/completar-cadastro') {
-      router.replace('/completar-cadastro');
+    if (
+      auth.user?.needsProfileCompletion &&
+      pathname !== "/completar-cadastro"
+    ) {
+      router.replace("/completar-cadastro");
     }
   }, [
     auth.isHydrated,
@@ -55,53 +95,66 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!moreOpen || desktop) return;
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = "hidden";
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMoreOpen(false);
+      if (event.key === "Escape") setMoreOpen(false);
     };
-    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener("keydown", onKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener("keydown", onKeyDown);
     };
   }, [moreOpen, desktop]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
-      if (userMenuOpen && !target.closest('.user-menu')) {
+      if (userMenuOpen && !target.closest(".user-menu")) {
         setUserMenuOpen(false);
       }
-      if (desktopUserMenuOpen && !target.closest('.desktop-user-menu')) {
+      if (desktopUserMenuOpen && !target.closest(".desktop-user-menu")) {
         setDesktopUserMenuOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [userMenuOpen, desktopUserMenuOpen]);
-
-  useEffect(() => {
-    if (sidenavCollapsed) setDesktopUserMenuOpen(false);
-  }, [sidenavCollapsed]);
 
   const contentMargin = desktop ? (sidenavCollapsed ? 56 : 280) : 0;
   const pageTitle = titleForPath(pathname);
-  const isActiveRoute = (to: string) => pathname === to || (to !== '/' && pathname.startsWith(to));
+  const isActiveRoute = (to: string) =>
+    pathname === to || (to !== "/" && pathname.startsWith(to));
   const toggleCollapsed = () => {
     const next = !sidenavCollapsed;
     setSidenavCollapsed(next);
-    localStorage.setItem('app.sidenavCollapsed', String(next));
+    if (next) setDesktopUserMenuOpen(false);
+    localStorage.setItem("app.sidenavCollapsed", String(next));
+  };
+  const toggleDesktopNotifications = () => {
+    notificationReturnFocusRef.current = desktopNotificationsRef.current;
+    setDesktopUserMenuOpen(false);
+    setNotificationsOpen((open) => !open);
   };
 
-  const NavLink = ({ href, label, icon }: { href: string; label: string; icon: string }) => (
+  const NavLink = ({
+    href,
+    label,
+    icon,
+  }: {
+    href: string;
+    label: string;
+    icon: string;
+  }) => (
     <Link
       href={href}
       className={`flex items-center gap-3 px-4 py-3 no-underline hover:no-underline transition-colors ${
-        isActiveRoute(href) ? 'bg-white/10 text-[var(--color-brand)] font-semibold' : 'text-[var(--sidebar-fg)]'
-      } ${sidenavCollapsed ? 'justify-center px-0' : ''}`}
+        isActiveRoute(href)
+          ? "bg-white/10 text-[var(--color-brand)] font-semibold"
+          : "text-[var(--sidebar-fg)]"
+      } ${sidenavCollapsed ? "justify-center px-0" : ""}`}
       title={label}
       aria-label={label}
-      aria-current={isActiveRoute(href) ? 'page' : undefined}
+      aria-current={isActiveRoute(href) ? "page" : undefined}
     >
       <span className="material-icons text-2xl w-6 flex-shrink-0" aria-hidden>
         {icon}
@@ -131,7 +184,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       );
     }
     if (isFirst) return null;
-    return <div className="mx-2 my-1 h-px bg-white/15" role="presentation" aria-hidden />;
+    return (
+      <div
+        className="mx-2 my-1 h-px bg-white/15"
+        role="presentation"
+        aria-hidden
+      />
+    );
   };
 
   const renderNavGroups = (onNavigate?: () => void, mobile = false) =>
@@ -140,20 +199,43 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         key={group.id}
         role="group"
         aria-labelledby={
-          group.label.trim() && (mobile || !sidenavCollapsed) ? `nav-group-${group.id}` : undefined
+          group.label.trim() && (mobile || !sidenavCollapsed)
+            ? `nav-group-${group.id}`
+            : undefined
         }
       >
-        <NavGroupHeading group={group} isFirst={groupIndex === 0} mobile={mobile} />
+        <NavGroupHeading
+          group={group}
+          isFirst={groupIndex === 0}
+          mobile={mobile}
+        />
+        {desktop &&
+        sidenavCollapsed &&
+        !mobile &&
+        group.id === "public" &&
+        auth.isLoggedIn ? (
+          <div className="flex justify-center py-1">
+            <NotificationBell
+              buttonRef={desktopNotificationsRef}
+              count={unreadCount}
+              countError={unreadCountError}
+              expanded={notificationsOpen}
+              onClick={toggleDesktopNotifications}
+            />
+          </div>
+        ) : null}
         {group.items.map((item) =>
           mobile ? (
             <Link
               key={`${group.id}-${item.href}`}
               href={item.href}
               className={`flex min-h-12 items-center gap-3 px-4 text-sm no-underline hover:no-underline ${
-                isActiveRoute(item.href) ? 'bg-white/10 font-semibold text-[var(--color-brand)]' : 'text-[var(--sidebar-fg)]'
+                isActiveRoute(item.href)
+                  ? "bg-white/10 font-semibold text-[var(--color-brand)]"
+                  : "text-[var(--sidebar-fg)]"
               }`}
               aria-label={item.label}
-              aria-current={isActiveRoute(item.href) ? 'page' : undefined}
+              aria-current={isActiveRoute(item.href) ? "page" : undefined}
               onClick={onNavigate}
             >
               <span className="material-icons" aria-hidden>
@@ -171,44 +253,82 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="relative min-h-screen w-full flex app-shell-container"
-      style={{ ['--content-margin' as string]: `${contentMargin}px` }}
+      style={{ ["--content-margin" as string]: `${contentMargin}px` }}
     >
       <aside
         className={`fixed left-0 top-0 bottom-0 z-[100] flex flex-col transition-all duration-200 ${
-          sidenavCollapsed ? 'w-14 min-w-[3.5rem]' : 'w-[280px]'
-        } ${desktop ? '' : 'hidden'}`}
-        style={{ backgroundColor: 'var(--sidebar-bg)', borderRight: '1px solid var(--sidebar-border)' }}
+          sidenavCollapsed ? "w-14 min-w-[3.5rem]" : "w-[280px]"
+        } ${desktop ? "" : "hidden"}`}
+        style={{
+          backgroundColor: "var(--sidebar-bg)",
+          borderRight: "1px solid var(--sidebar-border)",
+        }}
         aria-label="Navegação"
       >
-        <div className={`flex-shrink-0 ${!sidenavCollapsed ? 'px-4 py-4' : 'px-1 py-3'} flex items-center justify-center gap-3`}>
-          <Image src="/assets/logo.png" alt="Banda Carmelitana" className="w-12 h-12 rounded-full" width={48} height={48} />
-          {!sidenavCollapsed && (
-            <div>
-              <p className="font-semibold text-[var(--header-fg)] leading-tight">Banda Carmelitana</p>
-              <p className="text-xs text-[var(--color-brand)]">{roleLabels(auth.roles)}</p>
-            </div>
-          )}
+        <div
+          className={`flex-shrink-0 ${sidenavCollapsed ? "flex flex-col items-center gap-2 px-1 py-3" : "flex items-center justify-between gap-3 px-4 py-4"}`}
+        >
+          <div
+            className={`flex min-w-0 items-center gap-3 ${sidenavCollapsed ? "justify-center" : ""}`}
+          >
+            <Image
+              src="/assets/logo.png"
+              alt="Banda Carmelitana"
+              className="h-12 w-12 shrink-0 rounded-full"
+              width={48}
+              height={48}
+            />
+            {!sidenavCollapsed ? (
+              <div className="min-w-0">
+                <p className="truncate font-semibold leading-tight text-[var(--header-fg)]">
+                  Banda Carmelitana
+                </p>
+                <p className="truncate text-xs text-[var(--color-brand)]">
+                  {roleLabels(auth.roles)}
+                </p>
+              </div>
+            ) : null}
+          </div>
+          {auth.isLoggedIn && !sidenavCollapsed ? (
+            <NotificationBell
+              buttonRef={desktopNotificationsRef}
+              count={unreadCount}
+              countError={unreadCountError}
+              expanded={notificationsOpen}
+              onClick={toggleDesktopNotifications}
+            />
+          ) : null}
         </div>
         <nav className="flex-1 overflow-y-auto py-2">{renderNavGroups()}</nav>
         {desktop && auth.user ? (
           <div className="desktop-user-menu relative mx-2 mb-2 border-t border-[var(--sidebar-border)] pt-2">
             <button
+              ref={desktopAccountRef}
               type="button"
               className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-white/10 ${
-                sidenavCollapsed ? 'justify-center' : ''
+                sidenavCollapsed ? "justify-center" : ""
               }`}
               aria-expanded={desktopUserMenuOpen}
               aria-controls="desktop-user-submenu"
               onClick={() => setDesktopUserMenuOpen((open) => !open)}
             >
-              <UserAvatar url={auth.user.pictureUrl} name={auth.user.name} className="h-10 w-10 shrink-0 text-[40px] leading-none" />
+              <span className="relative shrink-0">
+                <UserAvatar
+                  url={auth.user.pictureUrl}
+                  name={auth.user.name}
+                  className="h-10 w-10 text-[40px] leading-none"
+                />
+              </span>
               {!sidenavCollapsed ? (
                 <>
                   <span className="min-w-0 flex-1 truncate text-sm text-[var(--sidebar-fg)]">
                     {auth.displayName ?? auth.user.name}
                   </span>
-                  <span className="material-icons text-xl text-[var(--sidebar-fg)]" aria-hidden>
-                    {desktopUserMenuOpen ? 'expand_less' : 'expand_more'}
+                  <span
+                    className="material-icons text-xl text-[var(--sidebar-fg)]"
+                    aria-hidden
+                  >
+                    {desktopUserMenuOpen ? "expand_less" : "expand_more"}
                   </span>
                 </>
               ) : (
@@ -216,7 +336,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
             </button>
             {desktopUserMenuOpen && !sidenavCollapsed ? (
-              <div id="desktop-user-submenu" className="mb-1 space-y-0.5 pl-3" role="menu">
+              <div
+                id="desktop-user-submenu"
+                className="mb-1 space-y-0.5 pl-3"
+                role="menu"
+              >
                 <Link
                   href="/profile"
                   role="menuitem"
@@ -229,7 +353,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   Perfil
                 </Link>
                 <Link
-                  href="/settings"
+                  href="/configuracoes"
                   role="menuitem"
                   className="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm text-[var(--sidebar-fg)] no-underline hover:bg-white/10 hover:no-underline"
                   onClick={() => setDesktopUserMenuOpen(false)}
@@ -246,7 +370,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   onClick={() => {
                     setDesktopUserMenuOpen(false);
                     void auth.logout();
-                    router.push('/');
+                    router.push("/");
                   }}
                 >
                   <span className="material-icons text-xl" aria-hidden>
@@ -271,7 +395,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   Perfil
                 </Link>
                 <Link
-                  href="/settings"
+                  href="/configuracoes"
                   role="menuitem"
                   className="flex min-h-11 items-center gap-3 px-4 text-sm text-[var(--foreground)] no-underline hover:bg-[var(--accent)] hover:no-underline"
                   onClick={() => setDesktopUserMenuOpen(false)}
@@ -285,7 +409,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   onClick={() => {
                     setDesktopUserMenuOpen(false);
                     void auth.logout();
-                    router.push('/');
+                    router.push("/");
                   }}
                 >
                   Sair
@@ -299,18 +423,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               className="inline-flex items-center justify-center w-10 h-10 rounded-full text-[var(--sidebar-fg)] hover:bg-white/10"
-              onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+              onClick={() => setTheme(theme === "light" ? "dark" : "light")}
               aria-label="Alternar tema"
             >
-              <span className="material-icons">{theme === 'light' ? 'dark_mode' : 'light_mode'}</span>
+              <span className="material-icons">
+                {theme === "light" ? "dark_mode" : "light_mode"}
+              </span>
             </button>
             <button
               type="button"
               className="inline-flex items-center justify-center w-10 h-10 rounded-full text-[var(--sidebar-fg)] hover:bg-white/10"
               onClick={toggleCollapsed}
-              aria-label={sidenavCollapsed ? 'Expandir menu' : 'Recolher menu'}
+              aria-label={sidenavCollapsed ? "Expandir menu" : "Recolher menu"}
             >
-              <span className="material-icons">{sidenavCollapsed ? 'chevron_right' : 'chevron_left'}</span>
+              <span className="material-icons">
+                {sidenavCollapsed ? "chevron_right" : "chevron_left"}
+              </span>
             </button>
           </div>
         )}
@@ -322,7 +450,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               className="inline-flex h-11 w-11 items-center justify-center rounded-full text-white"
-              aria-label={moreOpen ? 'Fechar menu' : 'Abrir menu'}
+              aria-label={moreOpen ? "Fechar menu" : "Abrir menu"}
               aria-expanded={moreOpen}
               onClick={() => setMoreOpen((v) => !v)}
             >
@@ -330,22 +458,50 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </button>
             <span className="font-semibold text-base">{pageTitle}</span>
             <span className="flex-1" />
+            {auth.isLoggedIn ? (
+              <NotificationBell
+                buttonRef={mobileNotificationsRef}
+                count={unreadCount}
+                countError={unreadCountError}
+                expanded={notificationsOpen}
+                onClick={() => {
+                  notificationReturnFocusRef.current =
+                    mobileNotificationsRef.current;
+                  setNotificationsOpen((open) => !open);
+                }}
+              />
+            ) : null}
             <div className="relative user-menu">
               <button
                 type="button"
                 className="inline-flex h-11 w-11 items-center justify-center rounded-full text-white"
                 aria-label="Conta"
                 aria-expanded={userMenuOpen}
-                onClick={() => setUserMenuOpen((v) => !v)}
+                onClick={() => {
+                  setNotificationsOpen(false);
+                  setUserMenuOpen((v) => !v);
+                }}
               >
-                <UserAvatar url={auth.user?.pictureUrl} name={auth.user?.name} className="h-9 w-9 text-[28px] leading-none" />
+                <UserAvatar
+                  url={auth.user?.pictureUrl}
+                  name={auth.user?.name}
+                  className="h-9 w-9 text-[28px] leading-none"
+                />
               </button>
               {userMenuOpen && (
                 <div className="absolute top-full right-0 mt-2 bg-[var(--card)] border border-[var(--border)] rounded-md shadow-lg z-50 min-w-48">
-                  <button type="button" className="w-full flex items-center gap-3 px-4 py-3 text-sm" onClick={() => router.push('/profile')}>
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm"
+                    onClick={() => router.push("/profile")}
+                  >
                     Perfil
                   </button>
-                  <button type="button" className="w-full flex items-center gap-3 px-4 py-3 text-sm" onClick={() => router.push('/settings')}>
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm"
+                    onClick={() => router.push("/configuracoes")}
+                  >
                     Configurações
                   </button>
                   <button
@@ -353,7 +509,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     className="w-full flex items-center gap-3 px-4 py-3 text-sm"
                     onClick={() => {
                       void auth.logout();
-                      router.push('/');
+                      router.push("/");
                     }}
                   >
                     Sair
@@ -365,29 +521,50 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
 
         {!desktop && moreOpen && (
-          <div className="fixed inset-0 bg-black/40 z-[120]" onClick={() => setMoreOpen(false)} aria-hidden />
+          <div
+            className="fixed inset-0 bg-black/40 z-[120]"
+            onClick={() => setMoreOpen(false)}
+            aria-hidden
+          />
         )}
 
         {!desktop && moreOpen && (
-          <aside className="fixed top-0 left-0 bottom-0 w-[80%] max-w-[280px] z-[130] flex flex-col" style={{ backgroundColor: 'var(--sidebar-bg)' }}>
+          <aside
+            className="fixed top-0 left-0 bottom-0 w-[80%] max-w-[280px] z-[130] flex flex-col"
+            style={{ backgroundColor: "var(--sidebar-bg)" }}
+          >
             <div className="flex items-center justify-between px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] text-[var(--header-fg)]">
               <span className="font-semibold">Menu</span>
-              <button type="button" className="inline-flex h-11 w-11 items-center justify-center" aria-label="Fechar menu" onClick={() => setMoreOpen(false)}>
+              <button
+                type="button"
+                className="inline-flex h-11 w-11 items-center justify-center"
+                aria-label="Fechar menu"
+                onClick={() => setMoreOpen(false)}
+              >
                 <span className="material-icons">close</span>
               </button>
             </div>
-            <nav className="overflow-y-auto py-2">{renderNavGroups(() => setMoreOpen(false), true)}</nav>
+            <nav className="overflow-y-auto py-2">
+              {renderNavGroups(() => setMoreOpen(false), true)}
+            </nav>
           </aside>
         )}
 
         <main
           className={`flex-1 overflow-x-hidden overflow-y-auto pb-20 ${
-            pathname === '/' ? 'px-0 pt-0' : 'px-4 pt-6'
-          } ${desktop ? 'ml-[var(--content-margin)]' : ''}`}
+            pathname === "/" ? "px-0 pt-0" : "px-4 pt-6"
+          } ${desktop ? "ml-[var(--content-margin)]" : ""}`}
         >
           {children}
         </main>
       </div>
+      <NotificationInbox
+        open={notificationsOpen && auth.isLoggedIn}
+        onClose={() => setNotificationsOpen(false)}
+        onUnreadCountRefresh={refreshUnreadCount}
+        countError={unreadCountError}
+        returnFocusRef={notificationReturnFocusRef}
+      />
     </div>
   );
 }

@@ -165,7 +165,7 @@ O restante do app deve usar essas variáveis (`--color-brand`, `--color-ink`, `-
 
 Logo e fotos institucionais estão em `public/assets/logo.png` e `public/imgs/`.
 
-Tema claro/escuro: `src/contexts/ThemeContext.tsx` e a página `/settings`.
+Tema claro/escuro: `src/contexts/ThemeContext.tsx` e a página `/configuracoes` (`/settings` redireciona para ela).
 
 ## Estrutura do projeto
 
@@ -211,7 +211,7 @@ Tema claro/escuro: `src/contexts/ThemeContext.tsx` e a página `/settings`.
 - `/gestao/apresentacoes`
 - `/gestao/midias`
 - `/profile` — dados da sessão
-- `/settings` — tema e preferências
+- `/configuracoes` — tema e preferências (`/settings` redireciona)
 
 ### Estudo e treinamento
 

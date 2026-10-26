@@ -1,15 +1,18 @@
-'use client';
+"use client";
 
-import { useEffect, useState, type ReactNode } from 'react';
-import { StudyInstrumentPanel } from '@/components/StudyInstrumentPanel';
-import { StudyPlayerPanel } from '@/components/StudyPlayerPanel';
-import { youtubeWatchUrl } from '@/domains/songs/youtube';
-import type { StudySession, StudyViewSnapshot } from '@/study/studySession';
-import { MusicLoader } from '@/components/MusicLoader';
-import { MobileScoreZoom } from '@/study/MobileScoreZoom';
+import { type ReactNode, useState } from "react";
+
+import { MusicLoader } from "@/components/MusicLoader";
+import { StudyInstrumentPanel } from "@/components/StudyInstrumentPanel";
+import { StudyPlayerPanel } from "@/components/StudyPlayerPanel";
+import { EntityDialog } from "@/components/shared/EntityDialog";
+import { youtubeWatchUrl } from "@/domains/songs/youtube";
+import { MobileScoreZoom } from "@/study/MobileScoreZoom";
+import type { StudySession, StudyViewSnapshot } from "@/study/studySession";
 
 /** Reserva espaço para a barra fixa de controles (rolagem da partitura). */
-export const STUDY_MOBILE_FOOTER_HEIGHT = 'calc(3.25rem + env(safe-area-inset-bottom, 0px))';
+export const STUDY_MOBILE_FOOTER_HEIGHT =
+  "calc(3.25rem + env(safe-area-inset-bottom, 0px))";
 
 export function StudyMobileSheet({
   session,
@@ -25,17 +28,60 @@ export function StudyMobileSheet({
   const [open, setOpen] = useState(false);
   const [playerOpen, setPlayerOpen] = useState(false);
   const [instrumentsOpen, setInstrumentsOpen] = useState(false);
-  const watchUrl = youtubeWatchUrl(videoUrl ?? '');
-  const transportBlocked = state.loading || !state.xmlLoaded || state.audioPreparing;
+  const watchUrl = youtubeWatchUrl(videoUrl ?? "");
+  const transportBlocked =
+    state.loading || !state.xmlLoaded || state.audioPreparing;
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  const renderTransportControls = (showOptionsButton: boolean) => (
+    <div className="flex h-[3.25rem] shrink-0 items-center justify-center gap-1 px-2">
+      {showOptionsButton ? (
+        <button
+          type="button"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]"
+          onClick={() => setOpen(true)}
+          aria-expanded={open}
+          aria-label="Mais opções"
+        >
+          <span className="material-icons text-xl" aria-hidden>
+            tune
+          </span>
+        </button>
+      ) : null}
+      <MobileScoreZoom session={session} state={state} />
+      <button
+        type="button"
+        className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-[var(--primary)] text-[var(--primary-foreground)] shadow-[var(--shadow-soft)] disabled:cursor-not-allowed disabled:opacity-50"
+        onClick={() => void session.play()}
+        disabled={transportBlocked}
+        aria-busy={state.audioPreparing}
+        aria-label={state.audioPreparing ? "Preparando áudio" : "Play"}
+      >
+        {state.audioPreparing ? (
+          <MusicLoader compact label="" className="py-0" tone="current" />
+        ) : (
+          <span className="material-icons text-3xl">play_arrow</span>
+        )}
+      </button>
+      <button
+        type="button"
+        className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
+        onClick={() => session.pause()}
+        disabled={transportBlocked}
+        aria-label="Pausar"
+      >
+        <span className="material-icons">pause</span>
+      </button>
+      <button
+        type="button"
+        className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
+        onClick={() => session.stop()}
+        disabled={transportBlocked}
+        aria-label="Parar"
+      >
+        <span className="material-icons">stop</span>
+      </button>
+    </div>
+  );
 
   return (
     <>
@@ -44,23 +90,16 @@ export function StudyMobileSheet({
         style={{ height: STUDY_MOBILE_FOOTER_HEIGHT }}
         aria-hidden
       />
-      {open ? (
-        <button
-          type="button"
-          className="fixed inset-0 z-[1004] bg-black/45"
-          aria-label="Fechar menu"
-          onClick={() => setOpen(false)}
-        />
-      ) : null}
-      <div
-        className={`fixed bottom-0 left-0 right-0 z-[1005] flex flex-col border-t border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-soft)] ${open ? 'max-h-[min(85dvh,32rem)] rounded-t-2xl' : ''}`}
-        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-        role={open ? 'dialog' : undefined}
-        aria-modal={open ? true : undefined}
-        aria-label={open ? 'Menu do estudo' : undefined}
+      <EntityDialog
+        open={open}
+        title="Opções do estudo"
+        description="Configure o player e os instrumentos da sessão."
+        size="xl"
+        placement="bottom"
+        onClose={() => setOpen(false)}
       >
         {open ? (
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3 pt-2">
+          <div className="max-h-[min(70dvh,28rem)] min-h-0 flex-1 overflow-y-auto px-4 pb-3 pt-2">
             <button
               type="button"
               className="btn-outline-primary mb-3 inline-flex min-h-11 w-full items-center justify-center gap-2"
@@ -131,20 +170,30 @@ export function StudyMobileSheet({
                 selectedIds={state.instruments.selectedIds}
                 midiSelectedIds={state.instruments.midiSelectedIds}
                 filtered={state.instruments.filtered}
-                selectionMatchesApplied={state.instruments.selectionMatchesApplied}
+                selectionMatchesApplied={
+                  state.instruments.selectionMatchesApplied
+                }
                 filter={state.instruments.filter}
                 loading={state.loading}
                 xmlLoaded={state.xmlLoaded}
                 allSelected={state.instruments.allSelected}
                 midiAllSelected={state.instruments.midiAllSelected}
                 onFilterChange={(value) => session.setInstrumentFilter(value)}
-                onToggle={(id, checked) => session.toggleInstrument(id, checked)}
-                onToggleMidi={(id, checked) => session.toggleMidiInstrument(id, checked)}
+                onToggle={(id, checked) =>
+                  session.toggleInstrument(id, checked)
+                }
+                onToggleMidi={(id, checked) =>
+                  session.toggleMidiInstrument(id, checked)
+                }
                 onSelectAllChange={(checked) =>
-                  checked ? session.selectAllInstruments() : session.clearSelectedInstruments()
+                  checked
+                    ? session.selectAllInstruments()
+                    : session.clearSelectedInstruments()
                 }
                 onSelectAllMidiChange={(checked) =>
-                  checked ? session.selectAllMidiInstruments() : session.clearSelectedMidiInstruments()
+                  checked
+                    ? session.selectAllMidiInstruments()
+                    : session.clearSelectedMidiInstruments()
                 }
                 onApply={() => {
                   session.applySelectedInstruments();
@@ -195,54 +244,16 @@ export function StudyMobileSheet({
             ) : null}
           </div>
         ) : null}
-
-        <div className="flex h-[3.25rem] shrink-0 items-center justify-center gap-1 px-2">
-          <button
-            type="button"
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]"
-            onClick={() => setOpen((current) => !current)}
-            aria-expanded={open}
-            aria-label={open ? 'Fechar opções' : 'Mais opções'}
-          >
-            <span className="material-icons text-xl" aria-hidden>
-              {open ? 'close' : 'tune'}
-            </span>
-          </button>
-          <MobileScoreZoom session={session} state={state} />
-          <button
-            type="button"
-            className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-[var(--primary)] text-[var(--primary-foreground)] shadow-[var(--shadow-soft)] disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={() => void session.play()}
-            disabled={transportBlocked}
-            aria-busy={state.audioPreparing}
-            aria-label={state.audioPreparing ? 'Preparando áudio' : 'Play'}
-          >
-            {state.audioPreparing ? (
-              <MusicLoader compact label="" className="py-0" tone="current" />
-            ) : (
-              <span className="material-icons text-3xl">play_arrow</span>
-            )}
-          </button>
-          <button
-            type="button"
-            className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
-            onClick={() => session.pause()}
-            disabled={transportBlocked}
-            aria-label="Pausar"
-          >
-            <span className="material-icons">pause</span>
-          </button>
-          <button
-            type="button"
-            className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
-            onClick={() => session.stop()}
-            disabled={transportBlocked}
-            aria-label="Parar"
-          >
-            <span className="material-icons">stop</span>
-          </button>
+        {renderTransportControls(false)}
+      </EntityDialog>
+      {!open ? (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-[1005] border-t border-[var(--border)] bg-[var(--card)] shadow-[var(--shadow-soft)]"
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        >
+          {renderTransportControls(true)}
         </div>
-      </div>
+      ) : null}
     </>
   );
 }
@@ -268,7 +279,7 @@ function SheetSection({
       >
         {title}
         <span className="material-icons" aria-hidden>
-          {open ? 'expand_less' : 'expand_more'}
+          {open ? "expand_less" : "expand_more"}
         </span>
       </button>
       {open ? <div className="pb-3">{children}</div> : null}

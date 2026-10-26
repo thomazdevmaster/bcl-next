@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 function SelectionIcon({ kind }: { kind: "all" | "delete" }) {
   const icon = {
     all: "select_all",
@@ -20,6 +22,8 @@ interface TableSelectionToolbarProps {
   allSelected: boolean;
   onToggleAll: () => void;
   onDelete: () => void;
+  deleteLabel?: string;
+  extraActions?: ReactNode;
 }
 
 export function TableSelectionToolbar({
@@ -29,6 +33,8 @@ export function TableSelectionToolbar({
   allSelected,
   onToggleAll,
   onDelete,
+  deleteLabel = "Excluir",
+  extraActions,
 }: TableSelectionToolbarProps) {
   const hasSelection = selectedCount > 0;
 
@@ -37,22 +43,32 @@ export function TableSelectionToolbar({
       aria-label="Ações de seleção em lote"
       className={`rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 shadow-[var(--shadow-soft)] transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none starting:opacity-0 starting:-translate-y-1 starting:scale-[0.99] ${visible ? "translate-y-0 scale-100 opacity-100" : "pointer-events-none -translate-y-1 scale-[0.99] opacity-0"}`}
     >
-      <p role="status" className="text-base font-semibold tabular-nums text-[var(--foreground)]">
+      <p
+        role="status"
+        className="text-base font-semibold tabular-nums text-[var(--foreground)]"
+      >
         {selectedCount.toLocaleString("pt-BR")}
         <span className="ml-1 text-sm font-normal text-[var(--muted)]">
           de {totalCount.toLocaleString("pt-BR")} selecionados
         </span>
       </p>
-      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-2">
         <button
           type="button"
           onClick={onToggleAll}
-          aria-label={allSelected ? "Desmarcar todos os registros" : "Selecionar todos os registros"}
+          aria-label={
+            allSelected
+              ? "Desmarcar todos os registros"
+              : "Selecionar todos os registros"
+          }
           className="flex min-h-11 min-w-0 touch-manipulation cursor-pointer select-none items-center justify-center gap-2 rounded-lg px-2 text-sm font-medium text-[var(--info)] transition-colors hover:bg-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
         >
           <SelectionIcon kind="all" />
-          <span className="truncate">{allSelected ? "Desmarcar todos" : "Selecionar todos"}</span>
+          <span className="truncate">
+            {allSelected ? "Desmarcar" : "Todos"}
+          </span>
         </button>
+        {extraActions}
         <button
           type="button"
           onClick={onDelete}
@@ -60,7 +76,7 @@ export function TableSelectionToolbar({
           className="btn-danger flex min-h-11 touch-manipulation cursor-pointer select-none items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-semibold active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:active:scale-100! motion-reduce:transition-none! motion-reduce:hover:transform-none!"
         >
           <SelectionIcon kind="delete" />
-          <span>Excluir</span>
+          <span>{deleteLabel}</span>
         </button>
       </div>
     </section>
