@@ -29,6 +29,8 @@ import {
 import type { Person } from "@/domains/people/types";
 import { filterPeopleForRole } from "@/domains/people/visibility";
 import { filterSongRecordsForCatalog } from "@/domains/songs/catalogAccess";
+import { gestaoDeepLinkParam } from "@/lib/deepLink/gestaoDeepLinkParams";
+import { useGestaoDeepLink } from "@/lib/deepLink/useGestaoDeepLink";
 import { apiFetch } from "@/lib/api";
 import { sealPassword } from "@/lib/passwordCipher";
 import { failureMessage, userFacingError } from "@/lib/userMessages";
@@ -294,6 +296,13 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
     },
     [config],
   );
+
+  useGestaoDeepLink({
+    param: gestaoDeepLinkParam(resource),
+    items,
+    loading,
+    onOpen: openItem,
+  });
 
   const getRowActions = useCallback(
     (row: Record<string, unknown>, includeView: boolean, mobile = false) => {

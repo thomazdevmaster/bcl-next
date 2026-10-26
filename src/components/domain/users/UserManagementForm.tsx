@@ -24,10 +24,6 @@ import {
   UserGuardianStage,
   type GuardianStageHandlers,
 } from "./UserGuardianStage";
-import {
-  UserProfilesStage,
-  type ProfilesStageHandlers,
-} from "./UserProfilesStage";
 import { UserAccessStage, type AccessStageHandlers } from "./UserAccessStage";
 import {
   UserPermissionsStage,
@@ -66,10 +62,7 @@ export interface EntityFormProps {
   onRegisterGuardianStageHandlers?: (
     handlers: GuardianStageHandlers | null,
   ) => void;
-  profilesStage?: boolean;
-  onRegisterProfilesStageHandlers?: (
-    handlers: ProfilesStageHandlers | null,
-  ) => void;
+  profileFields?: CrudField[];
   accessStage?: boolean;
   onRegisterAccessStageHandlers?: (
     handlers: AccessStageHandlers | null,
@@ -108,8 +101,7 @@ export function EntityForm({
   guardianPeople = [],
   guardianRelationshipOptions = [],
   onRegisterGuardianStageHandlers,
-  profilesStage = false,
-  onRegisterProfilesStageHandlers,
+  profileFields,
   accessStage = false,
   onRegisterAccessStageHandlers,
   permissionsStage = false,
@@ -188,11 +180,8 @@ export function EntityForm({
       }}
       className="flex min-h-0 flex-1 flex-col"
     >
-      {onRegisterPersonalContactHandlers ? (
-        <div
-          hidden={!personalContactStage}
-          className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
-        >
+      {onRegisterPersonalContactHandlers && personalContactStage ? (
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
           <UserPersonalContactStage
             values={values}
             onChange={onChange}
@@ -201,11 +190,8 @@ export function EntityForm({
           />
         </div>
       ) : null}
-      {onRegisterGuardianStageHandlers ? (
-        <div
-          hidden={!guardianStage}
-          className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
-        >
+      {onRegisterGuardianStageHandlers && guardianStage ? (
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
           <UserGuardianStage
             values={values}
             people={guardianPeople}
@@ -216,26 +202,8 @@ export function EntityForm({
           />
         </div>
       ) : null}
-      {onRegisterProfilesStageHandlers ? (
-        <div
-          hidden={!profilesStage}
-          className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
-        >
-          <UserProfilesStage
-            values={values}
-            fields={fields}
-            instruments={dynamicChoices.instruments ?? []}
-            onChange={onChange}
-            onRegisterHandlers={onRegisterProfilesStageHandlers}
-            readOnly={readOnly}
-          />
-        </div>
-      ) : null}
-      {onRegisterAccessStageHandlers ? (
-        <div
-          hidden={!accessStage}
-          className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
-        >
+      {onRegisterAccessStageHandlers && accessStage ? (
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
           <UserAccessStage
             values={values}
             onChange={onChange}
@@ -245,11 +213,8 @@ export function EntityForm({
           />
         </div>
       ) : null}
-      {onRegisterPermissionsStageHandlers ? (
-        <div
-          hidden={!permissionsStage}
-          className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
-        >
+      {onRegisterPermissionsStageHandlers && permissionsStage ? (
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
           <UserPermissionsStage
             values={values}
             options={
@@ -257,6 +222,8 @@ export function EntityForm({
               fields.find((field) => field.name === "roles")?.options ??
               []
             }
+            profileFields={profileFields}
+            instruments={dynamicChoices.instruments ?? undefined}
             locked={rolesLocked}
             onChange={onChange}
             onRegisterHandlers={onRegisterPermissionsStageHandlers}
@@ -264,18 +231,14 @@ export function EntityForm({
           />
         </div>
       ) : null}
-      <div
-        hidden={
-          personalContactStage ||
-          guardianStage ||
-          profilesStage ||
-          accessStage ||
-          permissionsStage
-        }
-        className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4 sm:p-6 md:grid-cols-2"
-      >
-        {!personalContactStage &&
-          visibleFields.map((field, index) => {
+      {!(
+        personalContactStage ||
+        guardianStage ||
+        accessStage ||
+        permissionsStage
+      ) ? (
+        <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4 sm:p-6 md:grid-cols-2">
+          {visibleFields.map((field, index) => {
             const value = values[field.name];
             const options = optionsForField(
               field,
@@ -459,7 +422,14 @@ export function EntityForm({
                     placeholder={field.placeholder}
                     className={`min-h-11 ${controlMotion}`}
                     autoComplete={
-                      field.type === "password" ? "new-password" : undefined
+                      field.name === "username" ||
+                      field.name === "guardian.username"
+                        ? "username"
+                        : field.type === "password"
+                          ? "new-password"
+                          : field.name === "email"
+                            ? "email"
+                            : undefined
                     }
                     inputMode={field.type === "tel" ? "tel" : undefined}
                     step={field.type === "number" ? "0.01" : undefined}
@@ -498,7 +468,8 @@ export function EntityForm({
               </FieldSlot>
             );
           })}
-      </div>
+        </div>
+      ) : null}
       <div className="flex shrink-0 justify-end gap-3 border-t border-[var(--border)] bg-[var(--card)] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
         {footerActions ?? (
           <>

@@ -33,6 +33,13 @@ export const personProfilesSchema = z
     if (isMusician && !musician.section) {
       context.addIssue({ code: "custom", path: ["musician", "section"], message: "Campo obrigatório para este perfil." });
     }
+    if (isMusician && !musician.playedInstrumentId.trim()) {
+      context.addIssue({
+        code: "custom",
+        path: ["musician", "playedInstrumentId"],
+        message: "Informe o instrumento que o músico toca.",
+      });
+    }
     if (musician.joinedAt && !validDateOrEmpty(musician.joinedAt)) {
       context.addIssue({ code: "custom", path: ["musician", "joinedAt"], message: "Informe uma data válida e não futura." });
     }

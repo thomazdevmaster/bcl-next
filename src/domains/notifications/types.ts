@@ -1,5 +1,6 @@
 export const NOTIFICATION_TYPES = [
   "signup_approval_pending",
+  "signup_incomplete",
   "signup_completed",
   "password_changed",
   "admin_message",
@@ -14,6 +15,7 @@ export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
 export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   signup_approval_pending: "Cadastro aguardando aprovação",
+  signup_incomplete: "Cadastro incompleto",
   signup_completed: "Novo cadastro concluído",
   password_changed: "Senha alterada",
   admin_message: "Alertas enviados pela gestão",

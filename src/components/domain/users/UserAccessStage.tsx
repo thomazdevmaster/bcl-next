@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, FormProvider, useForm, useWatch } from "react-hook-form";
 import { FormStageBlock } from "@/components/forms/FormStageBlock";
@@ -11,7 +11,10 @@ import {
   type AccessFormValues,
 } from "@/domains/users/schemas/access.schema";
 
-export type AccessStageHandlers = { validate: () => Promise<boolean> };
+export type AccessStageHandlers = {
+  validate: () => Promise<boolean>;
+  syncToParent: () => Record<string, unknown>;
+};
 
 type Props = {
   values: Record<string, unknown>;
@@ -39,12 +42,24 @@ export function UserAccessStage({
     mode: "onBlur",
     reValidateMode: "onChange",
   });
-  const { control, trigger } = form;
+  const { control, trigger, getValues } = form;
   const password = useWatch({ control, name: "password" });
   const confirmPassword = useWatch({ control, name: "confirmPassword" });
 
+  const syncToParent = () => ({
+    username: getValues("username"),
+    password: getValues("password"),
+    confirmPassword: getValues("confirmPassword"),
+    isActive: getValues("isActive"),
+  });
+  const syncToParentRef = useRef(syncToParent);
+  syncToParentRef.current = syncToParent;
+
   useEffect(() => {
-    onRegisterHandlers({ validate: () => trigger() });
+    onRegisterHandlers({
+      validate: () => trigger(),
+      syncToParent: () => syncToParentRef.current(),
+    });
     return () => onRegisterHandlers(null);
   }, [onRegisterHandlers, trigger]);
 
@@ -73,6 +88,7 @@ export function UserAccessStage({
               className="sm:col-span-2"
               disabled={readOnly}
               required={false}
+              syncParentOn="blur"
               optionalMessage={
                 editing
                   ? undefined

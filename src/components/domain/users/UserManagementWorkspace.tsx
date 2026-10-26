@@ -45,9 +45,13 @@ import {
 } from "@/domains/crudConfig";
 import type { Person } from "@/domains/people/types";
 import { isPersonUnderage } from "@/domains/people/types";
+import { mergeParsedAddressIntoValues } from "@/domains/people/composeAddress";
+import { gestaoDeepLinkParam } from "@/lib/deepLink/gestaoDeepLinkParams";
+import { useGestaoDeepLink } from "@/lib/deepLink/useGestaoDeepLink";
 import { filterPeopleForRole } from "@/domains/people/visibility";
 import {
   type AdministrativeCompletionStatus,
+  enrichPersonForAdministrativeCompletion,
   evaluateAdministrativeCompletion,
   getAdministrativeCompletionStatuses,
 } from "@/domains/users/administrativeCompletion";
@@ -71,7 +75,6 @@ import {
 } from "./UserManagementForm";
 import type { PermissionsStageHandlers } from "./UserPermissionsStage";
 import type { PersonalContactFormHandlers } from "./UserPersonalContactStage";
-import type { ProfilesStageHandlers } from "./UserProfilesStage";
 
 interface UserManagementWorkspaceProps {
   resource: CrudResource;
@@ -279,7 +282,6 @@ export function UserManagementWorkspace({
     null,
   );
   const guardianStageHandlers = useRef<GuardianStageHandlers | null>(null);
-  const profilesStageHandlers = useRef<ProfilesStageHandlers | null>(null);
   const accessStageHandlers = useRef<AccessStageHandlers | null>(null);
   const permissionsStageHandlers = useRef<PermissionsStageHandlers | null>(
     null,
@@ -293,12 +295,6 @@ export function UserManagementWorkspace({
   const registerGuardianStageHandlers = useCallback(
     (handlers: GuardianStageHandlers | null) => {
       guardianStageHandlers.current = handlers;
-    },
-    [],
-  );
-  const registerProfilesStageHandlers = useCallback(
-    (handlers: ProfilesStageHandlers | null) => {
-      profilesStageHandlers.current = handlers;
     },
     [],
   );
@@ -660,13 +656,26 @@ export function UserManagementWorkspace({
         setError(userFacingError(caught));
       }
     }
+    const roles = Array.isArray(itemValues.roles)
+      ? itemValues.roles.map(String)
+      : [];
+    itemValues.isStudent = roles.includes("aluno");
+    itemValues.isMusician = roles.includes("musico");
+    const normalized = mergeParsedAddressIntoValues(itemValues);
     setSelected(item);
-    setValues(itemValues);
+    setValues(normalized);
     setFormErrors({});
     setActiveStage(0);
     setValidatedStageTitles([]);
     setDialogMode(mode);
   };
+
+  useGestaoDeepLink({
+    param: gestaoDeepLinkParam(resource),
+    items,
+    loading,
+    onOpen: openItem,
+  });
 
   const handleIncompleteUserNoticeClosed = () => {
     const target = incompleteUserEditTarget.current;
@@ -739,22 +748,37 @@ export function UserManagementWorkspace({
     setFormErrors({});
   };
 
+  const mergeActiveStageValues = (
+    base: Record<string, unknown>,
+  ): Record<string, unknown> => {
+    let merged = base;
+    const accessPatch = accessStageHandlers.current?.syncToParent?.();
+    if (accessPatch) merged = { ...merged, ...accessPatch };
+    const profilePatch = permissionsStageHandlers.current?.syncProfiles?.();
+    if (profilePatch) merged = { ...merged, ...profilePatch };
+    return merged;
+  };
+
   const handleSave = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
+    let saveValues = mergeActiveStageValues({ ...values });
+    if (isAccountWorkflow) setValues(saveValues);
     const fieldsToValidate =
       combinedUser && dialogMode === "create"
         ? combinedFields.filter(
             (field) => !stageFieldNames.personal?.includes(field.name),
           )
         : combinedFields;
-    const errors = validateValues(fieldsToValidate, values);
+    const errors: Record<string, string> = isAccountEdit
+      ? {}
+      : validateValues(fieldsToValidate, saveValues);
 
     if ((resource === "users" || combinedUser) && !managesRoles) {
       const previous = Array.isArray(selected?.roles)
         ? selected.roles.map(String).sort()
         : [];
-      const next = Array.isArray(values.roles)
-        ? values.roles.map(String).sort()
+      const next = Array.isArray(saveValues.roles)
+        ? saveValues.roles.map(String).sort()
         : [];
       if (previous.join("|") !== next.join("|")) {
         errors.roles =
@@ -767,7 +791,7 @@ export function UserManagementWorkspace({
       ...(combinedUser ? ["username"] : []),
     ]);
     for (const uniqueField of uniqueFields) {
-      const candidate = normalizeUniqueValue(values[uniqueField]);
+      const candidate = normalizeUniqueValue(saveValues[uniqueField]);
       if (
         candidate &&
         items.some(
@@ -783,24 +807,107 @@ export function UserManagementWorkspace({
     setFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
     if (isAccountEdit) {
-      const accessResult = accessSchema.safeParse(accessDetailsFrom(values));
-      const accessErrors: Record<string, string> = accessResult.success
-        ? {}
-        : Object.fromEntries(
-            accessResult.error.issues.map((issue) => [
-              String(issue.path[0] ?? "access"),
+      const personResult = personDetailsSchema.safeParse(
+        personDetailsFrom(saveValues),
+      );
+      if (!personResult.success) {
+        const personErrors = Object.fromEntries(
+          personResult.error.issues.map((issue) => [
+            issue.path.join("."),
+            issue.message,
+          ]),
+        );
+        setFormErrors((current) => ({ ...current, ...personErrors }));
+        setActiveStage(
+          wizardStages.findIndex((stage) => stage.id === "personal"),
+        );
+        return;
+      }
+
+      if (isPersonUnderage(String(saveValues.birthDate ?? ""))) {
+        const guardianResult = guardianSchema.safeParse(
+          guardianDetailsFrom(saveValues),
+        );
+        if (!guardianResult.success) {
+          const guardianErrors = Object.fromEntries(
+            guardianResult.error.issues.map((issue) => [
+              issue.path.join("."),
               issue.message,
             ]),
           );
-      if (!String(values.username ?? "").trim()) {
-        accessErrors.username = "Informe o nome de usuário.";
+          setFormErrors((current) => ({ ...current, ...guardianErrors }));
+          setActiveStage(
+            wizardStages.findIndex((stage) => stage.id === "guardian"),
+          );
+          return;
+        }
       }
-      if (Object.keys(accessErrors).length > 0) {
-        setFormErrors((current) => ({ ...current, ...accessErrors }));
+
+      if (accessStageHandlers.current) {
+        const accessValid = await accessStageHandlers.current.validate();
+        if (!accessValid) {
+          setActiveStage(
+            wizardStages.findIndex((stage) => stage.id === "access"),
+          );
+          return;
+        }
+        saveValues = mergeActiveStageValues(saveValues);
+      } else {
+        const accessResult = accessSchema.safeParse(
+          accessDetailsFrom(saveValues),
+        );
+        const accessErrors: Record<string, string> = accessResult.success
+          ? {}
+          : Object.fromEntries(
+              accessResult.error.issues.map((issue) => [
+                String(issue.path[0] ?? "access"),
+                issue.message,
+              ]),
+            );
+        if (!String(saveValues.username ?? "").trim()) {
+          accessErrors.username = "Informe o nome de usuário.";
+        }
+        if (Object.keys(accessErrors).length > 0) {
+          setFormErrors((current) => ({ ...current, ...accessErrors }));
+          setActiveStage(
+            wizardStages.findIndex((stage) => stage.id === "access"),
+          );
+          return;
+        }
+      }
+
+      if (!String(saveValues.username ?? "").trim()) {
         setActiveStage(
           wizardStages.findIndex((stage) => stage.id === "access"),
         );
         return;
+      }
+
+      if (permissionsStageHandlers.current) {
+        const permissionsValid =
+          await permissionsStageHandlers.current.validate();
+        if (!permissionsValid) {
+          setActiveStage(
+            wizardStages.findIndex((stage) => stage.id === "permissions"),
+          );
+          return;
+        }
+        saveValues = mergeActiveStageValues(saveValues);
+      } else {
+        const roles = Array.isArray(saveValues.roles)
+          ? saveValues.roles.map(String)
+          : [];
+        const profilesResult = personProfilesSchema.safeParse({
+          ...personProfilesFrom(saveValues),
+          isStudent: roles.includes("aluno"),
+          isMusician: roles.includes("musico"),
+        });
+        if (!profilesResult.success) {
+          setActiveStage(
+            wizardStages.findIndex((stage) => stage.id === "permissions"),
+          );
+          return;
+        }
       }
     }
 
@@ -812,7 +919,7 @@ export function UserManagementWorkspace({
     try {
       if (isAccountEdit && selected) {
         const peopleConfig = getCrudConfig("people");
-        const personValues = { ...values };
+        const personValues = { ...saveValues };
         for (const field of [
           "confirmPassword",
           "isActive",
@@ -821,6 +928,14 @@ export function UserManagementWorkspace({
           "personId",
           "roles",
           "username",
+          "postalCode",
+          "street",
+          "addressNumber",
+          "complement",
+          "unit",
+          "neighborhood",
+          "city",
+          "state",
         ]) {
           delete personValues[field];
         }
@@ -829,7 +944,7 @@ export function UserManagementWorkspace({
           : personValues;
         const personPayload = {
           ...withAudit(mappedPerson, {
-            createdAt: values.createdAt,
+            createdAt: saveValues.createdAt,
           }),
           userId: selected.id,
         };
@@ -842,8 +957,8 @@ export function UserManagementWorkspace({
         );
 
         const mappedAccount = config.toPayload
-          ? config.toPayload(values, selected)
-          : values;
+          ? config.toPayload(saveValues, selected)
+          : saveValues;
         const accountPayload: Record<string, unknown> = {
           ...selected,
           ...mappedAccount,
@@ -880,7 +995,12 @@ export function UserManagementWorkspace({
         setCompletionStatuses((current) =>
           new Map(current).set(
             String(selected.id),
-            evaluateAdministrativeCompletion(updatedPerson),
+            evaluateAdministrativeCompletion(
+              enrichPersonForAdministrativeCompletion(
+                updatedPerson,
+                updatedAccount.roles ?? saveValues.roles,
+              ),
+            ),
           ),
         );
         refreshPeopleChoices(updatedPerson);
@@ -1108,7 +1228,12 @@ export function UserManagementWorkspace({
         setCompletionStatuses((current) =>
           new Map(current).set(
             String(selected.id),
-            evaluateAdministrativeCompletion(updatedPerson),
+            evaluateAdministrativeCompletion(
+              enrichPersonForAdministrativeCompletion(
+                updatedPerson,
+                selected.roles,
+              ),
+            ),
           ),
         );
         const name =
@@ -1216,12 +1341,6 @@ export function UserManagementWorkspace({
                 },
               ]
             : []),
-          {
-            id: "profiles",
-            title: "Perfis da pessoa",
-            shortTitle: "Perfis",
-            icon: "groups",
-          },
           { id: "access", title: "Acesso", shortTitle: "Acesso", icon: "key" },
           {
             id: "permissions",
@@ -1240,15 +1359,14 @@ export function UserManagementWorkspace({
       )
       .map((field) => field.name),
     guardian: ["guardianId", "guardianRelationship"],
-    profiles: combinedFields
+    access: ["username", "password", "confirmPassword", "isActive"],
+    permissions: combinedFields
       .filter(
         (field) =>
-          ["Perfis", "Aluno", "Músico"].includes(field.section ?? "") &&
-          field.name !== "roles",
+          field.name === "roles" ||
+          ["Aluno", "Músico"].includes(field.section ?? ""),
       )
       .map((field) => field.name),
-    access: ["username", "password", "confirmPassword", "isActive"],
-    permissions: ["roles"],
   };
   const activeWizardStage = wizardStages[activeStage];
   const stageFields =
@@ -1260,8 +1378,10 @@ export function UserManagementWorkspace({
         )
       : combinedFields;
 
-  const stageStatuses = Object.fromEntries(
-    wizardStages.flatMap((stage) => {
+  const stageStatuses = useMemo(
+    () =>
+      Object.fromEntries(
+        wizardStages.flatMap((stage) => {
       if (!validatedStageTitles.includes(stage.title)) return [];
       if (stage.id === "personal") {
         const parsed = personDetailsSchema.safeParse(personDetailsFrom(values));
@@ -1303,23 +1423,6 @@ export function UserManagementWorkspace({
         const status: FormStageStatus = hasInvalidValue ? "error" : "warning";
         return [[stage.title, status] as const];
       }
-      if (stage.id === "profiles") {
-        const parsed = personProfilesSchema.safeParse(
-          personProfilesFrom(values),
-        );
-        if (parsed.success) return [[stage.title, "complete"] as const];
-        const missingPaths = new Set([
-          "student.enrollmentDate",
-          "musician.section",
-        ]);
-        const hasInvalidValue = parsed.error.issues.some((issue) => {
-          const path = issue.path.join(".");
-          return (
-            !missingPaths.has(path) || String(values[path] ?? "").trim() !== ""
-          );
-        });
-        return [[stage.title, hasInvalidValue ? "error" : "warning"] as const];
-      }
       if (stage.id === "access") {
         const parsed = accessSchema.safeParse(accessDetailsFrom(values));
         const usernameMissing =
@@ -1332,10 +1435,34 @@ export function UserManagementWorkspace({
         ];
       }
       if (stage.id === "permissions") {
-        const parsed = permissionsSchema.safeParse({
-          roles: Array.isArray(values.roles) ? values.roles.map(String) : [],
+        const roles = Array.isArray(values.roles)
+          ? values.roles.map(String)
+          : [];
+        const rolesParsed = permissionsSchema.safeParse({ roles });
+        const profilesParsed = personProfilesSchema.safeParse({
+          ...personProfilesFrom(values),
+          isStudent: roles.includes("aluno"),
+          isMusician: roles.includes("musico"),
         });
-        return [[stage.title, parsed.success ? "complete" : "error"] as const];
+        if (rolesParsed.success && profilesParsed.success) {
+          return [[stage.title, "complete"] as const];
+        }
+        const missingPaths = new Set([
+          "student.enrollmentDate",
+          "musician.section",
+          "musician.playedInstrumentId",
+        ]);
+        const hasInvalidValue = profilesParsed.success
+          ? !rolesParsed.success
+          : profilesParsed.error.issues.some((issue) => {
+              const path = issue.path.join(".");
+              return (
+                !missingPaths.has(path) ||
+                String(values[path] ?? "").trim() !== ""
+              );
+            });
+        const status: FormStageStatus = hasInvalidValue ? "error" : "warning";
+        return [[stage.title, rolesParsed.success ? status : "error"] as const];
       }
       const fields = combinedFields.filter((field) =>
         stageFieldNames[stage.id]?.includes(field.name),
@@ -1358,13 +1485,28 @@ export function UserManagementWorkspace({
           ? "warning"
           : "complete";
       return [[stage.title, status] as const];
-    }),
+        }),
+      ),
+    [
+      combinedFields,
+      isAccountEdit,
+      validatedStageTitles,
+      values,
+      wizardStages,
+    ],
   );
 
   const validateCurrentStage = async (): Promise<boolean> => {
+    const stageValues = mergeActiveStageValues({ ...values });
+    if (
+      activeWizardStage?.id === "access" ||
+      activeWizardStage?.id === "permissions"
+    ) {
+      setValues(stageValues);
+    }
     let isValid = false;
     if (isAccountEdit && activeWizardStage?.id === "access") {
-      const result = accessSchema.safeParse(accessDetailsFrom(values));
+      const result = accessSchema.safeParse(accessDetailsFrom(stageValues));
       const errors = result.success
         ? {}
         : Object.fromEntries(
@@ -1373,7 +1515,7 @@ export function UserManagementWorkspace({
               issue.message,
             ]),
           );
-      if (!String(values.username ?? "").trim()) {
+      if (!String(stageValues.username ?? "").trim()) {
         errors.username = "Informe o nome de usuário.";
       }
       setFormErrors((current) => {
@@ -1382,13 +1524,12 @@ export function UserManagementWorkspace({
           delete next[field];
         return { ...next, ...errors };
       });
-      isValid = result.success && Boolean(String(values.username ?? "").trim());
+      isValid =
+        result.success && Boolean(String(stageValues.username ?? "").trim());
     } else if (activeWizardStage?.id === "personal") {
       isValid = await (personalContactHandlers.current?.validate() ?? false);
     } else if (activeWizardStage?.id === "guardian") {
       isValid = await (guardianStageHandlers.current?.validate() ?? false);
-    } else if (activeWizardStage?.id === "profiles") {
-      isValid = await (profilesStageHandlers.current?.validate() ?? false);
     } else if (activeWizardStage?.id === "access") {
       isValid = await (accessStageHandlers.current?.validate() ?? false);
     } else if (activeWizardStage?.id === "permissions") {
@@ -1749,11 +1890,6 @@ export function UserManagementWorkspace({
                 isAccountWorkflow) &&
               activeWizardStage?.id === "guardian"
             }
-            profilesStage={
-              ((combinedUser && dialogMode === "create") ||
-                isAccountWorkflow) &&
-              activeWizardStage?.id === "profiles"
-            }
             accessStage={
               ((combinedUser && dialogMode === "create") ||
                 isAccountWorkflow) &&
@@ -1780,9 +1916,11 @@ export function UserManagementWorkspace({
                 ? registerGuardianStageHandlers
                 : undefined
             }
-            onRegisterProfilesStageHandlers={
+            profileFields={
               (combinedUser && dialogMode === "create") || isAccountWorkflow
-                ? registerProfilesStageHandlers
+                ? combinedFields.filter((field) =>
+                    ["Aluno", "Músico"].includes(field.section ?? ""),
+                  )
                 : undefined
             }
             onRegisterAccessStageHandlers={
@@ -1872,7 +2010,6 @@ export function UserManagementWorkspace({
                   active={activeStage}
                   total={wizardStages.length}
                   busy={saving}
-                  submitDisabled={!allWizardStagesComplete}
                   onBack={returnToPreviousStage}
                   onNext={goToNextStage}
                   onSubmit={() => void handleSave()}

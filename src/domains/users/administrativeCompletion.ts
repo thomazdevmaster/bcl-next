@@ -17,6 +17,17 @@ function hasValue(value: unknown): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function hasPresentId(value: unknown): boolean {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return true;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 && trimmed !== "0";
+  }
+  return false;
+}
+
 function isValidDate(value: unknown): boolean {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value))
     return false;
@@ -35,15 +46,30 @@ function isValidPhone(value: unknown): boolean {
 }
 
 function documentStatus(value: unknown): AdministrativeCompletionStatus {
-  if (value === null) return "complete";
+  if (value === null || value === undefined) return "complete";
   if (!isRecord(value)) return "unverified";
+  const type =
+    typeof value.type === "string" ? value.type.trim().toLowerCase() : "";
+  const number =
+    typeof value.number === "string" ? value.number.trim() : "";
+  if (!type && !number) return "complete";
   if (!hasOwn(value, "type") || !hasOwn(value, "number")) return "unverified";
-  const type = value.type;
-  const number = typeof value.number === "string" ? value.number.trim() : "";
   if ((type !== "cpf" && type !== "rg") || !number) return "incomplete";
   if (type === "cpf") return isValidCpf(number) ? "complete" : "incomplete";
   const rg = number.replace(/[^A-Za-z0-9]/g, "");
   return rg.length >= 5 && rg.length <= 14 ? "complete" : "incomplete";
+}
+
+export function enrichPersonForAdministrativeCompletion(
+  person: PersonRecord,
+  roles?: unknown,
+): PersonRecord {
+  const roleList = Array.isArray(roles) ? roles.map(String) : [];
+  return {
+    ...person,
+    isStudent: Boolean(person.isStudent) || roleList.includes("aluno"),
+    isMusician: Boolean(person.isMusician) || roleList.includes("musico"),
+  };
 }
 
 export function evaluateAdministrativeCompletion(
@@ -92,6 +118,8 @@ export function evaluateAdministrativeCompletion(
     if (!isRecord(value.musician)) return "incomplete";
     if (!hasOwn(value.musician, "section")) return "unverified";
     if (!hasValue(value.musician.section)) return "incomplete";
+    if (!hasOwn(value.musician, "playedInstrumentId")) return "unverified";
+    if (!hasPresentId(value.musician.playedInstrumentId)) return "incomplete";
   }
 
   return "complete";
@@ -134,7 +162,11 @@ export function getAdministrativeCompletionStatuses(
     const person = peopleById.get(String(user.personId));
     statuses.set(
       id,
-      person ? evaluateAdministrativeCompletion(person) : "incomplete",
+      person
+        ? evaluateAdministrativeCompletion(
+            enrichPersonForAdministrativeCompletion(person, user.roles),
+          )
+        : "incomplete",
     );
   }
   return statuses;

@@ -19,7 +19,7 @@ import {
   markNotificationRead,
   markNotificationUnread,
 } from "@/domains/notifications/api";
-import { getNotificationLink } from "@/domains/notifications/links";
+import { resolveNotificationLink } from "@/domains/notifications/links";
 import type {
   NotificationItem,
   NotificationPage,
@@ -433,7 +433,7 @@ export function NotificationInbox({
               ) : null}
               <ul className="space-y-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
                 {visibleItems.map((item) => {
-                  const link = getNotificationLink(item.targetUrl);
+                  const link = resolveNotificationLink(item);
                   const selected = selectedIds.includes(item.id);
                   const content = (
                     <span className="flex min-w-0 flex-1 flex-col gap-1">
