@@ -948,13 +948,14 @@ export function UserManagementWorkspace({
           }),
           userId: selected.id,
         };
-        updatedPerson = await apiFetch<Record<string, unknown>>(
+        const savedPerson = await apiFetch<Record<string, unknown>>(
           `/people/${encodeURIComponent(String(selected.personId))}`,
           {
             method: "PUT",
             body: JSON.stringify(personPayload),
           },
         );
+        updatedPerson = savedPerson;
 
         const mappedAccount = config.toPayload
           ? config.toPayload(saveValues, selected)
@@ -984,8 +985,8 @@ export function UserManagementWorkspace({
         const stored = {
           ...selected,
           ...updatedAccount,
-          name: `${String(updatedPerson.firstName ?? "")} ${String(updatedPerson.lastName ?? "")}`.trim(),
-          email: updatedPerson.email,
+          name: `${String(savedPerson.firstName ?? "")} ${String(savedPerson.lastName ?? "")}`.trim(),
+          email: savedPerson.email,
         };
         setItems((current) =>
           current.map((item) =>
@@ -997,13 +998,13 @@ export function UserManagementWorkspace({
             String(selected.id),
             evaluateAdministrativeCompletion(
               enrichPersonForAdministrativeCompletion(
-                updatedPerson,
+                savedPerson,
                 updatedAccount.roles ?? saveValues.roles,
               ),
             ),
           ),
         );
-        refreshPeopleChoices(updatedPerson);
+        refreshPeopleChoices(savedPerson);
         setDialogMode(null);
         setSelected(null);
         setFormErrors({});
