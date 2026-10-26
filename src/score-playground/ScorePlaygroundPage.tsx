@@ -1,0 +1,264 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { MusicLoader } from '@/components/MusicLoader';
+import {
+  StudySongCatalog,
+  type StudyStartOptions,
+} from '@/components/study/StudySongCatalog';
+import { StudyPublicRepertoireNotice } from '@/components/study/StudyPublicRepertoireNotice';
+import { useScorePlaygroundPlayer } from './useScorePlaygroundPlayer';
+import { ScorePlaygroundZoomControls } from './ScorePlaygroundZoomControls';
+
+function formatMs(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${min}:${sec.toString().padStart(2, '0')}`;
+}
+
+export default function ScorePlaygroundPage() {
+  const { user } = useAuth();
+  const ownerId = user?.id != null ? String(user.id) : null;
+  const {
+    sheetRef,
+    state,
+    startSession,
+    resetToCatalog,
+    play,
+    pause,
+    rewind,
+    setVelocity,
+    zoomIn,
+    zoomOut,
+  } = useScorePlaygroundPlayer(ownerId);
+
+  const [mobile, setMobile] = useState(false);
+  const scoreScrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = scoreScrollRef.current;
+    if (!el || state.phase !== 'ready') return;
+    let startDistance = 0;
+    let applied = false;
+    const distance = (touches: TouchList) => {
+      const a = touches[0];
+      const b = touches[1];
+      if (!a || !b) return 0;
+      return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    };
+    const onStart = (event: TouchEvent) => {
+      if (event.touches.length === 2) {
+        startDistance = distance(event.touches);
+        applied = false;
+      }
+    };
+    const onMove = (event: TouchEvent) => {
+      if (event.touches.length !== 2) return;
+      if (applied || startDistance <= 0) return;
+      const ratio = distance(event.touches) / startDistance;
+      if (ratio > 1.15) {
+        applied = true;
+        event.preventDefault();
+        zoomIn();
+      } else if (ratio < 0.87) {
+        applied = true;
+        event.preventDefault();
+        zoomOut();
+      }
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+    };
+  }, [state.phase, zoomIn, zoomOut]);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 600px)');
+    const apply = () => setMobile(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+
+  const inSession = state.phase === 'loading' || state.phase === 'ready' || state.phase === 'error';
+
+  useEffect(() => {
+    if (!inSession) return;
+    const html = document.documentElement;
+    const main = document.querySelector('main');
+    const prevHtml = html.style.overflow;
+    const prevMain = main instanceof HTMLElement ? main.style.overflow : '';
+    html.style.overflow = 'hidden';
+    if (main instanceof HTMLElement) main.style.overflow = 'hidden';
+    return () => {
+      html.style.overflow = prevHtml;
+      if (main instanceof HTMLElement) main.style.overflow = prevMain;
+    };
+  }, [inSession]);
+
+  const handleStart = (options: StudyStartOptions) => {
+    void startSession(options);
+  };
+
+  if (inSession) {
+    return (
+      <div
+        className={`fixed inset-0 z-[15] flex flex-col overflow-hidden bg-[var(--background)] md:left-[var(--content-margin)] ${
+          mobile ? 'pb-[calc(5rem+env(safe-area-inset-bottom))]' : ''
+        }`}
+        aria-label="Sessão de partitura"
+      >
+        {state.phase === 'error' ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6" role="alert">
+            <p className="text-lg font-semibold">{state.songTitle ?? 'Erro'}</p>
+            <p className="max-w-md text-center text-sm text-[var(--muted)]">{state.error}</p>
+            <button type="button" className="btn-outline-primary min-h-11 px-4" onClick={resetToCatalog}>
+              Voltar ao catálogo
+            </button>
+          </div>
+        ) : (
+          <>
+            {state.phase === 'loading' ? (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-[var(--background)]/95 p-6">
+                <MusicLoader
+                  label={
+                    state.scoreLoading
+                      ? 'Carregando partitura…'
+                      : 'Preparando sessão…'
+                  }
+                />
+                {state.songTitle ? (
+                  <p className="text-sm text-[var(--muted)]">{state.songTitle}</p>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--card)] px-3 py-2 sm:px-4">
+              <h2 className="min-w-0 flex-1 truncate text-base font-semibold">{state.songTitle}</h2>
+              <div className="flex items-center gap-2">
+                <ScorePlaygroundZoomControls
+                  zoom={state.zoom}
+                  onZoomIn={zoomIn}
+                  onZoomOut={zoomOut}
+                />
+                <button
+                  type="button"
+                  className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 text-sm font-medium"
+                  onClick={resetToCatalog}
+                >
+                  <span className="material-icons text-lg" aria-hidden>
+                    arrow_back
+                  </span>
+                  <span className="hidden sm:inline">Catálogo</span>
+                </button>
+              </div>
+            </div>
+
+            <div
+              ref={scoreScrollRef}
+              data-score-scroll
+              className="relative min-h-0 flex-1 touch-pan-x touch-pan-y overflow-x-auto overflow-y-auto overscroll-contain bg-[var(--background)] px-2 py-2 sm:px-3"
+            >
+              <div ref={sheetRef} className="score-playground-sheet min-h-[12rem] w-full" />
+            </div>
+
+            <div
+              className="shrink-0 border-t border-[var(--border)] bg-[var(--card)] px-3 py-3 sm:px-4"
+              style={
+                mobile
+                  ? { paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }
+                  : undefined
+              }
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center justify-center gap-1 sm:justify-start">
+                  <button
+                    type="button"
+                    aria-label="Voltar ao início"
+                    className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-transparent hover:bg-[var(--secondary)] ${!state.playerReady ? 'cursor-not-allowed opacity-40' : ''}`}
+                    onClick={rewind}
+                    disabled={!state.playerReady}
+                  >
+                    <span className="material-icons" aria-hidden>
+                      skip_previous
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Tocar"
+                    className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-transparent text-[var(--primary)] hover:bg-[var(--secondary)] ${!state.playerReady ? 'cursor-not-allowed opacity-40' : ''}`}
+                    onClick={play}
+                    disabled={!state.playerReady}
+                  >
+                    <span className="material-icons" aria-hidden>
+                      play_arrow
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Pausar"
+                    className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-transparent hover:bg-[var(--secondary)] ${!state.playerReady ? 'cursor-not-allowed opacity-40' : ''}`}
+                    onClick={pause}
+                    disabled={!state.playerReady}
+                  >
+                    <span className="material-icons" aria-hidden>
+                      pause
+                    </span>
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-2 sm:min-w-[14rem]">
+                  <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
+                    <span className="whitespace-nowrap">Andamento</span>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={1.5}
+                      step={0.05}
+                      value={state.velocity}
+                      className="min-h-11 flex-1"
+                      onChange={(event) => setVelocity(Number(event.target.value))}
+                      aria-valuetext={`${Math.round(state.velocity * 100)} por cento`}
+                    />
+                    <span className="w-10 text-right tabular-nums">
+                      {Math.round(state.velocity * 100)}%
+                    </span>
+                  </label>
+                  <p className="text-center text-xs tabular-nums text-[var(--muted)] sm:text-left">
+                    {formatMs(state.positionMs)} / {formatMs(state.durationMs)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex w-full min-w-0 flex-col gap-4 py-2 sm:py-4">
+      <header className="flex flex-col gap-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+          Laboratório
+        </p>
+        <h1 className="text-xl font-semibold sm:text-2xl">Score playground</h1>
+        <p className="mt-1 max-w-4xl text-sm text-[var(--muted)]">
+          Partitura renderizada com o motor MuseScore (webmscore) e áudio preparado pelo servidor,
+          como no estudo — com outra pilha de visualização e player.
+        </p>
+      </header>
+
+      <StudyPublicRepertoireNotice context="study" />
+      <StudySongCatalog
+        onStart={handleStart}
+        ownerId={ownerId}
+        personId={user?.personId != null ? String(user.personId) : null}
+      />
+    </div>
+  );
+}

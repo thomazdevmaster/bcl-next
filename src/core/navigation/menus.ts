@@ -27,6 +27,11 @@ export const PUBLIC_NAV: NavItem[] = [
 ];
 
 const STUDY_NAV: NavItem = { href: '/study', label: 'Estudo', icon: 'school' };
+const SCORE_PLAYGROUND_NAV: NavItem = {
+  href: '/score_playground',
+  label: 'Score playground',
+  icon: 'piano',
+};
 const SONGS_NAV: NavItem = { href: '/gestao/musicas', label: 'Músicas', icon: 'library_music' };
 const ROLES_NAV: NavItem = { href: '/gestao/papeis', label: 'Papéis', icon: 'admin_panel_settings' };
 
@@ -57,6 +62,7 @@ function getMyAreaItems(roles: AccessRoles, permissions?: readonly string[] | nu
   const items: NavItem[] = [];
   if (canAccessStudyModule(roles, permissions)) {
     items.push(STUDY_NAV);
+    items.push(SCORE_PLAYGROUND_NAV);
   }
   if (canAccessSongsModule(roles, permissions)) {
     items.push(SONGS_NAV);
@@ -108,5 +114,6 @@ export function titleForPath(pathname: string): string {
   if (path === '/profile') return 'Meu perfil';
   if (path === '/settings') return 'Configurações';
   if (path.startsWith('/study')) return 'Estudo';
+  if (path.startsWith('/score_playground')) return 'Score playground';
   return 'Banda Carmelitana';
 }

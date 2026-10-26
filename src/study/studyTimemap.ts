@@ -4,16 +4,197 @@ export type MeasureTimemapEntry = {
   duration: number;
 };
 
+function medianPositive(values: number[]): number {
+  const sorted = values.filter((v) => v > 0).sort((a, b) => a - b);
+  if (sorted.length === 0) return 0;
+  return sorted[Math.floor(sorted.length / 2)] ?? 0;
+}
+
+/**
+ * Verovio costuma emitir uma entrada por semínima (~60000/bpm ms), não por compasso.
+ * Tratar isso como compasso faz o contador de tempos correr ~beatsPerMeasure vezes rápido demais.
+ */
+export function timemapLooksBeatLevel(
+  entries: MeasureTimemapEntry[],
+  beatsPerMeasure: number,
+  tempoBpm: number,
+): boolean {
+  const beats = Math.max(1, beatsPerMeasure);
+  if (entries.length < beats + 1) return false;
+  const beatMs = 60000 / Math.max(30, tempoBpm);
+  const measureMs = beatMs * beats;
+  const median = medianPositive(entries.map((e) => e.duration ?? 0));
+  if (median <= 0) return false;
+  const likeBeat = Math.abs(median - beatMs) / beatMs <= 0.12;
+  const likeMeasure = Math.abs(median - measureMs) / measureMs <= 0.12;
+  if (likeMeasure || !likeBeat) return false;
+  return median / beats < beatMs * 0.85;
+}
+
+/** Agrupa entradas batida-a-batida em compassos (soma durações; timestamps recalculados). */
+export function aggregateTimemapBeatsToMeasures(
+  entries: MeasureTimemapEntry[],
+  beatsPerMeasure: number,
+): MeasureTimemapEntry[] {
+  const beats = Math.max(1, beatsPerMeasure);
+  const out: MeasureTimemapEntry[] = [];
+  for (let i = 0; i < entries.length; i += beats) {
+    const chunk = entries.slice(i, i + beats);
+    if (chunk.length === 0) continue;
+    const duration = chunk.reduce((sum, e) => sum + Math.max(0, e.duration ?? 0), 0);
+    const firstMeasure = chunk[0]?.measure;
+    out.push({
+      measure: typeof firstMeasure === 'number' ? Math.floor(firstMeasure / beats) : out.length,
+      timestamp: 0,
+      duration,
+    });
+  }
+  return normalizeTimemapTimestamps(out);
+}
+
+/** Um compasso por entrada, mas `duration` veio em semínimas (~60000/bpm ms). */
+export function scaleTimemapMeasureDurationsFromBeatUnit(
+  entries: MeasureTimemapEntry[],
+  beatsPerMeasure: number,
+): MeasureTimemapEntry[] {
+  const beats = Math.max(1, beatsPerMeasure);
+  const scaled = entries.map((entry) => ({
+    ...entry,
+    duration: Math.max(0, (entry.duration ?? 0) * beats),
+  }));
+  return normalizeTimemapTimestamps(scaled);
+}
+
+function timemapIsBeatStream(
+  entries: MeasureTimemapEntry[],
+  beatsPerMeasure: number,
+): boolean {
+  const beats = Math.max(1, beatsPerMeasure);
+  return entries.length >= beats * 8 && entries.length % beats === 0;
+}
+
+/** Ajusta timemap bruto do Verovio para o eixo compasso usado no estudo. */
+export function normalizeStudyTimemapEntries(
+  entries: MeasureTimemapEntry[],
+  beatsPerMeasure: number,
+  tempoBpm: number,
+): MeasureTimemapEntry[] {
+  let normalized = normalizeTimemapTimestamps(entries);
+  if (!timemapLooksBeatLevel(normalized, beatsPerMeasure, tempoBpm)) {
+    return normalized;
+  }
+  if (timemapIsBeatStream(normalized, beatsPerMeasure)) {
+    return aggregateTimemapBeatsToMeasures(normalized, beatsPerMeasure);
+  }
+  return scaleTimemapMeasureDurationsFromBeatUnit(normalized, beatsPerMeasure);
+}
+
+/**
+ * Relógio de compasso fixo (♩=bpm, compasso homogêneo) — alinha cursor/metrônomo ao áudio
+ * quando o timemap Verovio vem em fatias irregulares (~semínima por entrada).
+ */
+export function measureDurationMsFromTempo(
+  beatsPerMeasure: number,
+  tempoBpm: number,
+): number {
+  const beats = Math.max(1, beatsPerMeasure);
+  const bpm = Math.max(30, tempoBpm);
+  return (beats * 60_000) / bpm;
+}
+
+/** Compasso/tempo a partir do BPM da partitura (eixo do áudio mapeado por duração total). */
+export function getPlaybackPositionFromUniformTempo(
+  posMs: number,
+  beatsPerMeasure: number,
+  tempoBpm: number,
+): {
+  measureIndex: number;
+  measure: number;
+  beatInMeasure: number;
+  beat: number;
+  fractionInMeasure: number;
+} {
+  const measureMs = measureDurationMsFromTempo(beatsPerMeasure, tempoBpm);
+  const beats = Math.max(1, beatsPerMeasure);
+  const beatMs = measureMs / beats;
+  const safePos = Math.max(0, posMs);
+  const measureIndex = Math.max(0, Math.floor(safePos / measureMs));
+  const offsetInMeasure = safePos - measureIndex * measureMs;
+  const beatInMeasure = Math.min(
+    beats - 1,
+    Math.max(0, Math.floor(offsetInMeasure / beatMs)),
+  );
+  const fractionInMeasure =
+    measureMs > 0 ? Math.max(0, Math.min(1, offsetInMeasure / measureMs)) : 0;
+  return {
+    measureIndex,
+    measure: measureIndex + 1,
+    beatInMeasure,
+    beat: beatInMeasure + 1,
+    fractionInMeasure,
+  };
+}
+
+/** Recalcula `timestamp` cumulativo a partir de `duration` (Verovio às vezes envia timestamp incoerente). */
+export function normalizeTimemapTimestamps(
+  entries: MeasureTimemapEntry[],
+): MeasureTimemapEntry[] {
+  let cursor = 0;
+  return entries.map((entry, index) => {
+    const duration = Math.max(0, entry.duration ?? 0);
+    const normalized: MeasureTimemapEntry = {
+      ...entry,
+      timestamp: cursor,
+      measure: typeof entry.measure === 'number' ? entry.measure : index,
+    };
+    cursor += duration;
+    return normalized;
+  });
+}
+
 export function readPlayerTimemap(player: unknown): MeasureTimemapEntry[] | null {
   const timemap = (player as { _options?: { converter?: { timemap?: unknown } } })?._options
     ?.converter?.timemap;
   if (!Array.isArray(timemap) || timemap.length === 0) return null;
-  return timemap.filter(
+  const filtered = timemap.filter(
     (entry): entry is MeasureTimemapEntry =>
       entry != null &&
       typeof entry === 'object' &&
-      typeof (entry as MeasureTimemapEntry).timestamp === 'number',
+      typeof (entry as MeasureTimemapEntry).duration === 'number',
   );
+  if (filtered.length === 0) return null;
+  const playback = (player as { __bclStudyTimemapPlayback?: MeasureTimemapEntry[] })
+    .__bclStudyTimemapPlayback;
+  if (playback?.length) return playback;
+  const study = (player as { __bclStudyTimemap?: MeasureTimemapEntry[] }).__bclStudyTimemap;
+  if (study?.length) return study;
+  return normalizeTimemapTimestamps(filtered);
+}
+
+export function syncStudyTimemapToSequencerDuration(
+  player: unknown,
+  sourceTimemap: MeasureTimemapEntry[],
+  sequencerDurationMs: number,
+): void {
+  if (!sourceTimemap.length || sequencerDurationMs <= 0) return;
+  const p = player as {
+    __bclStudyTimemapPlayback?: MeasureTimemapEntry[];
+    __bclPlaybackTimelineMs?: number;
+  };
+  p.__bclStudyTimemapPlayback = scaleTimemapDurationsToTarget(
+    sourceTimemap,
+    sequencerDurationMs,
+  );
+  p.__bclPlaybackTimelineMs = sequencerDurationMs;
+}
+
+export function clearStudyTimemapPlaybackCalibration(player: unknown): void {
+  const p = player as {
+    __bclStudyTimemapPlayback?: MeasureTimemapEntry[];
+    __bclPlaybackTimelineMs?: number;
+  };
+  p.__bclStudyTimemapPlayback = undefined;
+  p.__bclPlaybackTimelineMs = undefined;
 }
 
 /** Posição atual do player — sempre em milissegundos (contrato do musicxml-player). */
@@ -23,27 +204,155 @@ export function getPlayerPositionMs(player: unknown): number | null {
   return Number(pos);
 }
 
+export function sumTimemapDurationMs(timemap: MeasureTimemapEntry[]): number {
+  return timemap.reduce((total, entry) => total + Math.max(0, entry.duration ?? 0), 0);
+}
+
+/** Escala durações para bater com o sequenciador (evita cursor adiantado/atrasado no desenrolar). */
+export function scaleTimemapDurationsToTarget(
+  entries: MeasureTimemapEntry[],
+  targetTotalMs: number,
+): MeasureTimemapEntry[] {
+  const normalized = normalizeTimemapTimestamps(entries);
+  const sourceTotal = sumTimemapDurationMs(normalized);
+  if (sourceTotal <= 0 || targetTotalMs <= 0) return normalized;
+  if (Math.abs(sourceTotal - targetTotalMs) / targetTotalMs < 0.001) return normalized;
+  const factor = targetTotalMs / sourceTotal;
+  const scaled = normalized.map((entry) => ({
+    ...entry,
+    duration: Math.max(0, (entry.duration ?? 0) * factor),
+  }));
+  return normalizeTimemapTimestamps(scaled);
+}
+
+function readSequencerTiming(player: unknown): { currentSec: number; durationSec: number } | null {
+  const seq = (player as { _sequencer?: { currentTime?: number; duration?: number } })?._sequencer;
+  if (!seq) return null;
+  const durationSec = seq.duration ?? 0;
+  if (durationSec <= 0) return null;
+  const currentSec = Math.max(0, seq.currentTime ?? 0);
+  return { currentSec, durationSec };
+}
+
+/** Converte posição do sequenciador (MIDI real) para eixo do timemap (partitura). */
+export function mapSequencerPositionToTimemapMs(
+  player: unknown,
+  timemap: MeasureTimemapEntry[] | null,
+): number | null {
+  if (!timemap?.length) return getPlayerPositionMs(player);
+  const timing = readSequencerTiming(player);
+  if (!timing) return getPlayerPositionMs(player);
+  const timelineMs =
+    (player as { __bclPlaybackTimelineMs?: number }).__bclPlaybackTimelineMs ??
+    sumTimemapDurationMs(timemap);
+  if (timelineMs <= 0) return getPlayerPositionMs(player);
+  const ratio = Math.max(0, Math.min(1, timing.currentSec / timing.durationSec));
+  return Math.min(timelineMs, ratio * timelineMs);
+}
+
+/** Offset do cursor dentro do compasso (1:1 com o eixo do timemap/áudio). */
+export function visualCursorOffsetInMeasure(
+  posMs: number,
+  measureStartMs: number,
+): number {
+  return Math.max(0, posMs - measureStartMs);
+}
+
+/** Posição unificada para cursor, loop e metrônomo no modo estudo. */
+export function getStudyPlaybackPositionMs(player: unknown): number | null {
+  const timemap = readPlayerTimemap(player);
+  if (timemap?.length) {
+    return mapSequencerPositionToTimemapMs(player, timemap);
+  }
+  return getPlayerPositionMs(player);
+}
+
+/** Define o sequenciador a partir de um instante no eixo do timemap. */
+export function setSequencerFromTimemapMs(
+  player: unknown,
+  timemap: MeasureTimemapEntry[],
+  timemapMs: number,
+): void {
+  const timing = readSequencerTiming(player);
+  const totalMs = sumTimemapDurationMs(timemap);
+  if (!timing || totalMs <= 0) return;
+  const clamped = Math.max(0, Math.min(timemapMs, totalMs));
+  const ratio = totalMs > 0 ? clamped / totalMs : 0;
+  const seq = (player as { _sequencer?: { currentTime?: number } })._sequencer;
+  if (seq) {
+    seq.currentTime = ratio * timing.durationSec;
+  }
+  try {
+    const posDesc = Object.getOwnPropertyDescriptor(player as object, 'position');
+    if (posDesc?.set) {
+      posDesc.set.call(player, clamped);
+    } else {
+      const internal = player as { _position?: number };
+      if ('_position' in internal) {
+        internal._position = clamped;
+      }
+    }
+  } catch {
+    /* Player.position é só leitura; sequenciador + cursor OSMD já foram posicionados. */
+  }
+}
+
+function timemapEntryEndMs(
+  timemap: MeasureTimemapEntry[],
+  index: number,
+): number {
+  const entry = timemap[index];
+  if (!entry) return 0;
+  const start = entry.timestamp ?? 0;
+  let duration = entry.duration ?? 0;
+  if (duration <= 0 && timemap[index + 1]) {
+    duration = (timemap[index + 1].timestamp ?? 0) - start;
+  }
+  return start + Math.max(0, duration);
+}
+
+function posMsInTimemapEntry(
+  timemap: MeasureTimemapEntry[],
+  index: number,
+  posMs: number,
+): boolean {
+  const entry = timemap[index];
+  if (!entry) return false;
+  const start = entry.timestamp ?? 0;
+  const end = timemapEntryEndMs(timemap, index);
+  if (index === timemap.length - 1) {
+    return posMs >= start && posMs <= end + 1;
+  }
+  return posMs >= start && posMs < end;
+}
+
 export function findTimemapIndexAtPosition(
   timemap: MeasureTimemapEntry[],
   posMs: number,
+  preferIndex?: number,
 ): number {
   if (timemap.length === 0) return 0;
+  if (
+    preferIndex != null &&
+    preferIndex >= 0 &&
+    preferIndex < timemap.length &&
+    posMsInTimemapEntry(timemap, preferIndex, posMs)
+  ) {
+    return preferIndex;
+  }
+
   let index = 0;
-  for (let i = 0; i < timemap.length - 1; i++) {
-    const start = timemap[i]?.timestamp ?? 0;
-    const nextStart = timemap[i + 1]?.timestamp ?? Infinity;
-    if (posMs >= start && posMs < nextStart) {
-      index = i;
-      break;
+  for (let i = 0; i < timemap.length; i++) {
+    if (posMsInTimemapEntry(timemap, i, posMs)) {
+      return i;
     }
+    const start = timemap[i]?.timestamp ?? 0;
     if (posMs < start) {
-      index = Math.max(0, i - 1);
-      break;
+      return Math.max(0, i - 1);
     }
     index = i;
   }
-  if (index >= timemap.length) index = timemap.length - 1;
-  return index;
+  return Math.min(index, timemap.length - 1);
 }
 
 export function getPlaybackPositionFromTimemap(
@@ -67,16 +376,14 @@ export function getPlaybackPositionFromTimemap(
     duration = (timemap[index + 1].timestamp ?? 0) - measureStart;
   }
 
-  const measureIndex =
-    typeof entry.measure === 'number' && entry.measure >= 0 && entry.measure < timemap.length
-      ? entry.measure
-      : index;
+  // Índice no timemap é o eixo do áudio; `entry.measure` do Verovio pode pular (ex.: 0,3,7…).
+  const measureIndex = index;
 
   const beats = Math.max(1, beatsPerMeasure);
   if (duration <= 0) {
     return {
       measureIndex,
-      measure: measureIndex + 1,
+      measure: index + 1,
       beatInMeasure: 0,
       beat: 1,
       fractionInMeasure: 0,
@@ -92,7 +399,164 @@ export function getPlaybackPositionFromTimemap(
 
   return {
     measureIndex,
-    measure: measureIndex + 1,
+    measure: index + 1,
+    beatInMeasure,
+    beat: beatInMeasure + 1,
+    fractionInMeasure,
+  };
+}
+
+function extractMeasureNumbersFromPartBlock(partXml: string): number[] {
+  const numbers: number[] = [];
+  const re = /<measure\b[^>]*\bnumber="([^"]+)"/g;
+  let match = re.exec(partXml);
+  while (match) {
+    const n = Number.parseInt(match[1], 10);
+    if (!Number.isNaN(n)) numbers.push(n);
+    match = re.exec(partXml);
+  }
+  return numbers;
+}
+
+/** Números `@number` na ordem de execução (XML desdobrado). */
+export function extractWrittenMeasureNumbersFromPartwiseXml(
+  xml: string,
+  expectedEntryCount?: number,
+): number[] {
+  if (!xml.includes('<score')) return [];
+  const partBlocks = xml.match(/<part\b[\s\S]*?<\/part>/g);
+  if (!partBlocks?.length) {
+    return extractMeasureNumbersFromPartBlock(xml);
+  }
+  if (expectedEntryCount != null && expectedEntryCount > 0) {
+    const exact = partBlocks
+      .map((part) => extractMeasureNumbersFromPartBlock(part))
+      .find((nums) => nums.length === expectedEntryCount);
+    if (exact?.length) return exact;
+  }
+  return extractMeasureNumbersFromPartBlock(partBlocks[0] ?? xml);
+}
+
+/** Timemap antigo usa índice 0…n; com repetições, `measure` repete o número escrito. */
+export function timemapUsesWrittenMeasureNumbers(
+  timemap: MeasureTimemapEntry[],
+  writtenMeasureCount: number | null,
+): boolean {
+  if (!writtenMeasureCount || timemap.length <= writtenMeasureCount) return false;
+  const nums = timemap.map((e) => e.measure);
+  if (new Set(nums).size < nums.length) return true;
+  const looksLikePlaybackIndex = nums.every((n, i) => n === i || n === i + 1);
+  if (looksLikePlaybackIndex) return false;
+  return nums.every((n) => n >= 1 && n <= writtenMeasureCount);
+}
+
+export function applyWrittenMeasureNumbersToTimemap(
+  entries: MeasureTimemapEntry[],
+  unrolledXml: string,
+): MeasureTimemapEntry[] {
+  const numbers = extractWrittenMeasureNumbersFromPartwiseXml(
+    unrolledXml,
+    entries.length,
+  );
+  if (numbers.length !== entries.length) return entries;
+  return entries.map((entry, index) => ({
+    ...entry,
+    measure: numbers[index] ?? entry.measure,
+  }));
+}
+
+function readSourceMeasureNumber(measure: unknown): number | undefined {
+  if (!measure || typeof measure !== 'object') return undefined;
+  const m = measure as { MeasureNumber?: number; MeasureNumberXML?: number };
+  if (typeof m.MeasureNumber === 'number') return m.MeasureNumber;
+  if (typeof m.MeasureNumberXML === 'number') return m.MeasureNumberXML;
+  return undefined;
+}
+
+export function resolveSourceMeasureIndex(
+  sourceMeasures: ReadonlyArray<unknown> | undefined,
+  writtenMeasureNumber: number,
+): number {
+  if (!sourceMeasures?.length) {
+    return Math.max(0, writtenMeasureNumber - 1);
+  }
+  const idx = sourceMeasures.findIndex(
+    (m) => readSourceMeasureNumber(m) === writtenMeasureNumber,
+  );
+  if (idx >= 0) return idx;
+  return Math.max(0, Math.min(sourceMeasures.length - 1, writtenMeasureNumber - 1));
+}
+
+/**
+ * Mapeia posição do timemap desdobrado (áudio) para compasso na pauta escrita (OSMD).
+ */
+export function getPlaybackPositionForWrittenScore(
+  timemap: MeasureTimemapEntry[],
+  posMs: number,
+  beatsPerMeasure: number,
+  writtenMeasureCount: number | null,
+): ReturnType<typeof getPlaybackPositionFromTimemap> {
+  const playback = getPlaybackPositionFromTimemap(timemap, posMs, beatsPerMeasure);
+  if (!playback || !writtenMeasureCount || writtenMeasureCount <= 0) {
+    return playback;
+  }
+  if (timemap.length <= writtenMeasureCount) {
+    return playback;
+  }
+
+  const playbackIndex = findTimemapIndexAtPosition(timemap, posMs);
+  const entry = timemap[playbackIndex];
+  if (!entry) return playback;
+
+  const measureStart = entry.timestamp ?? 0;
+  let duration = entry.duration ?? 0;
+  if (duration <= 0 && timemap[playbackIndex + 1]) {
+    duration = (timemap[playbackIndex + 1].timestamp ?? 0) - measureStart;
+  }
+
+  const beats = Math.max(1, beatsPerMeasure);
+  const usesWritten = timemapUsesWrittenMeasureNumbers(timemap, writtenMeasureCount);
+
+  let beatInMeasure = playback.beatInMeasure;
+  let fractionInMeasure = playback.fractionInMeasure;
+  if (duration > 0) {
+    const beatDuration = duration / beats;
+    beatInMeasure = Math.min(
+      beats - 1,
+      Math.max(0, Math.floor((posMs - measureStart) / beatDuration)),
+    );
+    fractionInMeasure = Math.max(0, Math.min(1, (posMs - measureStart) / duration));
+  }
+
+  if (usesWritten) {
+    const writtenMeasureNumber = entry.measure;
+    const writtenIndex = Math.max(
+      0,
+      Math.min(writtenMeasureCount - 1, writtenMeasureNumber - 1),
+    );
+    return {
+      measureIndex: writtenIndex,
+      measure: writtenMeasureNumber,
+      beatInMeasure,
+      beat: beatInMeasure + 1,
+      fractionInMeasure,
+    };
+  }
+
+  const totalMs = sumTimemapDurationMs(timemap);
+  let writtenIndex = playbackIndex;
+  if (timemap.length % writtenMeasureCount === 0) {
+    writtenIndex = playbackIndex % writtenMeasureCount;
+  } else if (totalMs > 0) {
+    writtenIndex = Math.min(
+      writtenMeasureCount - 1,
+      Math.floor((posMs / totalMs) * writtenMeasureCount),
+    );
+  }
+
+  return {
+    measureIndex: writtenIndex,
+    measure: writtenIndex + 1,
     beatInMeasure,
     beat: beatInMeasure + 1,
     fractionInMeasure,
