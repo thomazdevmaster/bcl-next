@@ -74,7 +74,7 @@ function readInitialScoreTempoBpm(doc: Document): number | null {
       if (!Number.isNaN(parsed) && parsed > 0) return parsed;
     }
     const metronome = direction.querySelector('metronome');
-    if (metronome && !soundEl) {
+    if (metronome) {
       const fromMetronome = quarterBpmFromMetronome(metronome);
       if (fromMetronome != null && fromMetronome > 0) return fromMetronome;
     }
@@ -147,6 +147,80 @@ export function extractMarkedTempoBpmFromXml(xml: string): number | null {
   });
 
   return peak > 0 ? peak : null;
+}
+
+function measureLengthInQuarterNotes(beats: number, beatType: number): number {
+  if (!Number.isFinite(beats) || beats <= 0 || !Number.isFinite(beatType) || beatType <= 0) {
+    return 4;
+  }
+  return beats * (4 / beatType);
+}
+
+function tempoFromMeasureDirections(measure: Element, currentTempo: number): number {
+  let tempo = currentTempo;
+  for (const direction of Array.from(measure.querySelectorAll('direction'))) {
+    const soundTempo = direction.querySelector('sound[tempo]')?.getAttribute('tempo');
+    if (soundTempo) {
+      const parsed = Number(soundTempo);
+      if (!Number.isNaN(parsed) && parsed > 0) tempo = parsed;
+    }
+    const metronome = direction.querySelector('metronome');
+    if (metronome) {
+      const fromMetronome = quarterBpmFromMetronome(metronome);
+      if (fromMetronome != null && fromMetronome > 0) tempo = fromMetronome;
+    }
+  }
+  return tempo;
+}
+
+function listScoreMeasures(doc: Document): Element[] {
+  const part = doc.querySelector('part');
+  if (part) return Array.from(part.querySelectorAll(':scope > measure'));
+  const timewise = doc.querySelector('score-timewise');
+  if (timewise) return Array.from(timewise.querySelectorAll(':scope > measure'));
+  return [];
+}
+
+/**
+ * Estima duração da partitura em segundos (sem desdobrar voltas).
+ * Usa compasso a compasso: fórmula de compasso + andamentos indicados no XML.
+ */
+export function estimateDurationSecondsFromMusicXml(xml: string): number | null {
+  const doc = parseXml(xml);
+  if (!doc) return null;
+  const measures = listScoreMeasures(doc);
+  if (measures.length === 0) return null;
+
+  let tempo = readInitialScoreTempoBpm(doc) ?? extractTempoInfoFromXml(xml)?.bpm ?? 120;
+  if (!Number.isFinite(tempo) || tempo <= 0) tempo = 120;
+
+  let beats = 4;
+  let beatType = 4;
+  let totalSeconds = 0;
+
+  for (const measure of measures) {
+    const attributes = measure.querySelector(':scope > attributes');
+    const time = attributes?.querySelector('time');
+    if (time) {
+      const beatsRaw = time.querySelector('beats')?.textContent?.trim();
+      const beatTypeRaw = time.querySelector('beat-type')?.textContent?.trim();
+      if (beatsRaw) {
+        const parsed = Number(beatsRaw);
+        if (!Number.isNaN(parsed) && parsed > 0) beats = parsed;
+      }
+      if (beatTypeRaw) {
+        const parsed = Number(beatTypeRaw);
+        if (!Number.isNaN(parsed) && parsed > 0) beatType = parsed;
+      }
+    }
+
+    tempo = tempoFromMeasureDirections(measure, tempo);
+    const quarters = measureLengthInQuarterNotes(beats, beatType);
+    totalSeconds += (quarters * 60) / tempo;
+  }
+
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return null;
+  return Math.max(1, Math.round(totalSeconds));
 }
 
 export const extractInstrumentsFromXml = (xml: string): InstrumentInfo[] => {
@@ -271,8 +345,57 @@ export function normalizePercussionMidiInXml(xml: string): string {
 }
 
 /** Sanitiza grupos MuseScore e corrige MIDI de bateria/percussão antes do player. */
+/** Garante `sound@tempo` (semínima/min) para Verovio/timemap quando só há `<metronome>`. */
+export function ensurePlaybackSoundTempoInMusicXml(xml: string): string {
+  const doc = parseXml(xml);
+  if (!doc) return xml;
+  const bpm = extractTempoInfoFromXml(xml)?.bpm;
+  if (bpm == null || bpm <= 0) return xml;
+  const tempoAttr = String(Math.round(bpm * 1000) / 1000);
+
+  const firstMeasure = doc.querySelector('part measure');
+  if (!firstMeasure) return xml;
+
+  let hasSoundTempo = false;
+  for (const direction of Array.from(firstMeasure.querySelectorAll('direction'))) {
+    const sound = direction.querySelector('sound[tempo]');
+    if (sound) {
+      hasSoundTempo = true;
+      break;
+    }
+    if (direction.querySelector('metronome')) {
+      let soundEl = direction.querySelector('sound');
+      if (!soundEl) {
+        soundEl = doc.createElement('sound');
+        direction.appendChild(soundEl);
+      }
+      soundEl.setAttribute('tempo', tempoAttr);
+      hasSoundTempo = true;
+    }
+  }
+
+  if (!hasSoundTempo && !firstMeasure.querySelector('sound[tempo]')) {
+    const direction = doc.createElement('direction');
+    direction.setAttribute('placement', 'above');
+    const soundEl = doc.createElement('sound');
+    soundEl.setAttribute('tempo', tempoAttr);
+    direction.appendChild(soundEl);
+    const afterAttributes = firstMeasure.querySelector('attributes');
+    if (afterAttributes?.nextSibling) {
+      firstMeasure.insertBefore(direction, afterAttributes.nextSibling);
+    } else if (afterAttributes) {
+      firstMeasure.appendChild(direction);
+    } else {
+      firstMeasure.insertBefore(direction, firstMeasure.firstChild);
+    }
+  }
+
+  return new XMLSerializer().serializeToString(doc);
+}
+
 export function prepareMusicXmlForStudyPlayback(xml: string): string {
-  return normalizePercussionMidiInXml(sanitizeMusicXmlPartList(xml));
+  const sanitized = normalizePercussionMidiInXml(sanitizeMusicXmlPartList(xml));
+  return ensurePlaybackSoundTempoInMusicXml(sanitized);
 }
 
 export function partIdIsPercussive(xml: string, partId: string): boolean {

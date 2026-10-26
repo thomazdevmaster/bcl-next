@@ -63,7 +63,7 @@ export interface CrudColumn {
 }
 
 /** Quem criou o registro ou fez a última alteração. */
-const actorColumn: CrudColumn = { path: 'updatedBy', label: 'Alterado por' };
+const actorColumn: CrudColumn = { path: 'createdBy', label: 'Criado por' };
 
 export interface DomainCrudConfig {
   resource: CrudResource;
@@ -572,7 +572,7 @@ const songs: DomainCrudConfig = {
       section: 'Partitura',
       accept: '.xml,.musicxml,application/xml,text/xml,application/vnd.recordare.musicxml+xml',
       helpText:
-        'Somente MusicXML (.xml ou .musicxml). Outros formatos (por exemplo .enc do Encore) não são aceitos — exporte como MusicXML antes de enviar. Título, compositor, arranjo, gênero e tonalidade entram sozinhos quando o arquivo traz esses dados. Ao editar, deixe vazio para manter a partitura atual.',
+        'Somente MusicXML (.xml ou .musicxml). Outros formatos (por exemplo .enc do Encore) não são aceitos — exporte como MusicXML antes de enviar. Título, compositor, arranjo, gênero, tonalidade e duração estimada entram sozinhos quando o arquivo permite calcular. A duração não inclui repetições desdobradas. Ao editar, deixe vazio para manter a partitura atual.',
     },
     {
       name: 'visibility',
