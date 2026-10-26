@@ -1,19 +1,9 @@
-/**
- * Em produção (Vercel) o site fala só com a API Spring.
- * O mock `/bcl-api` existe apenas no desenvolvimento local.
- */
+/** API oficial usada pelo frontend publicado. */
 const PRODUCTION_API_URL = 'https://api.bandacarmelitana.org';
+const DEVELOPMENT_API_URL = 'http://127.0.0.1:8080';
 
 function isHostedProduction(): boolean {
   return process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
-}
-
-export function usesRemoteApi(): boolean {
-  if (isHostedProduction()) return true;
-  if (process.env.NEXT_PUBLIC_USE_REMOTE_API === 'true') return true;
-  if (process.env.NEXT_PUBLIC_USE_REMOTE_API === 'false') return false;
-  const url = process.env.NEXT_PUBLIC_API_URL?.trim() ?? '';
-  return url.length > 0 && !url.includes('/bcl-api');
 }
 
 /** Origem pública do site — necessária para og:image absoluto no WhatsApp. */
@@ -26,11 +16,6 @@ export function getSiteUrl(): URL {
   if (vercel) return new URL(`https://${vercel}`);
   const port = process.env.PORT ?? '3000';
   return new URL(`http://localhost:${port}`);
-}
-
-function embeddedMockBase(): string {
-  const port = process.env.PORT ?? '3000';
-  return `http://127.0.0.1:${port}/bcl-api`;
 }
 
 function pageIsLanDev(): boolean {
@@ -71,13 +56,7 @@ function apiUrlFromPage(configured: string): string {
 
 /** URL única da API, compartilhada pelo módulo de estudo. */
 export function getApiUrl(): string {
-  if (!usesRemoteApi()) {
-    if (typeof window !== 'undefined') {
-      return `${window.location.origin}/bcl-api`;
-    }
-    return embeddedMockBase();
-  }
-  const url = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
-  if (url && !url.includes('/bcl-api')) return apiUrlFromPage(url);
-  return PRODUCTION_API_URL;
+  const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (configured) return apiUrlFromPage(configured);
+  return isHostedProduction() ? PRODUCTION_API_URL : DEVELOPMENT_API_URL;
 }

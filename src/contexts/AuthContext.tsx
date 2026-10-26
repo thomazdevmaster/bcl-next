@@ -13,12 +13,9 @@ import {
 import {
   setAccessToken,
   getAccessToken,
-  usesRemoteApi,
 } from "@/core/auth/accessToken";
-import { findDemoUser } from "@/core/auth/demoUsers";
 import { ApiError, apiFetch } from "@/lib/api";
 import { sealPassword } from "@/lib/passwordCipher";
-import { failureMessage } from "@/lib/userMessages";
 import {
   filterPermissionsForActiveRoles,
   loadStoredActiveRoles,
@@ -55,7 +52,7 @@ type AuthContextValue = {
     password: string,
     keepLoggedIn: boolean,
   ) => Promise<SessionUser>;
-  /** `credential` é o ID token do Google Identity Services. Só com a API Spring. */
+  /** `credential` é o ID token do Google Identity Services, validado pelo bcl-api. */
   loginWithGoogle: (
     credential: string,
     keepLoggedIn: boolean,
@@ -101,9 +98,7 @@ function restoreUser(): SessionUser | null {
     localStorage.getItem(AUTH_USER_KEY) ??
     sessionStorage.getItem(AUTH_USER_KEY);
   if (!raw) return null;
-  if (usesRemoteApi() && !getAccessToken()) {
-    return null;
-  }
+  if (!getAccessToken()) return null;
   const user = parseStoredUser(raw);
   if (!user) {
     localStorage.removeItem(AUTH_USER_KEY);
@@ -137,42 +132,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (identifier: string, password: string, keepLoggedIn: boolean) => {
-      if (usesRemoteApi()) {
-        const sealed = await sealPassword(password);
-        const session = await apiFetch<LoginPayload>("/auth/login", {
-          method: "POST",
-          body: JSON.stringify({
-            username: identifier.trim(),
-            password: sealed,
-            keepLoggedIn,
-          }),
-        });
-        setAccessToken(session.token, keepLoggedIn);
-        setUser(session.user);
-        persist(session.user, keepLoggedIn);
-        return session.user;
-      }
-      const found = findDemoUser(identifier, password);
-      if (!found) {
-        throw new Error("Usuário ou senha inválidos.");
-      }
-      setUser(found);
-      persist(found, keepLoggedIn);
-      return found;
+      const sealed = await sealPassword(password);
+      const session = await apiFetch<LoginPayload>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          username: identifier.trim(),
+          password: sealed,
+          keepLoggedIn,
+        }),
+      });
+      setAccessToken(session.token, keepLoggedIn);
+      setUser(session.user);
+      persist(session.user, keepLoggedIn);
+      return session.user;
     },
     [],
   );
 
   const loginWithGoogle = useCallback(
     async (credential: string, keepLoggedIn: boolean) => {
-      if (!usesRemoteApi()) {
-        throw new Error(
-          failureMessage(
-            undefined,
-            "Entrar com Google só funciona com a API conectada.",
-          ),
-        );
-      }
       const session = await apiFetch<LoginPayload>("/auth/google", {
         method: "POST",
         body: JSON.stringify({ credential, keepLoggedIn }),
@@ -211,7 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (!isHydrated || !usesRemoteApi() || !getAccessToken()) return;
+    if (!isHydrated || !getAccessToken()) return;
     let active = true;
     apiFetch<SessionUser>("/auth/me")
       .then((me) => {

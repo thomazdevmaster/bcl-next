@@ -212,7 +212,7 @@ export function StudySongCatalog({
         if (studyProcessingGateEnabled()) {
           throw new Error("study_parts_unavailable");
         }
-        /* mock legado: lê o XML inteiro */
+        /* Usa o MusicXML da API se o endpoint de partes falhar. */
       }
       const response = await fetchAuthedAsset(score.url);
       if (!response.ok) throw new Error("score_fetch_failed");

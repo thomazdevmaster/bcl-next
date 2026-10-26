@@ -1,6 +1,6 @@
 {
   "name": "front-next",
-  "version": "0.37.4",
+  "version": "0.37.5",
   "private": true,
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
@@ -8,8 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "api:server": "json-server --watch db.json --host 0.0.0.0 --port 3001 --delay 200"
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -39,7 +38,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
-    "json-server": "^0.17.3",
     "prettier": "^3.9.10",
     "tailwindcss": "^4",
     "typescript": "^5"

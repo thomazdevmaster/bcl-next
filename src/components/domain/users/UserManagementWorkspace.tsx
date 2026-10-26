@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { sealPassword } from "@/lib/passwordCipher";
 import { failureMessage, userFacingError } from "@/lib/userMessages";
-import { usesRemoteApi } from "@/core/auth/accessToken";
 import { can } from "@/core/auth/permissions";
 import { hasRole, roleLabels } from "@/core/auth/roles";
 import { useAuth } from "@/contexts/AuthContext";
@@ -659,7 +658,7 @@ export function UserManagementWorkspace({
         };
         delete accountPayload.confirmPassword;
         if (typeof accountPayload.password === "string") {
-          if (!usesRemoteApi() || !accountPayload.password) {
+          if (!accountPayload.password) {
             delete accountPayload.password;
           } else {
             accountPayload.password = await sealPassword(accountPayload.password);
@@ -790,7 +789,7 @@ export function UserManagementWorkspace({
         delete accountPayload.confirmPassword;
         accountPayload.personId = createdPerson.id;
         if (typeof accountPayload.password === "string") {
-          if (!usesRemoteApi() || !accountPayload.password) {
+          if (!accountPayload.password) {
             delete accountPayload.password;
           } else {
             accountPayload.password = await sealPassword(accountPayload.password);
@@ -829,9 +828,9 @@ export function UserManagementWorkspace({
         ? config.toPayload(values, selected ?? undefined)
         : withAudit(values, selected ?? undefined);
       const payload: Record<string, unknown> = dialogMode === "create" ? mapped : { ...selected, ...mapped };
-      // Senha de usuário nunca sai em claro: cifrada para a API; no mock, nem é enviada.
+      // Senhas de usuário são cifradas antes de serem enviadas à API.
       if (typeof payload.password === "string") {
-        if (!usesRemoteApi() || !payload.password) {
+        if (!payload.password) {
           delete payload.password;
         } else {
           payload.password = await sealPassword(payload.password);

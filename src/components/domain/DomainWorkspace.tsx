@@ -7,7 +7,6 @@ import { TableRowActions } from "@/components/tables/core/TableRowActions";
 import { createCrudTableRowActions } from "@/components/tables/core/table-actions";
 import { TableView } from "@/components/tables/core/TableView";
 import { useAuth } from "@/contexts/AuthContext";
-import { usesRemoteApi } from "@/core/auth/accessToken";
 import { can } from "@/core/auth/permissions";
 import type { CrudResource } from "@/core/auth/permissions";
 import { hasRole, roleLabels } from "@/core/auth/roles";
@@ -334,9 +333,9 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
         ? config.toPayload(values, selected ?? undefined)
         : withAudit(values, selected ?? undefined);
       const payload: Record<string, unknown> = dialogMode === "create" ? mapped : { ...selected, ...mapped };
-      // Senha de usuário nunca sai em claro: cifrada para a API; no mock, nem é enviada.
+      // Senhas de usuário são cifradas antes de serem enviadas à API.
       if (typeof payload.password === "string") {
-        if (!usesRemoteApi() || !payload.password) {
+        if (!payload.password) {
           delete payload.password;
         } else {
           payload.password = await sealPassword(payload.password);

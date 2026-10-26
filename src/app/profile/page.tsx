@@ -15,7 +15,6 @@ import { UserAvatar } from '@/components/auth/UserAvatar';
 import { MusicLoader } from '@/components/MusicLoader';
 import { EntityDialog } from '@/components/shared/EntityDialog';
 import { IconSelect, type IconSelectOption } from '@/components/shared/IconSelect';
-import { usesRemoteApi } from '@/core/auth/accessToken';
 import { normalizeActiveRoles } from '@/core/auth/activeRoles';
 import type { AccessRoles } from '@/core/auth/roles';
 import { useAuth, type SessionUser } from '@/contexts/AuthContext';
@@ -147,22 +146,12 @@ export default function ProfilePage() {
         address: form.address.trim(),
         pictureUrl: form.pictureUrl.trim(),
       };
-      if (usesRemoteApi()) {
-        const updated = await apiFetch<SessionUser>('/auth/me', {
-          method: 'PATCH',
-          body: JSON.stringify(payload),
-        });
-        auth.updateProfile(updated);
-        setForm(toForm(updated));
-      } else {
-        auth.updateProfile({
-          name,
-          email: email || null,
-          phone: payload.phone || null,
-          address: payload.address || null,
-          pictureUrl: payload.pictureUrl || null,
-        });
-      }
+      const updated = await apiFetch<SessionUser>('/auth/me', {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+      auth.updateProfile(updated);
+      setForm(toForm(updated));
       setSaved(true);
     } catch (caught) {
       setError(userFacingError(caught));
