@@ -27,6 +27,7 @@ type Values = Record<
 
 const NOTIFICATION_MODULES: Record<NotificationType, string> = {
   signup_approval_pending: "Usuários",
+  signup_incomplete: "Usuários",
   signup_completed: "Usuários",
   password_changed: "Conta",
   admin_message: "Gestão",
@@ -44,6 +45,7 @@ const NOTIFICATION_PREFERENCE_VISIBILITY: Record<
   PreferenceVisibility
 > = {
   signup_approval_pending: "users:approve",
+  signup_incomplete: "users:approve",
   signup_completed: "users:approve",
   password_changed: "account",
   admin_message: "required",

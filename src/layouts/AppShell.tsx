@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { UserAvatar } from "@/components/auth/UserAvatar";
-import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { NotificationBellStack } from "@/components/notifications/NotificationBellStack";
 import { NotificationInbox } from "@/components/notifications/NotificationInbox";
 import { useUnreadNotifications } from "@/components/notifications/useUnreadNotifications";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -40,7 +40,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     count: unreadCount,
     countError: unreadCountError,
     refreshCount: refreshUnreadCount,
+    newAlert: newNotificationAlert,
+    dismissNewAlert: dismissNewNotificationAlert,
   } = useUnreadNotifications(auth.isHydrated && auth.isLoggedIn, auth.user?.id);
+
+  const openNotificationsInbox = () => {
+    dismissNewNotificationAlert();
+    notificationReturnFocusRef.current =
+      desktop && !sidenavCollapsed
+        ? desktopNotificationsRef.current
+        : mobileNotificationsRef.current;
+    setDesktopUserMenuOpen(false);
+    setNotificationsOpen(true);
+  };
 
   useEffect(() => {
     const handleUnreadCountChange = () => {
@@ -131,6 +143,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     localStorage.setItem("app.sidenavCollapsed", String(next));
   };
   const toggleDesktopNotifications = () => {
+    dismissNewNotificationAlert();
     notificationReturnFocusRef.current = desktopNotificationsRef.current;
     setDesktopUserMenuOpen(false);
     setNotificationsOpen((open) => !open);
@@ -215,12 +228,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         group.id === "public" &&
         auth.isLoggedIn ? (
           <div className="flex justify-center py-1">
-            <NotificationBell
+            <NotificationBellStack
               buttonRef={desktopNotificationsRef}
               count={unreadCount}
               countError={unreadCountError}
               expanded={notificationsOpen}
               onClick={toggleDesktopNotifications}
+              newAlert={newNotificationAlert}
+              onDismissNewAlert={dismissNewNotificationAlert}
+              onOpenInbox={openNotificationsInbox}
             />
           </div>
         ) : null}
@@ -290,12 +306,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ) : null}
           </div>
           {auth.isLoggedIn && !sidenavCollapsed ? (
-            <NotificationBell
+            <NotificationBellStack
               buttonRef={desktopNotificationsRef}
               count={unreadCount}
               countError={unreadCountError}
               expanded={notificationsOpen}
               onClick={toggleDesktopNotifications}
+              newAlert={newNotificationAlert}
+              onDismissNewAlert={dismissNewNotificationAlert}
+              onOpenInbox={openNotificationsInbox}
             />
           ) : null}
         </div>
@@ -459,16 +478,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="font-semibold text-base">{pageTitle}</span>
             <span className="flex-1" />
             {auth.isLoggedIn ? (
-              <NotificationBell
+              <NotificationBellStack
                 buttonRef={mobileNotificationsRef}
                 count={unreadCount}
                 countError={unreadCountError}
                 expanded={notificationsOpen}
                 onClick={() => {
+                  dismissNewNotificationAlert();
                   notificationReturnFocusRef.current =
                     mobileNotificationsRef.current;
                   setNotificationsOpen((open) => !open);
                 }}
+                newAlert={newNotificationAlert}
+                onDismissNewAlert={dismissNewNotificationAlert}
+                onOpenInbox={openNotificationsInbox}
               />
             ) : null}
             <div className="relative user-menu">

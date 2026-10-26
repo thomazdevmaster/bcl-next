@@ -32,6 +32,8 @@ export type FormStageFieldProps<TFieldValues extends FieldValues> = {
   formatValue?: (value: string) => string;
   validateOnChange?: FieldPath<TFieldValues> | FieldPath<TFieldValues>[];
   validateOnMount?: boolean;
+  /** Quando "blur", `onEdit` só roda ao sair do campo (menos re-render no pai). */
+  syncParentOn?: "change" | "blur";
   onEdit?: () => void;
 };
 
@@ -57,6 +59,7 @@ export function FormStageField<TFieldValues extends FieldValues>({
   formatValue,
   validateOnChange,
   validateOnMount = false,
+  syncParentOn = "change",
   onEdit,
 }: FormStageFieldProps<TFieldValues>) {
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -99,8 +102,13 @@ export function FormStageField<TFieldValues extends FieldValues>({
 
   const handleChange = (rawValue: string) => {
     field.onChange(formatValue ? formatValue(rawValue) : rawValue);
-    onEdit?.();
+    if (syncParentOn === "change") onEdit?.();
     if (validateOnChange) void trigger(validateOnChange);
+  };
+
+  const handleBlur = () => {
+    field.onBlur();
+    if (syncParentOn === "blur") onEdit?.();
   };
 
   const visibilityTarget =
@@ -125,7 +133,7 @@ export function FormStageField<TFieldValues extends FieldValues>({
       spellCheck={spellCheck}
       value={value}
       onValueChange={handleChange}
-      onBlur={field.onBlur}
+      onBlur={handleBlur}
       inputRef={field.ref}
       state={state}
       message={message}

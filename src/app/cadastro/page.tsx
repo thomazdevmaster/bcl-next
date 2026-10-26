@@ -211,7 +211,8 @@ export default function CadastroPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [googlePicture] = useState<string | null>(null);
-  const busy = saving || form.formState.isSubmitting;
+  const googleBusy = auth.googleSignInPending;
+  const busy = saving || form.formState.isSubmitting || googleBusy;
 
   useEffect(() => {
     if (!Element.prototype.animate || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -250,14 +251,11 @@ export default function CadastroPage() {
   const onGoogleCredential = async (credential: string) => {
     setError(null);
     setNotice(null);
-    setSaving(true);
     try {
       const session = await auth.loginWithGoogle(credential, true);
       router.push(postLoginRoute(session));
     } catch (caught) {
       setError(userFacingError(caught));
-    } finally {
-      setSaving(false);
     }
   };
 

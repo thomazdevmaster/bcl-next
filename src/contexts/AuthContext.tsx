@@ -23,6 +23,7 @@ import {
   persistActiveRoles,
 } from "@/core/auth/activeRoles";
 import { PUBLIC_ROLES, type AccessRoles } from "@/core/auth/roles";
+import { GoogleSignInOverlay } from "@/components/auth/GoogleSignInOverlay";
 import type { AppUser } from "@/domains/users/types";
 
 const AUTH_USER_KEY = "app.auth.user";
@@ -57,6 +58,9 @@ type AuthContextValue = {
     credential: string,
     keepLoggedIn: boolean,
   ) => Promise<SessionUser>;
+  /** Overlay de “Entrando com Google…” até sair de login/cadastro. */
+  googleSignInPending: boolean;
+  dismissGoogleSignInPending: () => void;
   logout: () => Promise<void>;
   updateProfile: (patch: Partial<SessionUser>) => void;
 };
@@ -123,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [activeRoles, setActiveRolesState] =
     useState<AccessRoles>(PUBLIC_ROLES);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [googleSignInPending, setGoogleSignInPending] = useState(false);
 
   useLayoutEffect(() => {
     getAccessToken();
@@ -149,16 +154,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const dismissGoogleSignInPending = useCallback(() => {
+    setGoogleSignInPending(false);
+  }, []);
+
   const loginWithGoogle = useCallback(
     async (credential: string, keepLoggedIn: boolean) => {
-      const session = await apiFetch<LoginPayload>("/auth/google", {
-        method: "POST",
-        body: JSON.stringify({ credential, keepLoggedIn }),
-      });
-      setAccessToken(session.token, keepLoggedIn);
-      setUser(session.user);
-      persist(session.user, keepLoggedIn);
-      return session.user;
+      setGoogleSignInPending(true);
+      try {
+        const session = await apiFetch<LoginPayload>("/auth/google", {
+          method: "POST",
+          body: JSON.stringify({ credential, keepLoggedIn }),
+        });
+        setAccessToken(session.token, keepLoggedIn);
+        setUser(session.user);
+        persist(session.user, keepLoggedIn);
+        return session.user;
+      } catch (caught) {
+        setGoogleSignInPending(false);
+        throw caught;
+      }
     },
     [],
   );
@@ -241,6 +256,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       displayName: hydratedUser ? hydratedUser.name.split(" ")[0] : null,
       login,
       loginWithGoogle,
+      googleSignInPending,
+      dismissGoogleSignInPending,
       logout,
       updateProfile,
       setActiveRoles,
@@ -251,12 +268,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     activeRoles,
     login,
     loginWithGoogle,
+    googleSignInPending,
+    dismissGoogleSignInPending,
     logout,
     updateProfile,
     setActiveRoles,
   ]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      <GoogleSignInOverlay />
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

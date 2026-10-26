@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Controller,
   FormProvider,
   useForm,
   useFormContext,
-  useWatch,
 } from "react-hook-form";
 import { FormStageBlock } from "@/components/forms/FormStageBlock";
 import { FormStageField } from "@/components/forms/FormStageField";
@@ -24,7 +23,11 @@ import {
   type PersonProfilesFormValues,
 } from "@/domains/users/schemas/person-profiles.schema";
 
-export type ProfilesStageHandlers = { validate: () => Promise<boolean> };
+export type ProfilesStageHandlers = {
+  validate: () => Promise<boolean>;
+  /** Copia aluno/músico do formulário interno para o payload de salvamento. */
+  syncToParent: () => Record<string, unknown>;
+};
 
 type Props = {
   values: Record<string, unknown>;
@@ -39,18 +42,20 @@ function valueAt(values: Record<string, unknown>, name: string): string {
   return String(values[name] ?? "");
 }
 
-export function UserProfilesStage({
+export function UserRoleProfileFields({
   values,
   fields,
   instruments,
+  showStudent,
+  showMusician,
   onChange,
   onRegisterHandlers,
   readOnly = false,
-}: Props) {
+}: Props & { showStudent: boolean; showMusician: boolean }) {
   const form = useForm<PersonProfilesFormValues>({
     defaultValues: {
-      isStudent: Boolean(values.isStudent),
-      isMusician: Boolean(values.isMusician),
+      isStudent: showStudent,
+      isMusician: showMusician,
       student: {
         enrollmentDate: valueAt(values, "student.enrollmentDate"),
         classGroup: valueAt(values, "student.classGroup"),
@@ -69,14 +74,91 @@ export function UserProfilesStage({
     mode: "onBlur",
     reValidateMode: "onChange",
   });
-  const { control, trigger } = form;
-  const isStudent = useWatch({ control, name: "isStudent" });
-  const isMusician = useWatch({ control, name: "isMusician" });
+  const { trigger, getValues } = form;
+
+  const syncToParent = () => {
+    const current = getValues();
+    return {
+      isStudent: current.isStudent,
+      isMusician: current.isMusician,
+      "student.enrollmentDate": current.student.enrollmentDate,
+      "student.classGroup": current.student.classGroup,
+      "student.level": current.student.level,
+      "musician.section": current.musician.section,
+      "musician.experience": current.musician.experience,
+      "musician.defaultVoice": current.musician.defaultVoice,
+      "musician.ownInstrument": current.musician.ownInstrument,
+      "musician.joinedAt": current.musician.joinedAt,
+      "musician.playedInstrumentId": current.musician.playedInstrumentId,
+    };
+  };
+
+  const syncToParentRef = useRef(syncToParent);
+  syncToParentRef.current = syncToParent;
 
   useEffect(() => {
-    onRegisterHandlers({ validate: () => trigger() });
+    onRegisterHandlers({
+      validate: () => trigger(),
+      syncToParent: () => syncToParentRef.current(),
+    });
     return () => onRegisterHandlers(null);
   }, [onRegisterHandlers, trigger]);
+
+  const recordKey = String(values.id ?? values.personId ?? "");
+  const profileSeed = useMemo(
+    () => ({
+      isStudent: showStudent,
+      isMusician: showMusician,
+      student: {
+        enrollmentDate: valueAt(values, "student.enrollmentDate"),
+        classGroup: valueAt(values, "student.classGroup"),
+        level: valueAt(values, "student.level") || "1",
+      },
+      musician: {
+        section: valueAt(values, "musician.section"),
+        experience: valueAt(values, "musician.experience") || "less_than_1",
+        defaultVoice: valueAt(values, "musician.defaultVoice") || "1",
+        ownInstrument: Boolean(values["musician.ownInstrument"]),
+        joinedAt: valueAt(values, "musician.joinedAt"),
+        playedInstrumentId: valueAt(values, "musician.playedInstrumentId"),
+      },
+    }),
+    [
+      recordKey,
+      showMusician,
+      showStudent,
+      values["musician.experience"],
+      values["musician.joinedAt"],
+      values["musician.playedInstrumentId"],
+      values["musician.section"],
+      values["student.enrollmentDate"],
+      values["student.classGroup"],
+      values["student.level"],
+      values["musician.ownInstrument"],
+      values["musician.defaultVoice"],
+    ],
+  );
+
+  const profileSeedKey = useMemo(
+    () => JSON.stringify(profileSeed),
+    [profileSeed],
+  );
+  const lastProfileSeedKey = useRef<string | null>(null);
+  const lastRecordKey = useRef(recordKey);
+
+  useEffect(() => {
+    const recordChanged = lastRecordKey.current !== recordKey;
+    lastRecordKey.current = recordKey;
+
+    if (recordChanged || lastProfileSeedKey.current !== profileSeedKey) {
+      lastProfileSeedKey.current = profileSeedKey;
+      form.reset(profileSeed);
+      return;
+    }
+
+    form.setValue("isStudent", showStudent, { shouldDirty: false });
+    form.setValue("isMusician", showMusician, { shouldDirty: false });
+  }, [form, profileSeed, profileSeedKey, recordKey, showMusician, showStudent]);
 
   const sync = (name: string) => () =>
     onChange(name, form.getValues(name as never));
@@ -86,33 +168,7 @@ export function UserProfilesStage({
   return (
     <FormProvider {...form}>
       <div className="grid gap-4">
-        <FormStageBlock
-          title="Perfis"
-          description={
-            readOnly
-              ? "Perfis e dados vinculados a esta pessoa."
-              : "Escolha os perfis que se aplicam. Os dados correspondentes aparecem abaixo."
-          }
-          surface="plain"
-          className="!pb-0"
-        >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <ProfileCheckbox
-              name="isStudent"
-              label="É aluno"
-              disabled={readOnly}
-              onChange={(checked) => onChange("isStudent", checked)}
-            />
-            <ProfileCheckbox
-              name="isMusician"
-              label="É músico"
-              disabled={readOnly}
-              onChange={(checked) => onChange("isMusician", checked)}
-            />
-          </div>
-        </FormStageBlock>
-
-        {isStudent ? (
+        {showStudent ? (
           <FormStageBlock title="Aluno" surface="plain">
             <div className="grid gap-4 sm:grid-cols-2">
               {studentFields.map((field) =>
@@ -153,7 +209,7 @@ export function UserProfilesStage({
           </FormStageBlock>
         ) : null}
 
-        {isMusician ? (
+        {showMusician ? (
           <FormStageBlock title="Músico" surface="plain">
             <div className="grid gap-4 sm:grid-cols-2">
               {musicianFields.map((field) => {
@@ -185,14 +241,16 @@ export function UserProfilesStage({
                     }
                     label={field.label}
                     options={options}
-                    required={field.name === "musician.section"}
+                    required={
+                      field.name === "musician.section" ||
+                      field.name === "musician.playedInstrumentId"
+                    }
                     disabled={readOnly}
                     optionalMessage={
+                      field.name === "musician.section" ||
                       field.name === "musician.playedInstrumentId"
-                        ? "Opcional durante esta etapa de desenvolvimento."
-                        : field.name === "musician.section"
-                          ? undefined
-                          : "Opcional."
+                        ? undefined
+                        : "Opcional."
                     }
                     onChange={sync(field.name)}
                   />
@@ -226,7 +284,7 @@ function ProfileCheckbox({
   disabled = false,
   onChange,
 }: {
-  name: "isStudent" | "isMusician" | "musician.ownInstrument";
+  name: "musician.ownInstrument";
   label: string;
   disabled?: boolean;
   onChange: (checked: boolean) => void;
@@ -243,8 +301,13 @@ function ProfileCheckbox({
           value={String(field.value)}
           onBlur={field.onBlur}
           state={field.value ? "valid" : "info"}
-          renderControl={({ id }) => (
-            <div className="flex min-h-11 items-center gap-3 text-sm text-[var(--foreground)]">
+          description="Marque se o músico usa instrumento próprio, fora do patrimônio da banda."
+          labelForControl={false}
+          renderControl={({ id, labelId, describedBy, invalid }) => (
+            <label
+              htmlFor={id}
+              className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-[var(--foreground)]"
+            >
               <input
                 ref={field.ref}
                 id={id}
@@ -253,14 +316,17 @@ function ProfileCheckbox({
                 disabled={disabled}
                 checked={Boolean(field.value)}
                 onBlur={field.onBlur}
+                aria-labelledby={labelId}
+                aria-describedby={describedBy}
+                aria-invalid={invalid || undefined}
                 onChange={(event) => {
-                  field.onChange(event);
+                  field.onChange(event.target.checked);
                   onChange(event.target.checked);
                 }}
-                className="size-5 accent-[var(--ring)]"
+                className="size-5 shrink-0 accent-[var(--ring)] disabled:cursor-not-allowed"
               />
-              <span>{field.value ? "Ativado" : "Selecionar perfil"}</span>
-            </div>
+              <span>{field.value ? "Sim, possui instrumento próprio" : "Não possui instrumento próprio"}</span>
+            </label>
           )}
         />
       )}

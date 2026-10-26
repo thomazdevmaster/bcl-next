@@ -512,10 +512,12 @@ const people: DomainCrudConfig = {
     for (const key of ['id', 'age', 'user', 'userId', 'guardianName', 'createdAt', 'updatedAt', 'temporaryPassword']) {
       delete payload[key];
     }
-    const documentType = String(values['document.type'] ?? '');
-    payload.document = documentType
-      ? { type: documentType, number: String(values['document.number'] ?? '').trim() }
-      : null;
+    const documentType = String(values['document.type'] ?? '').trim();
+    const documentNumber = String(values['document.number'] ?? '').trim();
+    payload.document =
+      documentType && documentType !== 'none' && documentNumber
+        ? { type: documentType, number: documentNumber }
+        : null;
     payload.guardianId = toId(values.guardianId);
     if (!payload.guardianId) delete payload.guardianRelationship;
     payload.registeredAt = values.registeredAt || todayIso();

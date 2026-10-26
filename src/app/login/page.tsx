@@ -36,7 +36,7 @@ export default function LoginPage() {
     mode: "onChange",
   });
   const [error, setError] = useState<string | null>(null);
-  const [googleBusy, setGoogleBusy] = useState(false);
+  const googleBusy = auth.googleSignInPending;
 
   useEffect(() => {
     if (!auth.isHydrated || !auth.isLoggedIn) return;
@@ -59,7 +59,6 @@ export default function LoginPage() {
 
   const onGoogleCredential = async (credential: string) => {
     setError(null);
-    setGoogleBusy(true);
     try {
       const session = await auth.loginWithGoogle(
         credential,
@@ -68,8 +67,6 @@ export default function LoginPage() {
       router.replace(postLoginRoute(session));
     } catch (err) {
       setError(userFacingError(err));
-    } finally {
-      setGoogleBusy(false);
     }
   };
 
@@ -157,7 +154,7 @@ export default function LoginPage() {
           <FormStageActions
             active={0}
             total={1}
-            busy={googleBusy || form.formState.isSubmitting}
+            busy={form.formState.isSubmitting}
             onBack={() => undefined}
             onNext={() => undefined}
             fullWidth

@@ -17,7 +17,8 @@ import {
   notifyUnreadCountChanged,
   restoreNotification,
 } from "@/domains/notifications/api";
-import { getNotificationLink } from "@/domains/notifications/links";
+import Link from "next/link";
+import { resolveNotificationLink } from "@/domains/notifications/links";
 import {
   NOTIFICATION_TYPE_LABELS,
   type NotificationItem,
@@ -381,24 +382,29 @@ export function NotificationCenter() {
             <p className="whitespace-pre-wrap text-sm leading-6">
               {selected.body}
             </p>
-            {getNotificationLink(selected.targetUrl) ? (
-              <a
-                className="inline-flex min-h-11 items-center font-semibold text-[var(--primary)] underline"
-                href={getNotificationLink(selected.targetUrl)?.href}
-                target={
-                  getNotificationLink(selected.targetUrl)?.external
-                    ? "_blank"
-                    : undefined
-                }
-                rel={
-                  getNotificationLink(selected.targetUrl)?.external
-                    ? "noopener noreferrer"
-                    : undefined
-                }
-              >
-                Abrir conteúdo relacionado
-              </a>
-            ) : null}
+            {(() => {
+              const link = selected
+                ? resolveNotificationLink(selected)
+                : null;
+              if (!link) return null;
+              return link.external ? (
+                <a
+                  className="inline-flex min-h-11 items-center font-semibold text-[var(--primary)] underline"
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Abrir conteúdo relacionado
+                </a>
+              ) : (
+                <Link
+                  className="inline-flex min-h-11 items-center font-semibold text-[var(--primary)] underline"
+                  href={link.href}
+                >
+                  Abrir conteúdo relacionado
+                </Link>
+              );
+            })()}
           </div>
         ) : null}
       </EntityDialog>
