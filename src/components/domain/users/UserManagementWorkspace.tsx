@@ -59,9 +59,6 @@ import {
   personDetailsSchema,
 } from "@/domains/users/schemas/person-details.schema";
 import { personProfilesSchema } from "@/domains/users/schemas/person-profiles.schema";
-import { apiFetch } from "@/lib/api";
-import { sealPassword } from "@/lib/passwordCipher";
-import { failureMessage, userFacingError } from "@/lib/userMessages";
 
 import type { AccessStageHandlers } from "./UserAccessStage";
 import {

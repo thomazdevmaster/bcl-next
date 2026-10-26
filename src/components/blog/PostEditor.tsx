@@ -8,7 +8,6 @@ import { MusicLoader } from "@/components/MusicLoader";
 import { MediaSourceField } from "@/components/blog/MediaSourceField";
 import { PostBlocks } from "@/components/blog/PostBlocks";
 import { RichTextEditor } from "@/components/blog/RichTextEditor";
-import { usesRemoteApi } from "@/core/auth/accessToken";
 import {
   bodyFromBlocks,
   createBlock,
@@ -138,7 +137,7 @@ export function PostEditor({ postId }: PostEditorProps) {
         })(),
         kind: draft.kind,
         status: draft.status,
-        ...(usesRemoteApi() ? { notifyAll } : {}),
+        notifyAll,
         publishedAt:
           draft.status === "published" ? (draft.publishedAt ?? now) : undefined,
         blocks: draft.blocks,

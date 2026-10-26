@@ -1,5 +1,4 @@
-import { usesRemoteApi } from "@/config/environment";
-import { ApiError, apiFetch } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 import type {
   NotificationBulkAction,
@@ -25,12 +24,6 @@ async function notificationApiFetch<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
-  if (!usesRemoteApi()) {
-    throw new ApiError(
-      "Configure NEXT_PUBLIC_API_URL para conectar à API oficial de notificações.",
-      0,
-    );
-  }
   return apiFetch<T>(path, options);
 }
 
