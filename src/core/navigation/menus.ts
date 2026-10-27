@@ -160,7 +160,12 @@ export function titleForPath(pathname: string): string {
   if (path.startsWith("/study")) return "Estudo";
   if (path === "/jogos") return "Jogos";
   if (path.startsWith("/jogos/")) {
-    const slug = path.split("/")[2];
+    const parts = path.split("/").filter(Boolean);
+    const categorySlug = parts[1];
+    const gameSlug = parts[2];
+    if (gameSlug === "clave-sol-naturais-1") {
+      return "Naturais 1";
+    }
     const labels: Record<string, string> = {
       notas: "Notas",
       ritmos: "Ritmos",
@@ -168,7 +173,7 @@ export function titleForPath(pathname: string): string {
       escalas: "Escalas",
       instrumentos: "Instrumentos",
     };
-    return labels[slug ?? ""] ?? "Jogos";
+    return labels[categorySlug ?? ""] ?? "Jogos";
   }
   if (path.startsWith("/gestao/jogos")) return "Jogos";
   return "Banda Carmelitana";

@@ -12,7 +12,7 @@ export const GAME_CATEGORIES: GameCategoryDefinition[] = [
     id: 'notas',
     slug: 'notas',
     label: 'Notas',
-    description: 'Nome das notas, alturas e leitura no pentagrama.',
+    description: 'Nome das notas, alturas e leitura na partitura.',
     icon: 'music_note',
   },
   {
@@ -46,7 +46,17 @@ export const GAME_CATEGORIES: GameCategoryDefinition[] = [
 ];
 
 /** Cadastre novos jogos aqui; a gestão em `/gestao/jogos` controla visibilidade. */
-export const REGISTERED_GAMES: GameDefinition[] = [];
+export const REGISTERED_GAMES: GameDefinition[] = [
+  {
+    id: 'notas-clave-sol-naturais-1',
+    slug: 'clave-sol-naturais-1',
+    categoryId: 'notas',
+    title: 'Clave de sol — Naturais 1',
+    description:
+      'Leia a nota e escolha o nome.',
+    href: '/jogos/notas/clave-sol-naturais-1',
+  },
+];
 
 const ALL_AUTHENTICATED: GameVisibilitySettings['visibleRoles'] = [
   ...AUTHENTICATED_ROLES,
@@ -74,4 +84,15 @@ export function getCategoryBySlug(slug: string): GameCategoryDefinition | undefi
 
 export function gamesInCategory(categoryId: GameCategoryId): GameDefinition[] {
   return REGISTERED_GAMES.filter((game) => game.categoryId === categoryId);
+}
+
+export function getGameBySlug(
+  categorySlug: string,
+  gameSlug: string,
+): GameDefinition | undefined {
+  const category = getCategoryBySlug(categorySlug);
+  if (!category) return undefined;
+  return REGISTERED_GAMES.find(
+    (game) => game.categoryId === category.id && game.slug === gameSlug,
+  );
 }
