@@ -2,15 +2,13 @@
 
 import { TrebleClefSymbol } from '@/components/games/notas/TrebleClefSymbol';
 import type { TrebleNaturalNote } from '@/domains/games/notas/trebleNaturals1Notes';
-
-const STAFF_TOP = 34;
-const LINE_GAP = 11;
-const NOTE_X = 132;
-const LEDGER_HALF = 22;
-
-function stepCenterY(staffStep: number): number {
-  return STAFF_TOP + (4 - staffStep * 0.5) * LINE_GAP;
-}
+import {
+  TREBLE_LEDGER_HALF,
+  TREBLE_NOTE_X,
+  TREBLE_STAFF_METRICS,
+  trebleStaffLineYs,
+  trebleStepCenterY,
+} from '@/domains/games/notas/trebleStaffLayout';
 
 interface TrebleStaffNoteProps {
   note: TrebleNaturalNote;
@@ -19,8 +17,8 @@ interface TrebleStaffNoteProps {
 
 /** Partitura (clave de sol + pauta) com uma semíbreve. */
 export function TrebleStaffNote({ note, className = '' }: TrebleStaffNoteProps) {
-  const lines = [0, 1, 2, 3, 4].map((index) => STAFF_TOP + index * LINE_GAP);
-  const noteY = stepCenterY(note.staffStep);
+  const lines = trebleStaffLineYs(TREBLE_STAFF_METRICS);
+  const noteY = trebleStepCenterY(note.staffStep, TREBLE_STAFF_METRICS);
   const needsLedgerBelow = note.staffStep <= -2;
   const needsLedgerAbove = note.staffStep >= 10;
 
@@ -50,9 +48,9 @@ export function TrebleStaffNote({ note, className = '' }: TrebleStaffNoteProps) 
         ))}
         {needsLedgerBelow ? (
           <line
-            x1={NOTE_X - LEDGER_HALF}
+            x1={TREBLE_NOTE_X - TREBLE_LEDGER_HALF}
             y1={noteY}
-            x2={NOTE_X + LEDGER_HALF}
+            x2={TREBLE_NOTE_X + TREBLE_LEDGER_HALF}
             y2={noteY}
             stroke="currentColor"
             strokeWidth={1.2}
@@ -61,9 +59,9 @@ export function TrebleStaffNote({ note, className = '' }: TrebleStaffNoteProps) 
         ) : null}
         {needsLedgerAbove ? (
           <line
-            x1={NOTE_X - LEDGER_HALF}
+            x1={TREBLE_NOTE_X - TREBLE_LEDGER_HALF}
             y1={noteY}
-            x2={NOTE_X + LEDGER_HALF}
+            x2={TREBLE_NOTE_X + TREBLE_LEDGER_HALF}
             y2={noteY}
             stroke="currentColor"
             strokeWidth={1.2}
@@ -71,7 +69,7 @@ export function TrebleStaffNote({ note, className = '' }: TrebleStaffNoteProps) 
           />
         ) : null}
         <ellipse
-          cx={NOTE_X}
+          cx={TREBLE_NOTE_X}
           cy={noteY}
           rx={9}
           ry={6.5}

@@ -166,6 +166,9 @@ export function titleForPath(pathname: string): string {
     if (gameSlug === "clave-sol-naturais-1") {
       return "Naturais 1";
     }
+    if (gameSlug === "clave-sol-naturais-2") {
+      return "Naturais 2";
+    }
     const labels: Record<string, string> = {
       notas: "Notas",
       ritmos: "Ritmos",

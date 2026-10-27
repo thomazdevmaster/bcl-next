@@ -56,6 +56,15 @@ export const REGISTERED_GAMES: GameDefinition[] = [
       'Leia a nota e escolha o nome.',
     href: '/jogos/notas/clave-sol-naturais-1',
   },
+  {
+    id: 'notas-clave-sol-naturais-2',
+    slug: 'clave-sol-naturais-2',
+    categoryId: 'notas',
+    title: 'Clave de sol — Naturais 2',
+    description:
+      'Leia o nome e toque a nota na partitura.',
+    href: '/jogos/notas/clave-sol-naturais-2',
+  },
 ];
 
 const ALL_AUTHENTICATED: GameVisibilitySettings['visibleRoles'] = [

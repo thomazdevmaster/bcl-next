@@ -10,19 +10,26 @@ import {
 } from '@/domains/games/gameAccess';
 import { useGameCatalog } from '@/domains/games/useGameCatalog';
 
+const gameLoading = (
+  <p className="px-4 py-12 text-center text-sm text-[var(--muted)]">
+    Carregando jogo…
+  </p>
+);
+
 const TrebleNaturals1Game = dynamic(
   () =>
     import('@/components/games/notas/TrebleNaturals1Game').then((module) => ({
       default: module.TrebleNaturals1Game,
     })),
-  {
-    ssr: false,
-    loading: () => (
-      <p className="px-4 py-12 text-center text-sm text-[var(--muted)]">
-        Carregando jogo…
-      </p>
-    ),
-  },
+  { ssr: false, loading: () => gameLoading },
+);
+
+const TrebleNaturals2Game = dynamic(
+  () =>
+    import('@/components/games/notas/TrebleNaturals2Game').then((module) => ({
+      default: module.TrebleNaturals2Game,
+    })),
+  { ssr: false, loading: () => gameLoading },
 );
 
 interface GamesPlayPageProps {
@@ -34,6 +41,8 @@ function GameRenderer({ gameId }: { gameId: string }) {
   switch (gameId) {
     case 'notas-clave-sol-naturais-1':
       return <TrebleNaturals1Game />;
+    case 'notas-clave-sol-naturais-2':
+      return <TrebleNaturals2Game />;
     default:
       return (
         <div className="mx-auto max-w-xl px-4 py-12 text-sm text-[var(--muted)]">

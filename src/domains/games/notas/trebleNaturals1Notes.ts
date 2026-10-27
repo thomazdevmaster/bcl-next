@@ -130,6 +130,25 @@ export function isCorrectSolfegeAnswer(
   return target.solfege === chosenSolfege;
 }
 
+const SUBSCRIPT_DIGITS = '₀₁₂₃₄₅₆₇₈₉';
+
+export function formatTrebleNaturalLabel(note: TrebleNaturalNote): string {
+  const octaveMatch = note.id.match(/\d+/);
+  const octave = octaveMatch?.[0] ?? '';
+  const sub = octave
+    .split('')
+    .map((digit) => SUBSCRIPT_DIGITS[Number(digit)] ?? digit)
+    .join('');
+  return `${note.solfege}${sub}`;
+}
+
+export function isCorrectStaffStepAnswer(
+  target: TrebleNaturalNote,
+  chosenStaffStep: number,
+): boolean {
+  return target.staffStep === chosenStaffStep;
+}
+
 export const TREBLE_NATURALS_1_STORAGE_KEY =
   'bcl.game.notas-clave-sol-naturais-1';
 
@@ -183,6 +202,52 @@ export function writeTrebleNaturals1Stats(
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(
     TREBLE_NATURALS_1_STORAGE_KEY,
+    JSON.stringify(stats),
+  );
+}
+
+export const TREBLE_NATURALS_2_STORAGE_KEY =
+  'bcl.game.notas-clave-sol-naturais-2';
+
+export type TrebleNaturals2PersistedStats = TrebleNaturals1PersistedStats;
+
+export function readTrebleNaturals2Stats(): TrebleNaturals2PersistedStats {
+  if (typeof window === 'undefined') {
+    return { selectedLevel: 'medio', bestStreakByLevel: emptyBestStreakByLevel() };
+  }
+  try {
+    const raw = window.localStorage.getItem(TREBLE_NATURALS_2_STORAGE_KEY);
+    if (!raw) {
+      return { selectedLevel: 'medio', bestStreakByLevel: emptyBestStreakByLevel() };
+    }
+    const parsed = JSON.parse(raw) as Partial<TrebleNaturals2PersistedStats>;
+    const bestStreakByLevel = emptyBestStreakByLevel();
+    if (parsed.bestStreakByLevel) {
+      for (const level of TREBLE_NATURAL_LEVELS) {
+        bestStreakByLevel[level.id] = Math.max(
+          0,
+          Number(parsed.bestStreakByLevel[level.id]) || 0,
+        );
+      }
+    }
+    const selectedLevel =
+      parsed.selectedLevel === 'facil' ||
+      parsed.selectedLevel === 'medio' ||
+      parsed.selectedLevel === 'dificil'
+        ? parsed.selectedLevel
+        : 'medio';
+    return { selectedLevel, bestStreakByLevel };
+  } catch {
+    return { selectedLevel: 'medio', bestStreakByLevel: emptyBestStreakByLevel() };
+  }
+}
+
+export function writeTrebleNaturals2Stats(
+  stats: TrebleNaturals2PersistedStats,
+): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(
+    TREBLE_NATURALS_2_STORAGE_KEY,
     JSON.stringify(stats),
   );
 }
