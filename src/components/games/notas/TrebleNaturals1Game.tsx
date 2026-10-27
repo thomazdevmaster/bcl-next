@@ -1,8 +1,10 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
+import { GameHelpBody } from '@/components/games/GameHelpDialog';
+import { GamePlayHeader } from '@/components/games/GamePlayHeader';
 import { TrebleStaffNote } from '@/components/games/notas/TrebleStaffNote';
+import { TREBLE_NATURALS_1_HELP } from '@/domains/games/notas/trebleNaturalsGameHelp';
 import {
   TREBLE_ANSWER_BUTTONS,
   TREBLE_NATURALS_1_ANSWER_ORDER,
@@ -164,22 +166,14 @@ export function TrebleNaturals1Game() {
 
   return (
     <div className="mx-auto max-w-lg space-y-4 px-3 py-4 md:space-y-5 md:px-6 md:py-6">
-      <header className="flex items-start justify-between gap-2 border-b border-[var(--border)] pb-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted)]">
-            Notas · Clave de sol
-          </p>
-          <h1 className="text-xl font-semibold tracking-tight text-[var(--foreground)]">
-            Naturais 1
-          </h1>
-        </div>
-        <Link
-          href="/jogos/notas"
-          className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 text-sm font-medium no-underline hover:no-underline"
-        >
-          Voltar
-        </Link>
-      </header>
+      <GamePlayHeader
+        categoryLine="Notas · Clave de sol"
+        title="Naturais 1"
+        backHref="/jogos/notas"
+        helpTitle="Como jogar — Naturais 1"
+        helpDescription="Leitura de notas na clave de sol"
+        helpContent={<GameHelpBody sections={TREBLE_NATURALS_1_HELP} />}
+      />
 
       <div className="space-y-2">
         <p className="text-xs font-medium text-[var(--muted)]" id="level-label">
