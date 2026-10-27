@@ -1,0 +1,77 @@
+import { AUTHENTICATED_ROLES } from '@/core/auth/roles';
+import type {
+  GameCatalogVisibility,
+  GameCategoryDefinition,
+  GameCategoryId,
+  GameDefinition,
+  GameVisibilitySettings,
+} from '@/domains/games/types';
+
+export const GAME_CATEGORIES: GameCategoryDefinition[] = [
+  {
+    id: 'notas',
+    slug: 'notas',
+    label: 'Notas',
+    description: 'Nome das notas, alturas e leitura no pentagrama.',
+    icon: 'music_note',
+  },
+  {
+    id: 'ritmos',
+    slug: 'ritmos',
+    label: 'Ritmos',
+    description: 'Figuras rítmicas, compasso e pulsação.',
+    icon: 'graphic_eq',
+  },
+  {
+    id: 'intervalos',
+    slug: 'intervalos',
+    label: 'Intervalos',
+    description: 'Distâncias entre notas e reconhecimento auditivo.',
+    icon: 'compare_arrows',
+  },
+  {
+    id: 'escalas',
+    slug: 'escalas',
+    label: 'Escalas',
+    description: 'Tons, armaduras e construção de escalas.',
+    icon: 'linear_scale',
+  },
+  {
+    id: 'instrumentos',
+    slug: 'instrumentos',
+    label: 'Instrumentos',
+    description: 'Famílias, timbres e características dos naipes.',
+    icon: 'piano',
+  },
+];
+
+/** Cadastre novos jogos aqui; a gestão em `/gestao/jogos` controla visibilidade. */
+export const REGISTERED_GAMES: GameDefinition[] = [];
+
+const ALL_AUTHENTICATED: GameVisibilitySettings['visibleRoles'] = [
+  ...AUTHENTICATED_ROLES,
+];
+
+export function defaultVisibilitySettings(): GameVisibilitySettings {
+  return { enabled: true, visibleRoles: ALL_AUTHENTICATED };
+}
+
+export function buildDefaultGameCatalog(): GameCatalogVisibility {
+  const categories = {} as Record<GameCategoryId, GameVisibilitySettings>;
+  for (const category of GAME_CATEGORIES) {
+    categories[category.id] = defaultVisibilitySettings();
+  }
+  const games: Record<string, GameVisibilitySettings> = {};
+  for (const game of REGISTERED_GAMES) {
+    games[game.id] = defaultVisibilitySettings();
+  }
+  return { categories, games };
+}
+
+export function getCategoryBySlug(slug: string): GameCategoryDefinition | undefined {
+  return GAME_CATEGORIES.find((item) => item.slug === slug);
+}
+
+export function gamesInCategory(categoryId: GameCategoryId): GameDefinition[] {
+  return REGISTERED_GAMES.filter((game) => game.categoryId === categoryId);
+}

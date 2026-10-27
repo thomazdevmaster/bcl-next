@@ -29,6 +29,13 @@ export function hasRole(roles: AccessRoles, role: string): boolean {
   return roles.includes(role);
 }
 
+/** Sessão com pelo menos um perfil além de visitante público. */
+export function hasAuthenticatedRole(roles: AccessRoles): boolean {
+  return roles.some((role) =>
+    (AUTHENTICATED_ROLES as readonly string[]).includes(role),
+  );
+}
+
 export function roleLabels(roles: AccessRoles): string {
   return roles.map((role) => ROLE_LABEL[role as Role] ?? role).join(', ');
 }

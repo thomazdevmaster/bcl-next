@@ -2,6 +2,7 @@ import type { Action, Resource } from "@/core/auth/permissions";
 import { can } from "@/core/auth/permissions";
 import type { AccessRoles } from "@/core/auth/roles";
 import { DOMAINS } from "@/domains/catalog";
+import { canAccessGamesNav } from "@/domains/games/gameAccess";
 import {
   canAccessSongsModule,
   canAccessStudyModule,
@@ -30,6 +31,11 @@ export const PUBLIC_NAV: NavItem[] = [
 ];
 
 const STUDY_NAV: NavItem = { href: "/study", label: "Estudo", icon: "school" };
+const GAMES_NAV: NavItem = {
+  href: "/jogos",
+  label: "Jogos",
+  icon: "sports_esports",
+};
 const SONGS_NAV: NavItem = {
   href: "/gestao/musicas",
   label: "Músicas",
@@ -92,6 +98,9 @@ function getMyAreaItems(
   if (canAccessStudyModule(roles, permissions)) {
     items.push(STUDY_NAV);
   }
+  if (canAccessGamesNav(roles)) {
+    items.push(GAMES_NAV);
+  }
   if (canAccessSongsModule(roles, permissions)) {
     items.push(SONGS_NAV);
   }
@@ -149,5 +158,18 @@ export function titleForPath(pathname: string): string {
   if (path === "/profile") return "Meu perfil";
   if (path === "/configuracoes" || path === "/settings") return "Configurações";
   if (path.startsWith("/study")) return "Estudo";
+  if (path === "/jogos") return "Jogos";
+  if (path.startsWith("/jogos/")) {
+    const slug = path.split("/")[2];
+    const labels: Record<string, string> = {
+      notas: "Notas",
+      ritmos: "Ritmos",
+      intervalos: "Intervalos",
+      escalas: "Escalas",
+      instrumentos: "Instrumentos",
+    };
+    return labels[slug ?? ""] ?? "Jogos";
+  }
+  if (path.startsWith("/gestao/jogos")) return "Jogos";
   return "Banda Carmelitana";
 }
