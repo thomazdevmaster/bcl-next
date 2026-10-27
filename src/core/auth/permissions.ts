@@ -4,6 +4,7 @@ import { hasRole, isPrivilegedRole } from "./roles";
 export const RESOURCES = [
   "portal",
   "study",
+  "games",
   "users",
   "people",
   "songs",
@@ -36,7 +37,10 @@ export type Action = (typeof ACTIONS)[number];
 export type Permission = `${Resource}:${Action}`;
 
 /** Domínios com formulário genérico. A home tem editor próprio. */
-export type CrudResource = Exclude<Resource, "portal" | "homepage" | "blogpage" | "study" | "notifications">;
+export type CrudResource = Exclude<
+  Resource,
+  "portal" | "homepage" | "blogpage" | "study" | "games" | "notifications"
+>;
 
 export type PeopleReadScope = "none" | "students" | "members";
 
@@ -63,11 +67,13 @@ const ROLE_ACTIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
   amigos: {
     portal: ["read"],
     study: ["read"],
+    games: ["read"],
     songs: ["read"],
   },
   aluno: {
     portal: ["read"],
     study: ["read"],
+    games: ["read"],
     songs: ["read", "read_private_student"],
     instruments: ["read"],
     people: ["read"],
@@ -76,6 +82,7 @@ const ROLE_ACTIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
   musico: {
     portal: ["read"],
     study: ["read"],
+    games: ["read"],
     songs: ["read", "read_private_musician"],
     patrimony: ["read"],
     instruments: ["read"],
@@ -85,6 +92,7 @@ const ROLE_ACTIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
   maestro: {
     portal: ["read"],
     study: ["read"],
+    games: ["read", "update"],
     media: FULL_CRUD,
     songs: FULL_CRUD,
     patrimony: FULL_CRUD,
@@ -96,6 +104,7 @@ const ROLE_ACTIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
   admin: {
     portal: ["read"],
     study: ["read"],
+    games: ["read", "update"],
     media: FULL_CRUD,
     songs: FULL_CRUD,
     patrimony: FULL_CRUD,

@@ -8,6 +8,7 @@ export type RolesCatalogGroup = { id: string; label: string; resources: CatalogR
 const RESOURCE_ACTIONS: Partial<Record<Resource, Action[]>> = {
   portal: ["read"],
   study: ["read"],
+  games: ["read", "update"],
   users: ["read", "create", "update", "delete", "approve"],
   people: ["read", "create", "update", "delete", "read_members", "view_sensitive"],
   songs: ["read", "read_private_student", "read_private_musician", "create", "update", "delete"],
@@ -21,10 +22,11 @@ const RESOURCE_ACTIONS: Partial<Record<Resource, Action[]>> = {
 };
 
 const PORTAL_RESOURCES: Resource[] = ["portal", "homepage", "blogpage"];
-const MY_AREA_RESOURCES: Resource[] = ["study", "songs"];
+const MY_AREA_RESOURCES: Resource[] = ["study", "games", "songs"];
 const GESTAO_RESOURCES: Resource[] = [
   "users",
   "people",
+  "games",
   "songs",
   "patrimony",
   "instruments",
