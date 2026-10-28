@@ -1,26 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useMemo, useRef } from "react";
 import {
   Controller,
   FormProvider,
   useForm,
   useFormContext,
 } from "react-hook-form";
+
 import { FormStageBlock } from "@/components/forms/FormStageBlock";
 import { FormStageField } from "@/components/forms/FormStageField";
-import {
-  controlBase,
-  controlHeight,
-  FIELD_STATUS,
-  type ValidationState,
-} from "@/components/forms/core";
+import { FIELD_STATUS, type ValidationState } from "@/components/forms/core";
 import { FormFieldValidationShell } from "@/components/forms/validations/FormFieldValidationShell";
+import { IconCheckbox } from "@/components/shared/IconCheckbox";
+import { IconSelect } from "@/components/shared/IconSelect";
 import type { CrudField, CrudOption } from "@/domains/crudConfig";
 import {
-  personProfilesSchema,
   type PersonProfilesFormValues,
+  personProfilesSchema,
 } from "@/domains/users/schemas/person-profiles.schema";
 
 export type ProfilesStageHandlers = {
@@ -59,12 +57,12 @@ export function UserRoleProfileFields({
       student: {
         enrollmentDate: valueAt(values, "student.enrollmentDate"),
         classGroup: valueAt(values, "student.classGroup"),
-        level: valueAt(values, "student.level") || "1",
+        level: valueAt(values, "student.level"),
       },
       musician: {
         section: valueAt(values, "musician.section"),
-        experience: valueAt(values, "musician.experience") || "less_than_1",
-        defaultVoice: valueAt(values, "musician.defaultVoice") || "1",
+        experience: valueAt(values, "musician.experience"),
+        defaultVoice: valueAt(values, "musician.defaultVoice"),
         ownInstrument: Boolean(values["musician.ownInstrument"]),
         joinedAt: valueAt(values, "musician.joinedAt"),
         playedInstrumentId: valueAt(values, "musician.playedInstrumentId"),
@@ -94,7 +92,10 @@ export function UserRoleProfileFields({
   };
 
   const syncToParentRef = useRef(syncToParent);
-  syncToParentRef.current = syncToParent;
+
+  useEffect(() => {
+    syncToParentRef.current = syncToParent;
+  });
 
   useEffect(() => {
     onRegisterHandlers({
@@ -105,44 +106,51 @@ export function UserRoleProfileFields({
   }, [onRegisterHandlers, trigger]);
 
   const recordKey = String(values.id ?? values.personId ?? "");
+  const studentEnrollmentDate = valueAt(values, "student.enrollmentDate");
+  const studentClassGroup = valueAt(values, "student.classGroup");
+  const studentLevel = valueAt(values, "student.level");
+  const musicianSection = valueAt(values, "musician.section");
+  const musicianExperience = valueAt(values, "musician.experience");
+  const musicianDefaultVoice = valueAt(values, "musician.defaultVoice");
+  const musicianOwnInstrument = Boolean(values["musician.ownInstrument"]);
+  const musicianJoinedAt = valueAt(values, "musician.joinedAt");
+  const musicianPlayedInstrumentId = valueAt(
+    values,
+    "musician.playedInstrumentId",
+  );
   const profileSeed = useMemo(
     () => ({
       isStudent: showStudent,
       isMusician: showMusician,
       student: {
-        enrollmentDate: valueAt(values, "student.enrollmentDate"),
-        classGroup: valueAt(values, "student.classGroup"),
-        level: valueAt(values, "student.level") || "1",
+        enrollmentDate: studentEnrollmentDate,
+        classGroup: studentClassGroup,
+        level: studentLevel,
       },
       musician: {
-        section: valueAt(values, "musician.section"),
-        experience: valueAt(values, "musician.experience") || "less_than_1",
-        defaultVoice: valueAt(values, "musician.defaultVoice") || "1",
-        ownInstrument: Boolean(values["musician.ownInstrument"]),
-        joinedAt: valueAt(values, "musician.joinedAt"),
-        playedInstrumentId: valueAt(values, "musician.playedInstrumentId"),
+        section: musicianSection,
+        experience: musicianExperience,
+        defaultVoice: musicianDefaultVoice,
+        ownInstrument: musicianOwnInstrument,
+        joinedAt: musicianJoinedAt,
+        playedInstrumentId: musicianPlayedInstrumentId,
       },
     }),
     [
-      recordKey,
       showMusician,
       showStudent,
-      values["musician.experience"],
-      values["musician.joinedAt"],
-      values["musician.playedInstrumentId"],
-      values["musician.section"],
-      values["student.enrollmentDate"],
-      values["student.classGroup"],
-      values["student.level"],
-      values["musician.ownInstrument"],
-      values["musician.defaultVoice"],
+      studentEnrollmentDate,
+      studentClassGroup,
+      studentLevel,
+      musicianSection,
+      musicianExperience,
+      musicianDefaultVoice,
+      musicianOwnInstrument,
+      musicianJoinedAt,
+      musicianPlayedInstrumentId,
     ],
   );
-
-  const profileSeedKey = useMemo(
-    () => JSON.stringify(profileSeed),
-    [profileSeed],
-  );
+  const profileSeedKey = JSON.stringify(profileSeed);
   const lastProfileSeedKey = useRef<string | null>(null);
   const lastRecordKey = useRef(recordKey);
 
@@ -178,9 +186,9 @@ export function UserRoleProfileFields({
                     name={field.name as "student.level"}
                     label={field.label}
                     options={field.options ?? []}
-                    required={false}
+                    required={Boolean(field.required)}
                     disabled={readOnly}
-                    optionalMessage="Opcional."
+                    optionalMessage={field.required ? undefined : "Opcional."}
                     onChange={sync(field.name)}
                   />
                 ) : (
@@ -188,8 +196,7 @@ export function UserRoleProfileFields({
                     key={field.name}
                     name={
                       field.name as
-                        | "student.enrollmentDate"
-                        | "student.classGroup"
+                        "student.enrollmentDate" | "student.classGroup"
                     }
                     label={field.label}
                     type={field.type === "date" ? "date" : "text"}
@@ -241,17 +248,9 @@ export function UserRoleProfileFields({
                     }
                     label={field.label}
                     options={options}
-                    required={
-                      field.name === "musician.section" ||
-                      field.name === "musician.playedInstrumentId"
-                    }
+                    required={Boolean(field.required)}
                     disabled={readOnly}
-                    optionalMessage={
-                      field.name === "musician.section" ||
-                      field.name === "musician.playedInstrumentId"
-                        ? undefined
-                        : "Opcional."
-                    }
+                    optionalMessage={field.required ? undefined : "Opcional."}
                     onChange={sync(field.name)}
                   />
                 );
@@ -303,30 +302,27 @@ function ProfileCheckbox({
           state={field.value ? "valid" : "info"}
           description="Marque se o músico usa instrumento próprio, fora do patrimônio da banda."
           labelForControl={false}
-          renderControl={({ id, labelId, describedBy, invalid }) => (
-            <label
-              htmlFor={id}
-              className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-[var(--foreground)]"
-            >
-              <input
-                ref={field.ref}
-                id={id}
-                name={field.name}
-                type="checkbox"
-                disabled={disabled}
-                checked={Boolean(field.value)}
-                onBlur={field.onBlur}
-                aria-labelledby={labelId}
-                aria-describedby={describedBy}
-                aria-invalid={invalid || undefined}
-                onChange={(event) => {
-                  field.onChange(event.target.checked);
-                  onChange(event.target.checked);
-                }}
-                className="size-5 shrink-0 accent-[var(--ring)] disabled:cursor-not-allowed"
-              />
-              <span>{field.value ? "Sim, possui instrumento próprio" : "Não possui instrumento próprio"}</span>
-            </label>
+          renderControl={({ id, describedBy, invalid }) => (
+            <IconCheckbox
+              id={id}
+              name={field.name}
+              inputRef={field.ref}
+              label={
+                field.value
+                  ? "Sim, possui instrumento próprio"
+                  : "Não possui instrumento próprio"
+              }
+              icon="music_note"
+              checked={Boolean(field.value)}
+              disabled={disabled}
+              aria-describedby={describedBy}
+              aria-invalid={invalid || undefined}
+              onBlur={field.onBlur}
+              onChange={(checked) => {
+                field.onChange(checked);
+                onChange(checked);
+              }}
+            />
           )}
         />
       )}
@@ -363,16 +359,46 @@ function ProfileSelect({
       control={control}
       render={({ field, fieldState }) => {
         const empty = field.value === "";
-        const state: ValidationState = empty
-          ? required
-            ? "warning"
-            : optionalMessage
+        const state: ValidationState = fieldState.error
+          ? "invalid"
+          : empty
+            ? required
               ? "warning"
-              : "info"
-          : fieldState.error
-            ? "invalid"
+              : optionalMessage
+                ? "warning"
+                : "info"
             : "valid";
         const status = FIELD_STATUS[state];
+        const icon = {
+          "student.level": "school",
+          "musician.section": "groups",
+          "musician.experience": "history",
+          "musician.defaultVoice": "graphic_eq",
+          "musician.playedInstrumentId": "music_note",
+        }[name];
+        const selectOptions: CrudOption[] = [
+          {
+            value: "",
+            label: required ? "Selecione…" : "Selecione (opcional)",
+            icon: "more_horiz",
+          },
+          ...options
+            .filter((option) => option.value !== "")
+            .map((option) => ({ ...option, icon: option.icon ?? icon })),
+        ];
+        if (
+          field.value &&
+          !selectOptions.some((option) => option.value === field.value)
+        ) {
+          selectOptions.push({
+            value: field.value,
+            label:
+              name === "musician.playedInstrumentId"
+                ? `Instrumento #${field.value}`
+                : `Opção #${field.value}`,
+            icon,
+          });
+        }
         return (
           <FormFieldValidationShell
             label={label}
@@ -391,37 +417,24 @@ function ProfileSelect({
                     : undefined))
                 : undefined)
             }
-            renderControl={({
-              id,
-              name: controlName,
-              describedBy,
-              invalid,
-            }) => (
-              <select
-                ref={field.ref}
+            renderControl={({ id, describedBy, invalid }) => (
+              <IconSelect
                 id={id}
-                name={controlName}
-                disabled={disabled}
+                label={label}
+                options={selectOptions}
                 value={field.value}
+                disabled={disabled}
+                required={required}
+                invalid={invalid}
+                describedBy={describedBy}
+                onTriggerRef={field.ref}
                 onBlur={field.onBlur}
-                onChange={(event) => {
-                  field.onChange(event);
+                triggerClassName={`${status.border} pr-3`}
+                onChange={(value) => {
+                  field.onChange(value);
                   onChange();
                 }}
-                aria-required={required || undefined}
-                aria-describedby={describedBy}
-                aria-invalid={invalid || undefined}
-                className={`${controlBase} ${controlHeight.md} ${status.border} pr-3`}
-              >
-                <option value="">
-                  {required ? "Selecione uma opção" : "Selecione (opcional)"}
-                </option>
-                {options.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              />
             )}
           />
         );

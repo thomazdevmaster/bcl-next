@@ -1,23 +1,21 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useRef } from "react";
 import { Controller, FormProvider, useForm } from "react-hook-form";
+
 import { FormStageBlock } from "@/components/forms/FormStageBlock";
-import {
-  controlBase,
-  FIELD_STATUS,
-  type ValidationState,
-} from "@/components/forms/core";
 import { FormFieldValidationShell } from "@/components/forms/validations/FormFieldValidationShell";
+import { IconCheckbox } from "@/components/shared/IconCheckbox";
 import type { CrudField, CrudOption } from "@/domains/crudConfig";
 import {
-  permissionsSchema,
   type PermissionsFormValues,
+  permissionsSchema,
 } from "@/domains/users/schemas/permissions.schema";
+
 import {
-  UserRoleProfileFields,
   type ProfilesStageHandlers,
+  UserRoleProfileFields,
 } from "./UserProfilesStage";
 
 export type PermissionsStageHandlers = {
@@ -128,14 +126,13 @@ export function UserPermissionsStage({
             control={control}
             render={({ field, fieldState }) => {
               const selected = field.value;
-              const state: ValidationState = fieldState.error
+              const state = fieldState.error
                 ? "invalid"
                 : locked || readOnly
                   ? "info"
                   : selected.length > 0
                     ? "valid"
                     : "warning";
-              const status = FIELD_STATUS[state];
               const message =
                 fieldState.error?.message ??
                 (readOnly
@@ -161,7 +158,7 @@ export function UserPermissionsStage({
                       role="group"
                       aria-labelledby={labelId}
                       aria-describedby={describedBy}
-                      className={`${controlBase} ${status.border} grid gap-1 p-2 pr-3 sm:grid-cols-2`}
+                      className="grid gap-2 sm:grid-cols-2"
                     >
                       {options.length === 0 ? (
                         <p className="px-2 py-2 text-sm text-[var(--muted)] sm:col-span-2">
@@ -172,37 +169,44 @@ export function UserPermissionsStage({
                           const checked = selected.includes(option.value);
                           const checkboxId = `${id}-${option.value}`;
                           return (
-                            <label
+                            <IconCheckbox
                               key={option.value}
-                              htmlFor={checkboxId}
-                              className={`flex min-h-11 min-w-0 items-center gap-3 rounded-lg px-2 text-sm ${locked || readOnly ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-[var(--accent)]"}`}
-                            >
-                              <input
-                                ref={
-                                  option === options[0] ? field.ref : undefined
-                                }
-                                id={checkboxId}
-                                name={field.name}
-                                type="checkbox"
-                                value={option.value}
-                                checked={checked}
-                                disabled={locked || readOnly}
-                                aria-invalid={invalid || undefined}
-                                onBlur={field.onBlur}
-                                onChange={(event) => {
-                                  const next = event.target.checked
-                                    ? [...selected, option.value]
-                                    : selected.filter(
-                                        (role) => role !== option.value,
-                                      );
-                                  field.onChange(next);
-                                  onChange("roles", next);
-                                  syncProfileFlags(next, values, onChange);
-                                }}
-                                className="size-5 shrink-0 accent-[var(--ring)]"
-                              />
-                              <span className="truncate">{option.label}</span>
-                            </label>
+                              id={checkboxId}
+                              name={field.name}
+                              value={option.value}
+                              inputRef={
+                                option === options[0] ? field.ref : undefined
+                              }
+                              label={option.label}
+                              icon={
+                                option.icon ??
+                                {
+                                  amigos: "groups",
+                                  aluno: "school",
+                                  musico: "music_note",
+                                  maestro: "campaign",
+                                  admin: "admin_panel_settings",
+                                }[option.value] ??
+                                "badge"
+                              }
+                              checked={checked}
+                              disabled={locked || readOnly}
+                              aria-invalid={invalid || undefined}
+                              onBlur={field.onBlur}
+                              onChange={(nextChecked) => {
+                                const next = nextChecked
+                                  ? [...selected, option.value]
+                                  : selected.filter(
+                                      (role) => role !== option.value,
+                                    );
+                                field.onChange(next);
+                                onChange("roles", next);
+                                syncProfileFlags(next, values, onChange);
+                              }}
+                              className={
+                                invalid ? "!border-[var(--destructive)]" : ""
+                              }
+                            />
                           );
                         })
                       )}
