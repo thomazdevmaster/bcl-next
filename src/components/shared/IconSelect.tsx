@@ -5,6 +5,7 @@ import Image from "next/image";
 import {
   type CSSProperties,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -77,6 +78,8 @@ export function IconSelect<Value extends string>(
     onBlur,
   } = props;
   const rootRef = useRef<HTMLDivElement>(null);
+  const generatedId = useId();
+  const optionsId = `${id ?? generatedId}-options`;
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -102,7 +105,8 @@ export function IconSelect<Value extends string>(
       (selectedOptions.length === 1
         ? selectedOptions[0].label
         : `${selectedOptions.length} perfis ativos`))
-    : options.find((option) => option.value === props.value)?.label;
+    : (options.find((option) => option.value === props.value)?.label ??
+      (props.value || "Selecione…"));
   const selectedIcon = selectedOptions[0]?.icon;
   const selectedImageSrc = selectedOptions[0]?.imageSrc;
   const searchEnabled = options.length > SEARCH_THRESHOLD;
@@ -176,11 +180,30 @@ export function IconSelect<Value extends string>(
     });
   };
 
-  const closeMenu = () => {
+  const closeMenu = (restoreTriggerFocus = true) => {
     setIsOpen(false);
     resetSearch();
     pointerInteractionInMenuRef.current = false;
-    triggerRef.current?.focus();
+    if (restoreTriggerFocus) triggerRef.current?.focus();
+  };
+
+  const leaveMenuByTab = (backward: boolean) => {
+    const scope = rootRef.current?.closest("dialog") ?? document;
+    const tabbable = Array.from(
+      scope.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((element) => !menuRef.current?.contains(element));
+    const triggerIndex = tabbable.indexOf(triggerRef.current as HTMLElement);
+    if (triggerIndex < 0 || tabbable.length === 0) {
+      closeMenu();
+      return;
+    }
+    const nextIndex = triggerIndex + (backward ? -1 : 1);
+    const target = tabbable[nextIndex];
+    closeMenu(false);
+    if (target) target.focus();
+    else closeMenu();
   };
 
   const resetSearch = () => {
@@ -192,11 +215,7 @@ export function IconSelect<Value extends string>(
   const selectOption = (option: IconSelectOption<Value>) => {
     if (props.multiple) {
       const selected = selectedValues.includes(option.value);
-      if (
-        selected &&
-        selectedValues.length === 1 &&
-        !props.allowEmptySelection
-      )
+      if (selected && selectedValues.length === 1 && !props.allowEmptySelection)
         return;
       props.onChange(
         selected
@@ -398,8 +417,6 @@ export function IconSelect<Value extends string>(
     onBlur?.();
   };
 
-  if (!selectedLabel) return null;
-
   return (
     <div
       ref={rootRef}
@@ -419,6 +436,7 @@ export function IconSelect<Value extends string>(
         aria-invalid={!props.multiple && invalid ? true : undefined}
         aria-required={!props.multiple && required ? true : undefined}
         aria-haspopup={props.multiple ? "menu" : "listbox"}
+        aria-controls={isOpen ? optionsId : undefined}
         aria-expanded={isOpen}
         disabled={disabled}
         onClick={() => (isOpen ? closeMenu() : openMenu())}
@@ -467,7 +485,10 @@ export function IconSelect<Value extends string>(
               aria-label={`${label} opções`}
               onBlur={(event) => closeWhenFocusLeaves(event.relatedTarget)}
               onKeyDown={(event) => {
-                if (event.key === "Escape") {
+                if (event.key === "Tab") {
+                  event.preventDefault();
+                  leaveMenuByTab(event.shiftKey);
+                } else if (event.key === "Escape") {
                   event.preventDefault();
                   closeMenu();
                 } else if (
@@ -559,6 +580,7 @@ export function IconSelect<Value extends string>(
                 </div>
               ) : null}
               <div
+                id={optionsId}
                 role={props.multiple ? "menu" : "listbox"}
                 aria-label={label}
                 onScroll={(event) => {

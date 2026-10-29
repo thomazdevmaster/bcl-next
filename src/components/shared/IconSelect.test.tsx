@@ -1,12 +1,80 @@
 // @vitest-environment jsdom
-
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { IconSelect, type IconSelectOption } from "./IconSelect";
 
 describe("IconSelect keyboard navigation", () => {
+  afterEach(() => cleanup());
+  it("keeps unknown selected values visible and points aria-controls to the list", async () => {
+    const user = userEvent.setup();
+    render(
+      <IconSelect
+        label="Instrumento"
+        options={[{ value: "clarinete", label: "Clarinete" }]}
+        value="instrumento-removido"
+        onChange={vi.fn()}
+      />,
+    );
+
+    const trigger = screen.getByRole("combobox", {
+      name: "Instrumento: instrumento-removido",
+    });
+    expect(trigger).toBeTruthy();
+    await user.click(trigger);
+
+    const list = screen.getByRole("listbox", { name: "Instrumento" });
+    expect(trigger.getAttribute("aria-controls")).toBe(list.id);
+    expect(list.id).not.toBe("");
+  });
+
+  it("uses Tab to leave the popup at the next form control in a dialog", async () => {
+    const user = userEvent.setup();
+    render(
+      <dialog open>
+        <button type="button">Antes</button>
+        <IconSelect
+          label="Instrumento"
+          options={[
+            { value: "clarinete", label: "Clarinete" },
+            { value: "flauta", label: "Flauta" },
+          ]}
+          value="clarinete"
+          onChange={vi.fn()}
+        />
+        <input aria-label="Próximo campo" />
+        <button type="button">Salvar</button>
+      </dialog>,
+    );
+
+    await user.click(
+      screen.getByRole("combobox", { name: "Instrumento: Clarinete" }),
+    );
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole("option", { name: "Clarinete" }),
+      );
+    });
+
+    await user.tab();
+
+    expect(document.activeElement).toBe(
+      screen.getByRole("textbox", { name: "Próximo campo" }),
+    );
+    expect(
+      screen
+        .getByRole("combobox", { name: "Instrumento: Clarinete" })
+        .getAttribute("aria-expanded"),
+    ).toBe("false");
+  });
+
   it("keeps search focus and navigates filtered results with the keyboard", async () => {
     const options: IconSelectOption<string>[] = [
       ...Array.from({ length: 16 }, (_, index) => ({
@@ -29,7 +97,9 @@ describe("IconSelect keyboard navigation", () => {
       />,
     );
 
-    await user.click(screen.getByRole("combobox", { name: "Instrumento: Regular 2" }));
+    await user.click(
+      screen.getByRole("combobox", { name: "Instrumento: Regular 2" }),
+    );
     await waitFor(() => {
       expect(document.activeElement).toBe(
         screen.getByRole("option", { name: "Regular 2" }),
@@ -60,7 +130,10 @@ describe("IconSelect keyboard navigation", () => {
   it("opens by keyboard, focuses a virtualized selection, and supports Home and End", async () => {
     const options: IconSelectOption<string>[] = Array.from(
       { length: 30 },
-      (_, index) => ({ value: `instrument-${index}`, label: `Instrumento ${index}` }),
+      (_, index) => ({
+        value: `instrument-${index}`,
+        label: `Instrumento ${index}`,
+      }),
     );
     const onChange = vi.fn();
     const user = userEvent.setup();
@@ -74,7 +147,9 @@ describe("IconSelect keyboard navigation", () => {
       />,
     );
 
-    screen.getByRole("combobox", { name: "Instrumento: Instrumento 29" }).focus();
+    screen
+      .getByRole("combobox", { name: "Instrumento: Instrumento 29" })
+      .focus();
     await user.keyboard("{ArrowDown}");
     await waitFor(() => {
       expect(document.activeElement).toBe(
