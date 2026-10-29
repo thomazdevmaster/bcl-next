@@ -59,6 +59,7 @@ Novo domínio: tipos em `src/domains/<nome>/` → `catalog.ts` → `permissions.
 - Performance: listas virtuais só se necessário; imagens com `next/image`; MusicXML/MIDI grandes não devem ser convertidos de novo no React quando o backend existir (ver arquitetura).
 - Não commitar segredos. Não versionar XML/MIDI de produção em `public/` como fonte da verdade.
 - Não expandir escopo: sem microserviços, BFF extra ou segundo CRUD “só para estudo”.
+- **Testes de regressão obrigatórios:** toda mudança funcional em componente, formulário, domínio, rota ou integração deve incluir ou atualizar testes automatizados que validem o comportamento alterado e os comportamentos relacionados que possam regredir. Ao alterar um componente compartilhado, cubra também os consumidores ou fluxos relacionados relevantes — por exemplo, mudar o componente A não pode quebrar o componente B que o reutiliza. Execute os testes focados e a suíte completa antes de concluir; não remova nem enfraqueça testes para fazer a suíte passar.
 - Lint/tipos nos arquivos tocados. O ESLint global ainda pode falhar em código antigo do player — não “consertar o mundo” sem pedido.
 - Na dúvida de produto: perguntar.
 
