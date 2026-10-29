@@ -18,12 +18,12 @@ const profileFieldPaths: Record<ProfileFieldKey, (string | number)[]> = {
 };
 
 const profileFieldMessages: Record<ProfileFieldKey, string> = {
-  studentEnrollmentDate: "Campo obrigatório para este perfil.",
+  studentEnrollmentDate: "Informe a data de matrícula.",
   studentLevel: "Selecione o nível do aluno.",
-  musicianSection: "Campo obrigatório para este perfil.",
+  musicianSection: "Selecione o naipe.",
   musicianExperience: "Selecione o tempo de experiência.",
   musicianDefaultVoice: "Selecione a voz padrão.",
-  musicianPlayedInstrumentId: "Campo obrigatório para este perfil.",
+  musicianPlayedInstrumentId: "Selecione o instrumento que toca.",
 };
 
 const todayIsoDate = () => new Date().toISOString().slice(0, 10);

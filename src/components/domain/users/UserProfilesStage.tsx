@@ -413,7 +413,7 @@ function ProfileSelect({
               (empty
                 ? (optionalMessage ??
                   (required
-                    ? "Campo obrigatório para este perfil."
+                    ? `${label} é obrigatório.`
                     : undefined))
                 : undefined)
             }

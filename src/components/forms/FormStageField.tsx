@@ -165,6 +165,7 @@ export function FormStageField<TFieldValues extends FieldValues>({
                 placeholder={placeholder}
                 max={max}
                 disabled={disabled}
+                readOnly={readOnly}
                 required={required}
               />
             )

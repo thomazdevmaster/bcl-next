@@ -19,7 +19,7 @@ export const presentationsCrudFormSchema = z
       .string()
       .refine(
         (value) => !value || validDateTime(value),
-        "Informe uma data e hora de término válidas.",
+        "Informe uma data e hora de fim válidas.",
       ),
     description: z.string(),
     repertoireIds: z.string(),
@@ -45,7 +45,7 @@ export const presentationsCrudFormSchema = z
       context.addIssue({
         code: "custom",
         path: ["endsAt"],
-        message: "O término deve ocorrer após o início.",
+        message: "O fim deve ocorrer após o início.",
       });
     }
   });

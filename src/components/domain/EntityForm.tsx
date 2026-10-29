@@ -90,7 +90,6 @@ export function EntityForm({
       resource,
       fields,
       values,
-      !editing && !readOnly,
     ) as DefaultValues<DomainCrudFormValues>,
     shouldUnregister: false,
     mode: "onTouched",
@@ -765,16 +764,13 @@ function makeFormDefaults(
   resource: DomainCrudFormResource,
   fields: CrudField[],
   values: Record<string, unknown>,
-  clearSelectDefaults: boolean,
 ): Record<string, unknown> {
   const defaults: Record<string, unknown> = { resource };
   if (values.id != null) defaults.id = values.id;
   for (const field of fields) {
     const value = values[field.name];
     defaults[toFormFieldName(field.name)] =
-      clearSelectDefaults && field.type === "select"
-        ? ""
-        : (value ?? defaultValueForField(field));
+      value ?? defaultValueForField(field);
   }
   if (resource === "people" && values.userId != null)
     defaults.userId = values.userId;

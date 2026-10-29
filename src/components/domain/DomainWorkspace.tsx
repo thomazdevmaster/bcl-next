@@ -23,6 +23,7 @@ import {
 } from "@/domains/crudConfig";
 import type { Person } from "@/domains/people/types";
 import { filterPeopleForRole } from "@/domains/people/visibility";
+import { shouldNotifyOnPresentationSave } from "@/domains/presentations/notificationPayload";
 import { filterSongRecordsForCatalog } from "@/domains/songs/catalogAccess";
 import { apiFetch } from "@/lib/api";
 import { gestaoDeepLinkParam } from "@/lib/deepLink/gestaoDeepLinkParams";
@@ -376,7 +377,11 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
       const payload: Record<string, unknown> =
         dialogMode === "create" ? mapped : { ...selected, ...mapped };
       if (resource === "presentations") {
-        payload.notifyAll = Boolean(values.notifyAll);
+        payload.notifyAll = shouldNotifyOnPresentationSave(
+          Boolean(values.notifyAll),
+          selected,
+          dialogMode === "create",
+        );
       }
       // Senhas de usuário são cifradas antes de serem enviadas à API.
       if (typeof payload.password === "string") {
@@ -617,11 +622,14 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
             resource={resource}
             fields={config.fields.filter(
               (field) =>
-                field.name !== "notifyAll" ||
-                (dialogMode !== "view" &&
-                  (dialogMode === "create" ||
-                    selected?.status !== "scheduled" ||
-                    selected?.isPublic !== true)),
+                ((field.name !== "createUser" && field.name !== "username") ||
+                  resource === "users" ||
+                  can(roles, "users", "create", permissions)) &&
+                (field.name !== "notifyAll" ||
+                  (dialogMode !== "view" &&
+                    (dialogMode === "create" ||
+                      selected?.status !== "scheduled" ||
+                      selected?.isPublic !== true))),
             )}
             values={initialValues}
             readOnly={dialogMode === "view"}

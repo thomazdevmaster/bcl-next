@@ -28,6 +28,7 @@ type CalendarControlProps = {
   min?: string;
   max?: string;
   disabled?: boolean;
+  readOnly?: boolean;
   required?: boolean;
 };
 
@@ -103,6 +104,7 @@ export function IconCalendar({
   min,
   max,
   disabled,
+  readOnly,
   required,
 }: CalendarControlProps) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -189,6 +191,7 @@ export function IconCalendar({
   };
 
   const openCalendar = () => {
+    if (disabled || readOnly) return;
     const selected = parseDate(value);
     const initial = selected ?? new Date();
     setFocusedDate(toISODate(initial));
@@ -293,6 +296,7 @@ export function IconCalendar({
   };
 
   const handleDateDraftChange = (rawValue: string) => {
+    if (readOnly) return;
     const digits = rawValue.replace(/\D/g, "").slice(0, 8);
     updateDateDraft(formatDateDraft(digits));
     if (digits.length === 0) {
@@ -318,6 +322,7 @@ export function IconCalendar({
   };
 
   const chooseDate = (date: Date) => {
+    if (readOnly) return;
     const isoDate = toISODate(date);
     if ((min && isoDate < min) || (max && isoDate > max)) return;
     onValueChange(isoDate);
@@ -338,6 +343,7 @@ export function IconCalendar({
           value={dateDraft}
           placeholder={placeholder}
           disabled={disabled}
+          readOnly={readOnly}
           required={required}
           aria-labelledby={labelId}
           aria-describedby={
@@ -352,6 +358,7 @@ export function IconCalendar({
           aria-controls={calendarId}
           onChange={(event) => handleDateDraftChange(event.target.value)}
           onKeyDown={(event) => {
+            if (readOnly) return;
             if (event.key === "Escape" && isOpen) {
               event.preventDefault();
               closeCalendar(true);
@@ -384,7 +391,7 @@ export function IconCalendar({
           aria-label={`${isOpen ? "Fechar" : "Abrir"} calendário de ${label.toLocaleLowerCase("pt-BR")}`}
           aria-haspopup="dialog"
           aria-expanded={isOpen}
-          disabled={disabled}
+          disabled={disabled || readOnly}
           onClick={() => (isOpen ? closeCalendar() : openCalendar())}
           className="absolute right-0 top-1/2 inline-flex size-11 -translate-y-1/2 items-center justify-center rounded-r-xl text-[var(--muted)] transition-colors hover:text-[var(--foreground)] focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)] disabled:cursor-not-allowed"
         >

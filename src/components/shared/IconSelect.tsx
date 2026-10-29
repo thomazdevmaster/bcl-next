@@ -81,12 +81,14 @@ export function IconSelect<Value extends string>(
   const menuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const pointerInteractionInMenuRef = useRef(false);
+  const focusOptionOnOpenRef = useRef(false);
   const [isOpen, setIsOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>();
   const [portalContainer, setPortalContainer] = useState<Element | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [listScrollTop, setListScrollTop] = useState(0);
+  const [activeOptionIndex, setActiveOptionIndex] = useState(0);
   const searchDebouncer = useDebouncer(
     (value: string) => setDebouncedSearchQuery(value),
     { wait: 300 },
@@ -127,6 +129,53 @@ export function IconSelect<Value extends string>(
     : visibleOptions.length;
   const renderedOptions = visibleOptions.slice(visibleStart, visibleEnd);
 
+  const openMenu = () => {
+    resetSearch();
+    const selectedIndex = options.findIndex((option) =>
+      selectedValues.includes(option.value),
+    );
+    const initialIndex = selectedIndex >= 0 ? selectedIndex : 0;
+    setActiveOptionIndex(initialIndex);
+    setListScrollTop(
+      options.length > VIRTUALIZATION_THRESHOLD
+        ? Math.max(
+            0,
+            initialIndex * OPTION_HEIGHT - VIRTUAL_OVERSCAN * OPTION_HEIGHT,
+          )
+        : 0,
+    );
+    setPortalContainer(rootRef.current?.closest("dialog") ?? document.body);
+    focusOptionOnOpenRef.current = true;
+    setIsOpen(true);
+  };
+
+  const focusOption = (index: number) => {
+    if (visibleOptions.length === 0) return;
+    const boundedIndex = Math.max(
+      0,
+      Math.min(index, visibleOptions.length - 1),
+    );
+    setActiveOptionIndex(boundedIndex);
+    const list = menuRef.current?.querySelector<HTMLElement>(
+      '[role="listbox"], [role="menu"]',
+    );
+    if (shouldVirtualize && list) {
+      const nextScrollTop = Math.max(
+        0,
+        boundedIndex * OPTION_HEIGHT - VIRTUAL_OVERSCAN * OPTION_HEIGHT,
+      );
+      list.scrollTop = nextScrollTop;
+      setListScrollTop(nextScrollTop);
+    }
+    requestAnimationFrame(() => {
+      menuRef.current
+        ?.querySelector<HTMLButtonElement>(
+          `[data-option-index="${boundedIndex}"]`,
+        )
+        ?.focus();
+    });
+  };
+
   const closeMenu = () => {
     setIsOpen(false);
     resetSearch();
@@ -140,35 +189,38 @@ export function IconSelect<Value extends string>(
     setDebouncedSearchQuery("");
   };
 
-  const renderOption = (option: IconSelectOption<Value>) => {
+  const selectOption = (option: IconSelectOption<Value>) => {
+    if (props.multiple) {
+      const selected = selectedValues.includes(option.value);
+      if (
+        selected &&
+        selectedValues.length === 1 &&
+        !props.allowEmptySelection
+      )
+        return;
+      props.onChange(
+        selected
+          ? selectedValues.filter((value) => value !== option.value)
+          : [...selectedValues, option.value],
+      );
+      return;
+    }
+    props.onChange(option.value);
+    onBlur?.();
+    closeMenu();
+  };
+
+  const renderOption = (option: IconSelectOption<Value>, index: number) => {
     const selected = selectedValues.includes(option.value);
     return (
       <button
         key={option.value}
+        data-option-index={index}
         type="button"
         role={props.multiple ? "menuitemcheckbox" : "option"}
         aria-checked={props.multiple ? selected : undefined}
         aria-selected={!props.multiple ? selected : undefined}
-        onClick={() => {
-          if (props.multiple) {
-            if (
-              selected &&
-              selectedValues.length === 1 &&
-              !props.allowEmptySelection
-            )
-              return;
-            const nextValues = selected
-              ? selectedValues.filter(
-                  (selectedValue) => selectedValue !== option.value,
-                )
-              : [...selectedValues, option.value];
-            props.onChange(nextValues);
-            return;
-          }
-          props.onChange(option.value);
-          onBlur?.();
-          closeMenu();
-        }}
+        onClick={() => selectOption(option)}
         disabled={disabled}
         className={`flex h-11 w-full items-center gap-2 px-3 text-left text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-60 ${selected ? "bg-[var(--card-secondary)] text-[var(--foreground)]" : "text-[var(--muted)] hover:bg-[var(--card-secondary)]"}`}
       >
@@ -313,6 +365,25 @@ export function IconSelect<Value extends string>(
     };
   }, [isOpen, searchDebouncer]);
 
+  useEffect(() => {
+    if (
+      !isOpen ||
+      !menuStyle ||
+      !focusOptionOnOpenRef.current ||
+      visibleOptions.length === 0
+    )
+      return;
+    const frame = requestAnimationFrame(() => {
+      focusOptionOnOpenRef.current = false;
+      menuRef.current
+        ?.querySelector<HTMLButtonElement>(
+          `[data-option-index="${activeOptionIndex}"]`,
+        )
+        ?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeOptionIndex, isOpen, menuStyle]);
+
   const closeWhenFocusLeaves = (relatedTarget: EventTarget | null) => {
     if (relatedTarget instanceof Node) {
       if (
@@ -350,19 +421,17 @@ export function IconSelect<Value extends string>(
         aria-haspopup={props.multiple ? "menu" : "listbox"}
         aria-expanded={isOpen}
         disabled={disabled}
-        onClick={() => {
-          resetSearch();
-          if (!isOpen) {
-            setPortalContainer(
-              rootRef.current?.closest("dialog") ?? document.body,
-            );
-          }
-          setIsOpen((open) => !open);
-        }}
+        onClick={() => (isOpen ? closeMenu() : openMenu())}
         onKeyDown={(event) => {
           if (event.key === "Escape" && isOpen) {
             event.preventDefault();
             closeMenu();
+          } else if (
+            !isOpen &&
+            ["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)
+          ) {
+            event.preventDefault();
+            openMenu();
           }
         }}
         className={`inline-flex min-h-11 w-full items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 text-left text-sm font-semibold text-[var(--foreground)] outline-none transition disabled:cursor-not-allowed disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-[var(--ring)] ${triggerClassName ?? ""}`}
@@ -401,6 +470,23 @@ export function IconSelect<Value extends string>(
                 if (event.key === "Escape") {
                   event.preventDefault();
                   closeMenu();
+                } else if (
+                  event.target instanceof HTMLInputElement &&
+                  event.target === searchInputRef.current
+                ) {
+                  return;
+                } else if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  focusOption(activeOptionIndex + 1);
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  focusOption(activeOptionIndex - 1);
+                } else if (event.key === "Home") {
+                  event.preventDefault();
+                  focusOption(0);
+                } else if (event.key === "End") {
+                  event.preventDefault();
+                  focusOption(visibleOptions.length - 1);
                 }
               }}
               style={menuStyle}
@@ -423,6 +509,20 @@ export function IconSelect<Value extends string>(
                       aria-label={`Buscar ${label.toLocaleLowerCase("pt-BR")}`}
                       placeholder="Buscar…"
                       value={searchQuery}
+                      onKeyDown={(event) => {
+                        if (event.key === "ArrowDown") {
+                          event.preventDefault();
+                          focusOption(0);
+                        } else if (event.key === "ArrowUp") {
+                          event.preventDefault();
+                          focusOption(visibleOptions.length - 1);
+                        } else if (event.key === "Enter") {
+                          const firstOption = visibleOptions[0];
+                          if (!firstOption) return;
+                          event.preventDefault();
+                          selectOption(firstOption);
+                        }
+                      }}
                       onChange={(event) => {
                         const nextQuery = event.target.value;
                         setSearchQuery(nextQuery);
@@ -489,11 +589,15 @@ export function IconSelect<Value extends string>(
                       }}
                       className="absolute inset-x-0 top-0"
                     >
-                      {renderedOptions.map((option) => renderOption(option))}
+                      {renderedOptions.map((option, index) =>
+                        renderOption(option, visibleStart + index),
+                      )}
                     </div>
                   </div>
                 ) : (
-                  visibleOptions.map((option) => renderOption(option))
+                  visibleOptions.map((option, index) =>
+                    renderOption(option, index),
+                  )
                 )}
               </div>
             </div>,

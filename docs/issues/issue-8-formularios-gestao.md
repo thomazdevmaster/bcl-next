@@ -4,7 +4,7 @@
 - SPEC: [issue-8-formularios-gestao.md](../specs/issue-8-formularios-gestao.md).
 - Estado no GitHub observado em 2026-10-28: aberta; atribuída a `kjunda01`; label `enhancement`; sem milestone.
 - Status real do código: **implementação concluída para os cinco CRUDs; a pessoa usuária confirmou a validação real em mobile e desktop**.
-- Última verificação: 2026-10-28.
+- Última verificação: 2026-10-29.
 - Branch preparada: `feat/issue-8-padroes-formularios-gestao`, base `180365f` (`origin/main`).
 
 ## Contexto original observado
@@ -58,6 +58,21 @@ O snapshot integral da issue abaixo mantém as caixas como foram consultadas ori
 - `DomainWorkspace` usa posicionamento `mobile-full`; `EntityDialog` define altura `100dvh` no mobile e enquadramento central limitado no desktop. Uma verificação anterior confirmou o retângulo do diálogo em 360×800.
 - Correção de seletores: selects de escolha única dos cinco CRUDs usam `IconSelect` com ícones, ligado ao RHF e às mensagens acessíveis; cadastros novos começam em “Selecione…” e schemas Zod exigem a escolha para campos obrigatórios/condicionais. Edição e leitura preservam valores existentes. `AGENTS.md` aponta também para `ResponsiveTabs` na página Perfil. O cálculo da altura do menu inclui a borda, evitando rolagem residual com duas opções.
 - Revisão da implementação: não foram encontrados bloqueios claros de padrão ou divergências funcionais nos cinco CRUDs. A validação condicional de campos de aluno/músico foi centralizada em `people/profileValidation.ts`; cada schema mantém seus caminhos e mensagens. O nome de usuário vazio permanece permitido por regra anterior: a API o gera automaticamente. A revisão do agente não exercitou permissões e máscara PII com cada perfil autenticado; a lógica existente permanece no workspace.
+
+## Ajustes solicitados na revisão do PR #102
+
+Revisão geral enviada em 2026-10-29 por `thomazdevmaster` (commit revisado: `e12c5d1`). Estado do PR no momento do registro: aberto, com `CHANGES_REQUESTED`.
+
+- [x] **Data somente leitura no modo “ver”:** o campo de data fica `readOnly`, não abre o calendário e rejeita alterações por teclado quando o registro está em modo de visualização.
+- [x] **Select acessível pelo teclado:** `IconSelect` abre com Enter/Espaço/setas, foca a opção selecionada e permite navegar com setas, Home e End; Enter/Espaço selecionam pelo comportamento nativo do botão.
+- [x] **Rótulos alinhados ao schema:** mensagens dos campos obrigatórios de perfil foram alinhadas aos rótulos; a auditoria dos schemas de formulário também ajustou as mensagens de fim da apresentação para usar o rótulo “Fim”. Testes cobrem validações e mensagens correspondentes aos rótulos.
+- [x] **Preservar defaults de criação:** `EntityForm` mantém os valores declarados em `crudConfig` (por exemplo, status ativo e categoria equipamento); campos sem valor configurado continuam usando o fallback vazio.
+- [x] **Restaurar o filtro `users:create`:** os campos “Criar usuário de acesso” e “Nome de usuário” em Pessoas só aparecem para quem pode criar usuários.
+- [x] **Evitar notificação duplicada:** ao editar apresentação já agendada e pública, o payload força `notifyAll: false`; novas publicações continuam respeitando a opção marcada.
+- [x] **Confirmar versão:** confirmado `0.39.2` (base `origin/main`) → `0.42.1` (branch); a sequência foi `0.40.0` em controles compartilhados, `0.41.0` na migração dos CRUDs, `0.42.0` na padronização de usuários e `0.42.1` no commit de documentação. `package.json` e `package-lock.json` estão alinhados em `0.42.1`.
+- [x] **Testes:** adicionados Vitest e Testing Library, com cinco arquivos cobrindo navegação por teclado e busca do select, preservação de defaults, mensagens dos schemas de perfil e CRUD, payloads dos cinco domínios e regra de notificação de apresentações. `pnpm test`: 5 arquivos e 20 testes passaram em 2026-10-29. `git diff --check` passou; a checagem atual de TypeScript foi interrompida antes de concluir.
+
+Marque cada caixa após implementar e verificar o respectivo ajuste. A solicitação de testes foi formulada como desejável (“se der”) na revisão.
 
 ## Snapshot integral da issue
 
