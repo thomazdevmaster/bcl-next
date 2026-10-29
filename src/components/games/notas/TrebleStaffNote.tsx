@@ -1,13 +1,13 @@
 'use client';
 
 import { TrebleClefSymbol } from '@/components/games/notas/TrebleClefSymbol';
+import { TrebleEighthNoteGlyph } from '@/components/games/notas/TrebleEighthNote';
 import type { TrebleNaturalNote } from '@/domains/games/notas/trebleNaturals1Notes';
 import {
-  TREBLE_LEDGER_HALF,
   TREBLE_NOTE_X,
   TREBLE_STAFF_METRICS,
+  gameStaffSize,
   trebleStaffLineYs,
-  trebleStepCenterY,
 } from '@/domains/games/notas/trebleStaffLayout';
 
 interface TrebleStaffNoteProps {
@@ -15,23 +15,25 @@ interface TrebleStaffNoteProps {
   className?: string;
 }
 
-/** Partitura (clave de sol + pauta) com uma semíbreve. */
+/** Partitura (clave de sol + pauta) com uma colcheia. */
 export function TrebleStaffNote({ note, className = '' }: TrebleStaffNoteProps) {
   const lines = trebleStaffLineYs(TREBLE_STAFF_METRICS);
-  const noteY = trebleStepCenterY(note.staffStep, TREBLE_STAFF_METRICS);
-  const needsLedgerBelow = note.staffStep <= -2;
-  const needsLedgerAbove = note.staffStep >= 10;
+  const staff = gameStaffSize(200, 116, TREBLE_STAFF_METRICS.lineGap);
 
   return (
     <div
-      className={`relative mx-auto flex max-w-[17.5rem] items-center ${className}`}
+      className={`relative mx-auto flex w-full items-center justify-center overflow-x-auto ${className}`}
       role="img"
       aria-label="Nota na partitura em clave de sol"
     >
-      <TrebleClefSymbol className="pointer-events-none h-[5.5rem] w-[2.75rem] shrink-0 -mr-3 text-[var(--foreground)]" />
+      <TrebleClefSymbol
+        className="pointer-events-none shrink-0 -mr-3 text-[var(--foreground)]"
+        style={{ height: staff.height, width: staff.clefWidth }}
+      />
       <svg
-        viewBox="0 0 200 96"
-        className="h-[5.5rem] flex-1 text-[var(--foreground)]"
+        viewBox="0 -10 200 116"
+        className="shrink-0 text-[var(--foreground)]"
+        style={{ height: staff.height, width: staff.width }}
         aria-hidden
       >
         {lines.map((y) => (
@@ -46,36 +48,10 @@ export function TrebleStaffNote({ note, className = '' }: TrebleStaffNoteProps) 
             opacity={0.55}
           />
         ))}
-        {needsLedgerBelow ? (
-          <line
-            x1={TREBLE_NOTE_X - TREBLE_LEDGER_HALF}
-            y1={noteY}
-            x2={TREBLE_NOTE_X + TREBLE_LEDGER_HALF}
-            y2={noteY}
-            stroke="currentColor"
-            strokeWidth={1.2}
-            opacity={0.55}
-          />
-        ) : null}
-        {needsLedgerAbove ? (
-          <line
-            x1={TREBLE_NOTE_X - TREBLE_LEDGER_HALF}
-            y1={noteY}
-            x2={TREBLE_NOTE_X + TREBLE_LEDGER_HALF}
-            y2={noteY}
-            stroke="currentColor"
-            strokeWidth={1.2}
-            opacity={0.55}
-          />
-        ) : null}
-        <ellipse
+        <TrebleEighthNoteGlyph
+          staffStep={note.staffStep}
+          metrics={TREBLE_STAFF_METRICS}
           cx={TREBLE_NOTE_X}
-          cy={noteY}
-          rx={9}
-          ry={6.5}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2.2}
         />
       </svg>
     </div>

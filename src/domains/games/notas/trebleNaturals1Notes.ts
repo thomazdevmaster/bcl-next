@@ -123,6 +123,29 @@ export function pickRandomTrebleNatural(
   return pool[Math.floor(Math.random() * pool.length)]!;
 }
 
+/** Duas naturais do nível, em alturas diferentes. */
+export function pickTrebleNaturalPair(
+  level: TrebleNaturals1Level,
+): [TrebleNaturalNote, TrebleNaturalNote] {
+  const left = pickRandomTrebleNatural(level);
+  let right = pickRandomTrebleNatural(level, left.id);
+  let guard = 0;
+  while (right.staffStep === left.staffStep && guard < 8) {
+    right = pickRandomTrebleNatural(level, left.id);
+    guard += 1;
+  }
+  return [left, right];
+}
+
+export type TreblePairSide = 'left' | 'right';
+
+export function higherTrebleSide(
+  left: TrebleNaturalNote,
+  right: TrebleNaturalNote,
+): TreblePairSide {
+  return left.midi >= right.midi ? 'left' : 'right';
+}
+
 export function isCorrectSolfegeAnswer(
   target: TrebleNaturalNote,
   chosenSolfege: SolfegeName,
@@ -245,9 +268,89 @@ export function readTrebleNaturals2Stats(): TrebleNaturals2PersistedStats {
 export function writeTrebleNaturals2Stats(
   stats: TrebleNaturals2PersistedStats,
 ): void {
+  writeTrebleGameLevelStats(TREBLE_NATURALS_2_STORAGE_KEY, stats);
+}
+
+export const TREBLE_HIGHER_NOTE_STORAGE_KEY =
+  'bcl.game.notas-clave-sol-mais-aguda';
+
+export const TREBLE_LISTEN_WRITE_STORAGE_KEY =
+  'bcl.game.notas-clave-sol-ouca-escreva';
+
+export const TREBLE_ROTATE_STAFF_STORAGE_KEY =
+  'bcl.game.notas-clave-sol-gire-a-pauta';
+
+/** Sete encaixes, um por nome (Mi₄ na linha de baixo até Ré₅). A oitava não muda o encaixe. */
+export const TREBLE_WHEEL_SLOT_COUNT = 7;
+
+export function trebleWheelSlotForStaffStep(staffStep: number): number {
+  return ((staffStep % TREBLE_WHEEL_SLOT_COUNT) + TREBLE_WHEEL_SLOT_COUNT) %
+    TREBLE_WHEEL_SLOT_COUNT;
+}
+
+export function trebleWheelSlotForNote(note: TrebleNaturalNote): number {
+  return trebleWheelSlotForStaffStep(note.staffStep);
+}
+
+/** Posição inicial diferente da resposta, para a pauta não nascer alinhada. */
+export function pickTrebleWheelStart(correctSlot: number): number {
+  const offset =
+    1 + Math.floor(Math.random() * (TREBLE_WHEEL_SLOT_COUNT - 1));
+  return (correctSlot + offset) % TREBLE_WHEEL_SLOT_COUNT;
+}
+
+export function pickTrebleRotatePrompt(
+  level: TrebleNaturals1Level,
+  excludeSlot?: number,
+): TrebleNaturalNote {
+  const levelPool = notesForLevel(level);
+  const pool =
+    excludeSlot === undefined
+      ? levelPool
+      : levelPool.filter(
+          (note) => trebleWheelSlotForNote(note) !== excludeSlot,
+        );
+  const source = pool.length > 0 ? pool : levelPool;
+  return source[Math.floor(Math.random() * source.length)]!;
+}
+
+export function readTrebleGameLevelStats(
+  storageKey: string,
+): TrebleNaturals1PersistedStats {
+  if (typeof window === 'undefined') {
+    return { selectedLevel: 'medio', bestStreakByLevel: emptyBestStreakByLevel() };
+  }
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) {
+      return { selectedLevel: 'medio', bestStreakByLevel: emptyBestStreakByLevel() };
+    }
+    const parsed = JSON.parse(raw) as Partial<TrebleNaturals1PersistedStats>;
+    const bestStreakByLevel = emptyBestStreakByLevel();
+    if (parsed.bestStreakByLevel) {
+      for (const level of TREBLE_NATURAL_LEVELS) {
+        bestStreakByLevel[level.id] = Math.max(
+          0,
+          Number(parsed.bestStreakByLevel[level.id]) || 0,
+        );
+      }
+    }
+    const selectedLevel =
+      parsed.selectedLevel === 'facil' ||
+      parsed.selectedLevel === 'medio' ||
+      parsed.selectedLevel === 'dificil'
+        ? parsed.selectedLevel
+        : 'medio';
+    return { selectedLevel, bestStreakByLevel };
+  } catch {
+    return { selectedLevel: 'medio', bestStreakByLevel: emptyBestStreakByLevel() };
+  }
+}
+
+export function writeTrebleGameLevelStats(
+  storageKey: string,
+  stats: TrebleNaturals1PersistedStats,
+): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(
-    TREBLE_NATURALS_2_STORAGE_KEY,
-    JSON.stringify(stats),
-  );
+  window.localStorage.setItem(storageKey, JSON.stringify(stats));
 }

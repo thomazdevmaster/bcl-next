@@ -169,6 +169,26 @@ export function titleForPath(pathname: string): string {
     if (gameSlug === "clave-sol-naturais-2") {
       return "Naturais 2";
     }
+    if (gameSlug === "clave-sol-mais-aguda") {
+      return "Mais aguda";
+    }
+    if (gameSlug === "clave-sol-ouca-escreva") {
+      return "Ouça e escreva";
+    }
+    if (gameSlug === "gire-a-pauta") return "Gire a pauta";
+    if (gameSlug === "figuras") return "Figuras";
+    if (gameSlug === "qual-dura-mais") return "Qual dura mais";
+    if (gameSlug === "complete-o-compasso") return "Complete o compasso";
+    if (gameSlug === "ouca-o-ritmo") return "Ouça o ritmo";
+    if (gameSlug === "segure-o-tempo") return "Segure o tempo";
+    if (gameSlug === "nomeie") return "Nomeie";
+    if (gameSlug === "qual-e-maior") return "Qual é maior";
+    if (gameSlug === "ouca") return "Ouça";
+    if (gameSlug === "escreva") return "Escreva";
+    if (gameSlug === "familia") return "Família";
+    if (gameSlug === "como-se-toca") return "Como se toca";
+    if (gameSlug === "mais-agudo") return "Mais agudo";
+    if (gameSlug === "quem-e") return "Quem é";
     const labels: Record<string, string> = {
       notas: "Notas",
       ritmos: "Ritmos",
