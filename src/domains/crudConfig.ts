@@ -1,31 +1,33 @@
-import type { CrudResource } from '@/core/auth/permissions';
-import { youtubeVideoId } from '@/domains/songs/youtube';
-import { INSTRUMENT_FAMILY_OPTIONS, INSTRUMENT_SIGNAL_OPTIONS } from '@/domains/instruments/types';
+import type { CrudResource } from "@/core/auth/permissions";
+import {
+  INSTRUMENT_FAMILY_OPTIONS,
+  INSTRUMENT_SIGNAL_OPTIONS,
+} from "@/domains/instruments/types";
 import {
   EXPERIENCE_LABEL,
   GUARDIAN_RELATIONSHIP_LABEL,
   formatCpf,
-  isPersonUnderage,
-  isValidCpf,
-} from '@/domains/people/types';
+} from "@/domains/people/types";
+import { isValidUsername } from "@/domains/users/username";
 
 export type CrudFieldType =
-  | 'text'
-  | 'email'
-  | 'tel'
-  | 'password'
-  | 'number'
-  | 'date'
-  | 'datetime-local'
-  | 'textarea'
-  | 'select'
-  | 'multiselect'
-  | 'checkbox'
-  | 'xml';
+  | "text"
+  | "email"
+  | "tel"
+  | "password"
+  | "number"
+  | "date"
+  | "datetime-local"
+  | "textarea"
+  | "select"
+  | "multiselect"
+  | "checkbox"
+  | "xml";
 
 export interface CrudOption {
   value: string;
   label: string;
+  icon?: string;
 }
 
 /**
@@ -34,17 +36,20 @@ export interface CrudOption {
  * - `people-without-user`: pessoas que ainda não têm conta;
  * - `instruments`: catálogo de instrumentos (trompete, sax alto), não a peça do patrimônio.
  */
-export type CrudOptionSource = 'people' | 'people-without-user' | 'instruments';
+export type CrudOptionSource = "people" | "people-without-user" | "instruments";
 
 export interface CrudField {
   name: string;
   label: string;
   type?: CrudFieldType;
+  icon?: string;
   required?: boolean;
   options?: CrudOption[];
   optionsSource?: CrudOptionSource;
   /** Agrupa campos sob um título dentro do formulário. */
   section?: string;
+  /** Ocupa a largura completa da grade do formulário. */
+  wide?: boolean;
   /** Só pode ser definido na criação; na edição aparece bloqueado. */
   lockOnEdit?: boolean;
   placeholder?: string;
@@ -59,11 +64,12 @@ export interface CrudField {
 export interface CrudColumn {
   path: string;
   label: string;
-  format?: 'boolean' | 'date' | 'datetime' | 'currency' | 'count' | 'roles' | 'status';
+  format?:
+    "boolean" | "date" | "datetime" | "currency" | "count" | "roles" | "status";
 }
 
 /** Quem criou o registro ou fez a última alteração. */
-const actorColumn: CrudColumn = { path: 'createdBy', label: 'Criado por' };
+const actorColumn: CrudColumn = { path: "createdBy", label: "Criado por" };
 
 export interface DomainCrudConfig {
   resource: CrudResource;
@@ -80,25 +86,20 @@ export interface DomainCrudConfig {
   ) => Record<string, unknown>;
 }
 
-const requiredProfile = (value: unknown, values: Record<string, unknown>, enabled: string) =>
-  values[enabled] && !String(value ?? '').trim() ? 'Campo obrigatório para este perfil.' : null;
-
-const isMinor = (values: Record<string, unknown>) =>
-  Boolean(values.birthDate) && isPersonUnderage(String(values.birthDate));
-
-const validatePhone = (value: unknown) => {
-  const digits = String(value ?? '').replace(/\D/g, '');
-  return digits.length >= 10 && digits.length <= 11
-    ? null
-    : 'Informe um telefone com DDD.';
-};
+export interface CrudFormStage {
+  id: string;
+  title: string;
+  shortTitle: string;
+  icon: string;
+  fields: string[];
+}
 
 const validateUsername = (value: unknown) => {
-  const username = String(value ?? '').trim();
+  const username = String(value ?? "").trim();
   if (!username) return null;
-  return /^[a-z0-9][a-z0-9._-]{2,59}$/.test(username)
+  return isValidUsername(username)
     ? null
-    : 'Use de 3 a 60 caracteres: letras minúsculas, números, ponto, hífen ou _.';
+    : "Use de 3 a 60 caracteres: letras minúsculas, números, ponto, hífen ou _.";
 };
 
 const todayIso = () => {
@@ -108,57 +109,59 @@ const todayIso = () => {
 };
 
 const toId = (value: unknown): number | null => {
-  if (value === '' || value == null) return null;
+  if (value === "" || value == null) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-};
-
-const toIdList = (value: unknown): number[] => {
-  const raw = Array.isArray(value)
-    ? value
-    : String(value ?? '')
-        .split(',')
-        .map((item) => item.trim())
-        .filter(Boolean);
-  return raw.map(toId).filter((id): id is number => id !== null);
 };
 
 const LEVEL_OPTIONS: CrudOption[] = [1, 2, 3, 4, 5].map((level) => ({
   value: String(level),
   label: `Nível ${level}`,
+  icon: "school",
 }));
 
 const VOICE_OPTIONS: CrudOption[] = [1, 2, 3, 4].map((voice) => ({
   value: String(voice),
   label: `${voice}ª voz`,
+  icon: "graphic_eq",
 }));
 
-const EXPERIENCE_OPTIONS: CrudOption[] = Object.entries(EXPERIENCE_LABEL).map(([value, label]) => ({
-  value,
-  label,
-}));
+const EXPERIENCE_OPTIONS: CrudOption[] = Object.entries(EXPERIENCE_LABEL).map(
+  ([value, label]) => ({
+    value,
+    label,
+    icon: "history",
+  }),
+);
 
 const RELATIONSHIP_OPTIONS: CrudOption[] = [
-  { value: '', label: 'Selecione…' },
-  ...Object.entries(GUARDIAN_RELATIONSHIP_LABEL).map(([value, label]) => ({ value, label })),
-];
-
-const SECTION_OPTIONS: CrudOption[] = [
-  { value: '', label: 'Selecione…' },
-  ...['Madeiras', 'Metais', 'Percussão', 'Cordas', 'Teclas', 'Regência'].map((section) => ({
-    value: section,
-    label: section,
+  { value: "", label: "Selecione…", icon: "person_search" },
+  ...Object.entries(GUARDIAN_RELATIONSHIP_LABEL).map(([value, label]) => ({
+    value,
+    label,
+    icon: "family_restroom",
   })),
 ];
 
+const SECTION_OPTIONS: CrudOption[] = [
+  { value: "", label: "Selecione…", icon: "music_note" },
+  ...["Madeiras", "Metais", "Percussão", "Cordas", "Teclas", "Regência"].map(
+    (section) => ({
+      value: section,
+      label: section,
+      icon: "groups",
+    }),
+  ),
+];
+
 const commonStatus: CrudField = {
-  name: 'status',
-  label: 'Status',
-  type: 'select',
+  name: "status",
+  label: "Status",
+  type: "select",
   required: true,
   options: [
-    { value: 'active', label: 'Ativo' },
-    { value: 'inactive', label: 'Inativo' },
+    { value: "active", label: "Ativo", icon: "check_circle" },
+    { value: "inactive", label: "Inativo", icon: "cancel" },
   ],
 };
 
@@ -167,87 +170,95 @@ const commonStatus: CrudField = {
  * vêm da pessoa; aqui só ficam nome de usuário, papéis, status e senha.
  */
 const users: DomainCrudConfig = {
-  resource: 'users',
-  singular: 'usuário',
+  resource: "users",
+  singular: "usuário",
   defaults: {
-    personId: '',
-    username: '',
+    personId: "",
+    username: "",
     roles: [],
     isActive: true,
-    password: '',
+    password: "",
   },
   fields: [
     {
-      name: 'personId',
-      label: 'Pessoa',
-      type: 'select',
+      name: "personId",
+      label: "Pessoa",
+      type: "select",
       required: true,
       lockOnEdit: true,
-      optionsSource: 'people-without-user',
-      section: 'Pessoa',
-      helpText: 'Só aparecem pessoas sem conta. Se ainda não existe, cadastre em Pessoas antes.',
+      optionsSource: "people-without-user",
+      section: "Pessoa",
+      helpText:
+        "Só aparecem pessoas sem conta. Se ainda não existe, cadastre em Pessoas antes.",
     },
     {
-      name: 'username',
-      label: 'Nome de usuário',
-      section: 'Acesso',
-      placeholder: 'nome.sobrenome',
-      helpText: 'Em branco, a API gera a partir do nome da pessoa.',
+      name: "username",
+      label: "Nome de usuário",
+      section: "Acesso",
+      placeholder: "nome.sobrenome",
+      helpText: "Em branco, a API gera a partir do nome da pessoa.",
       validate: validateUsername,
-      format: (value) => value.toLowerCase().replace(/\s+/g, '.'),
+      format: (value) => value.toLowerCase().replace(/\s+/g, "."),
     },
     {
-      name: 'password',
-      label: 'Senha',
-      type: 'password',
-      section: 'Acesso',
-      helpText: 'Opcional. Em branco, a API gera uma senha temporária para o primeiro acesso.',
+      name: "password",
+      label: "Senha",
+      type: "password",
+      section: "Acesso",
+      helpText:
+        "Opcional. Em branco, a API gera uma senha temporária para o primeiro acesso.",
       validate: (value) =>
-        String(value ?? '').length > 0 && String(value).length < 8
-          ? 'A senha precisa ter pelo menos 8 caracteres.'
+        String(value ?? "").length > 0 && String(value).length < 8
+          ? "A senha precisa ter pelo menos 8 caracteres."
           : null,
     },
-    { name: 'isActive', label: 'Usuário ativo', type: 'checkbox', section: 'Acesso' },
     {
-      name: 'roles',
-      label: 'Perfis',
-      type: 'multiselect',
-      section: 'Perfis',
+      name: "isActive",
+      label: "Usuário ativo",
+      type: "checkbox",
+      section: "Acesso",
+    },
+    {
+      name: "roles",
+      label: "Perfis",
+      type: "multiselect",
+      section: "Perfis",
       options: [
-        { value: 'amigos', label: 'Amigos' },
-        { value: 'aluno', label: 'Aluno' },
-        { value: 'musico', label: 'Músico' },
-        { value: 'maestro', label: 'Maestro' },
-        { value: 'admin', label: 'Administrador' },
+        { value: "amigos", label: "Amigos" },
+        { value: "aluno", label: "Aluno" },
+        { value: "musico", label: "Músico" },
+        { value: "maestro", label: "Maestro" },
+        { value: "admin", label: "Administrador" },
       ],
       helpText:
-        'Aluno e Músico seguem o cadastro da pessoa e são mantidos pela API. Outros papéis só o administrador vincula.',
+        "Aluno e Músico seguem o cadastro da pessoa e são mantidos pela API. Outros papéis só o administrador vincula.",
     },
   ],
   columns: [
-    { path: 'username', label: 'Usuário' },
-    { path: 'name', label: 'Nome' },
-    { path: 'email', label: 'E-mail' },
-    { path: 'roles', label: 'Perfis', format: 'roles' },
-    { path: 'isActive', label: 'Ativo', format: 'boolean' },
+    { path: "username", label: "Usuário" },
+    { path: "name", label: "Nome" },
+    { path: "email", label: "E-mail" },
+    { path: "roles", label: "Perfis", format: "roles" },
+    { path: "isActive", label: "Ativo", format: "boolean" },
     actorColumn,
   ],
-  itemLabel: (item) => String(item.name ?? item.username ?? 'Usuário'),
+  itemLabel: (item) => String(item.name ?? item.username ?? "Usuário"),
   toForm: (item) => ({
     ...item,
     roles: Array.isArray(item.roles) ? item.roles : [],
-    personId: item.personId == null ? '' : String(item.personId),
-    username: item.username ?? '',
-    password: '',
+    personId: item.personId == null ? "" : String(item.personId),
+    username: item.username ?? "",
+    password: "",
   }),
   toPayload: (values, current) => {
     const payload: Record<string, unknown> = {
-      username: String(values.username ?? '').trim(),
+      username: String(values.username ?? "").trim(),
       roles: Array.isArray(values.roles) ? values.roles.map(String) : [],
       isActive: Boolean(values.isActive),
     };
     if (!current) payload.personId = toId(values.personId);
-    if (String(values.password ?? '').length > 0) payload.password = values.password;
+    if (String(values.password ?? "").length > 0)
+      payload.password = values.password;
     return payload;
   },
 };
@@ -257,265 +268,286 @@ const users: DomainCrudConfig = {
  * aluno e músico são perfis opcionais e o responsável é outra pessoa.
  */
 const people: DomainCrudConfig = {
-  resource: 'people',
-  singular: 'pessoa',
+  resource: "people",
+  singular: "pessoa",
   defaults: {
-    firstName: '',
-    lastName: '',
-    birthDate: '',
-    'document.type': '',
-    'document.number': '',
-    photoUrl: '',
-    email: '',
-    phone: '',
-    address: '',
-    guardianId: '',
-    guardianRelationship: '',
-    registeredAt: '',
-    status: 'active',
+    firstName: "",
+    lastName: "",
+    birthDate: "",
+    "document.type": "",
+    "document.number": "",
+    photoUrl: "",
+    email: "",
+    phone: "",
+    address: "",
+    guardianId: "",
+    guardianRelationship: "",
+    registeredAt: "",
+    status: "active",
     isStudent: false,
     isMusician: false,
-    'student.enrollmentDate': '',
-    'student.classGroup': '',
-    'student.level': '1',
-    'musician.section': '',
-    'musician.experience': 'less_than_1',
-    'musician.defaultVoice': '1',
-    'musician.ownInstrument': false,
-    'musician.joinedAt': '',
-    'musician.playedInstrumentId': '',
+    "student.enrollmentDate": "",
+    "student.classGroup": "",
+    "student.level": "",
+    "musician.section": "",
+    "musician.experience": "",
+    "musician.defaultVoice": "",
+    "musician.ownInstrument": false,
+    "musician.joinedAt": "",
+    "musician.playedInstrumentId": "",
     createUser: false,
-    username: '',
+    username: "",
   },
   fields: [
-    { name: 'firstName', label: 'Nome', required: true, section: 'Dados pessoais' },
-    { name: 'lastName', label: 'Sobrenome', required: true, section: 'Dados pessoais' },
     {
-      name: 'birthDate',
-      label: 'Data de nascimento',
-      type: 'date',
+      name: "firstName",
+      label: "Nome",
       required: true,
-      section: 'Dados pessoais',
-      validate: (value) => {
-        const date = new Date(`${String(value)}T00:00:00`);
-        return !Number.isNaN(date.getTime()) && date <= new Date()
-          ? null
-          : 'Informe uma data de nascimento válida.';
-      },
+      section: "Dados pessoais",
     },
     {
-      name: 'registeredAt',
-      label: 'Data de cadastro',
-      type: 'date',
-      section: 'Dados pessoais',
-      helpText: 'Em branco, usa a data de hoje.',
-      validate: (value) => {
-        if (!value) return null;
-        const date = new Date(`${String(value)}T00:00:00`);
-        return !Number.isNaN(date.getTime()) && date <= new Date()
-          ? null
-          : 'A data de cadastro não pode estar no futuro.';
-      },
+      name: "lastName",
+      label: "Sobrenome",
+      required: true,
+      section: "Dados pessoais",
     },
     {
-      name: 'document.type',
-      label: 'Documento',
-      type: 'select',
-      section: 'Dados pessoais',
+      name: "birthDate",
+      label: "Data de nascimento",
+      type: "date",
+      required: true,
+      section: "Dados pessoais",
+    },
+    {
+      name: "registeredAt",
+      label: "Data de cadastro",
+      type: "date",
+      section: "Dados pessoais",
+      helpText: "Em branco, usa a data de hoje.",
+    },
+    {
+      name: "document.type",
+      label: "Documento",
+      type: "select",
+      section: "Dados pessoais",
       options: [
-        { value: '', label: 'Não informado' },
-        { value: 'cpf', label: 'CPF' },
-        { value: 'rg', label: 'RG' },
+        { value: "", label: "Não informado", icon: "badge" },
+        { value: "cpf", label: "CPF", icon: "badge" },
+        { value: "rg", label: "RG", icon: "contact_page" },
       ],
     },
     {
-      name: 'document.number',
-      label: 'Número do documento',
-      section: 'Dados pessoais',
-      showWhen: (values) => Boolean(values['document.type']),
-      placeholder: '000.000.000-00',
+      name: "document.number",
+      label: "Número do documento",
+      section: "Dados pessoais",
+      showWhen: (values) => Boolean(values["document.type"]),
+      placeholder: "000.000.000-00",
       format: (value, values) =>
-        values['document.type'] === 'cpf' ? formatCpf(value) : value.toUpperCase(),
-      validate: (value, values) => {
-        const number = String(value ?? '').trim();
-        if (!number) return 'Informe o número do documento.';
-        if (values['document.type'] === 'cpf') {
-          return isValidCpf(number) ? null : 'Informe um CPF válido.';
-        }
-        const rg = number.replace(/[^A-Za-z0-9]/g, '');
-        return rg.length >= 5 && rg.length <= 14 ? null : 'Informe um RG válido.';
-      },
+        values["document.type"] === "cpf"
+          ? formatCpf(value)
+          : value.toUpperCase(),
     },
-    { name: 'photoUrl', label: 'URL da foto de perfil', section: 'Dados pessoais', placeholder: 'https://…' },
+    {
+      name: "photoUrl",
+      label: "URL da foto de perfil",
+      section: "Dados pessoais",
+      placeholder: "https://…",
+    },
     commonStatus,
     {
-      name: 'phone',
-      label: 'Telefone',
-      type: 'tel',
+      name: "phone",
+      label: "Telefone",
+      type: "tel",
       required: true,
-      section: 'Contato',
-      placeholder: '(00) 00000-0000',
-      validate: validatePhone,
+      section: "Contato",
+      placeholder: "(00) 00000-0000",
     },
     {
-      name: 'email',
-      label: 'E-mail',
-      type: 'email',
-      section: 'Contato',
-      helpText: 'Opcional, mas necessário para entrar com e-mail em vez do nome de usuário.',
+      name: "email",
+      label: "E-mail",
+      type: "email",
+      section: "Contato",
+      helpText:
+        "Opcional, mas necessário para entrar com e-mail em vez do nome de usuário.",
     },
-    { name: 'address', label: 'Endereço', section: 'Contato' },
+    { name: "address", label: "Endereço", section: "Contato" },
     {
-      name: 'guardianId',
-      label: 'Pessoa responsável',
-      type: 'select',
-      optionsSource: 'people',
-      section: 'Responsável',
-      helpText: 'Obrigatório para menor de idade. O responsável precisa estar cadastrado em Pessoas.',
-      validate: (value, values) =>
-        isMinor(values) && !value ? 'Menor de idade precisa de uma pessoa responsável.' : null,
+      name: "guardianId",
+      label: "Pessoa responsável",
+      type: "select",
+      optionsSource: "people",
+      section: "Responsável",
+      helpText:
+        "Obrigatório para menor de idade. O responsável precisa estar cadastrado em Pessoas.",
     },
     {
-      name: 'guardianRelationship',
-      label: 'Parentesco',
-      type: 'select',
-      section: 'Responsável',
+      name: "guardianRelationship",
+      label: "Parentesco",
+      type: "select",
+      required: true,
+      section: "Responsável",
       options: RELATIONSHIP_OPTIONS,
       showWhen: (values) => Boolean(values.guardianId),
-      validate: (value, values) =>
-        values.guardianId && !value ? 'Informe o parentesco do responsável.' : null,
     },
-    { name: 'isStudent', label: 'É aluno', type: 'checkbox', section: 'Perfis' },
-    { name: 'isMusician', label: 'É músico', type: 'checkbox', section: 'Perfis' },
     {
-      name: 'student.enrollmentDate',
-      label: 'Data de matrícula',
-      type: 'date',
-      section: 'Aluno',
+      name: "isStudent",
+      label: "É aluno",
+      type: "checkbox",
+      section: "Perfis",
+    },
+    {
+      name: "isMusician",
+      label: "É músico",
+      type: "checkbox",
+      section: "Perfis",
+    },
+    {
+      name: "student.enrollmentDate",
+      label: "Data de matrícula",
+      type: "date",
+      section: "Aluno",
       showWhen: (values) => Boolean(values.isStudent),
-      validate: (value, values) => requiredProfile(value, values, 'isStudent'),
     },
     {
-      name: 'student.classGroup',
-      label: 'Turma',
-      section: 'Aluno',
-      placeholder: 'Ex.: Turma A',
+      name: "student.classGroup",
+      label: "Turma",
+      section: "Aluno",
+      placeholder: "Ex.: Turma A",
       showWhen: (values) => Boolean(values.isStudent),
     },
     {
-      name: 'student.level',
-      label: 'Nível',
-      type: 'select',
-      section: 'Aluno',
+      name: "student.level",
+      label: "Nível",
+      type: "select",
+      required: true,
+      section: "Aluno",
       options: LEVEL_OPTIONS,
       showWhen: (values) => Boolean(values.isStudent),
     },
     {
-      name: 'musician.section',
-      label: 'Naipe',
-      type: 'select',
-      section: 'Músico',
+      name: "musician.section",
+      label: "Naipe",
+      type: "select",
+      required: true,
+      section: "Músico",
       options: SECTION_OPTIONS,
       showWhen: (values) => Boolean(values.isMusician),
-      validate: (value, values) => requiredProfile(value, values, 'isMusician'),
     },
     {
-      name: 'musician.experience',
-      label: 'Tempo de experiência',
-      type: 'select',
-      section: 'Músico',
+      name: "musician.experience",
+      label: "Tempo de experiência",
+      type: "select",
+      required: true,
+      section: "Músico",
       options: EXPERIENCE_OPTIONS,
       showWhen: (values) => Boolean(values.isMusician),
     },
     {
-      name: 'musician.defaultVoice',
-      label: 'Voz padrão',
-      type: 'select',
-      section: 'Músico',
+      name: "musician.defaultVoice",
+      label: "Voz padrão",
+      type: "select",
+      required: true,
+      section: "Músico",
       options: VOICE_OPTIONS,
       showWhen: (values) => Boolean(values.isMusician),
     },
     {
-      name: 'musician.ownInstrument',
-      label: 'Tem instrumento próprio',
-      type: 'checkbox',
-      section: 'Músico',
+      name: "musician.ownInstrument",
+      label: "Tem instrumento próprio",
+      type: "checkbox",
+      section: "Músico",
       showWhen: (values) => Boolean(values.isMusician),
     },
     {
-      name: 'musician.joinedAt',
-      label: 'Entrada na banda',
-      type: 'date',
-      section: 'Músico',
+      name: "musician.joinedAt",
+      label: "Entrada na banda",
+      type: "date",
+      section: "Músico",
       showWhen: (values) => Boolean(values.isMusician),
     },
     {
-      name: 'musician.playedInstrumentId',
-      label: 'Instrumento que toca',
-      type: 'select',
+      name: "musician.playedInstrumentId",
+      label: "Instrumento que toca",
+      type: "select",
       required: true,
-      optionsSource: 'instruments',
-      section: 'Músico',
+      optionsSource: "instruments",
+      section: "Músico",
       showWhen: (values) => Boolean(values.isMusician),
-      helpText: 'Do catálogo de instrumentos, não do patrimônio.',
-      validate: (value, values) => requiredProfile(value, values, 'isMusician'),
+      helpText: "Do catálogo de instrumentos, não do patrimônio.",
     },
     {
-      name: 'createUser',
-      label: 'Criar usuário de acesso',
-      type: 'checkbox',
-      section: 'Acesso',
-      helpText: 'Gera uma senha inicial. Aluno e músico recebem os papéis correspondentes.',
+      name: "createUser",
+      label: "Criar usuário de acesso",
+      type: "checkbox",
+      section: "Acesso",
+      helpText:
+        "Gera uma senha inicial. Aluno e músico recebem os papéis correspondentes.",
       showWhen: (values) => !values.userId,
     },
     {
-      name: 'username',
-      label: 'Nome de usuário',
-      section: 'Acesso',
-      placeholder: 'nome.sobrenome',
-      helpText: 'Em branco, a API gera a partir do nome.',
+      name: "username",
+      label: "Nome de usuário",
+      section: "Acesso",
+      placeholder: "nome.sobrenome",
+      helpText: "Em branco, a API gera a partir do nome.",
       showWhen: (values) => !values.userId && Boolean(values.createUser),
-      validate: validateUsername,
-      format: (value) => value.toLowerCase().replace(/\s+/g, '.'),
+      format: (value) => value.toLowerCase().replace(/\s+/g, "."),
     },
   ],
   columns: [
-    { path: 'firstName', label: 'Nome' },
-    { path: 'lastName', label: 'Sobrenome' },
-    { path: 'phone', label: 'Telefone' },
-    { path: 'isStudent', label: 'Aluno', format: 'boolean' },
-    { path: 'isMusician', label: 'Músico', format: 'boolean' },
-    { path: 'user.username', label: 'Usuário' },
-    { path: 'status', label: 'Status', format: 'status' },
+    { path: "firstName", label: "Nome" },
+    { path: "lastName", label: "Sobrenome" },
+    { path: "phone", label: "Telefone" },
+    { path: "isStudent", label: "Aluno", format: "boolean" },
+    { path: "isMusician", label: "Músico", format: "boolean" },
+    { path: "user.username", label: "Usuário" },
+    { path: "status", label: "Status", format: "status" },
     actorColumn,
   ],
-  itemLabel: (item) => `${String(item.firstName ?? '')} ${String(item.lastName ?? '')}`.trim(),
+  itemLabel: (item) =>
+    `${String(item.firstName ?? "")} ${String(item.lastName ?? "")}`.trim(),
   toForm: (item) => {
     const flat = flattenEntity(item);
-    const document = item.document as Record<string, unknown> | null | undefined;
-    flat['document.type'] = document?.type ?? '';
-    flat['document.number'] =
-      document?.type === 'cpf' ? formatCpf(String(document.number ?? '')) : (document?.number ?? '');
-    flat.guardianId = item.guardianId == null ? '' : String(item.guardianId);
-    flat.guardianRelationship = item.guardianRelationship ?? '';
-    flat['student.level'] = String(flat['student.level'] ?? '1');
-    flat['musician.defaultVoice'] = String(flat['musician.defaultVoice'] ?? '1');
-    flat['musician.experience'] = flat['musician.experience'] ?? 'less_than_1';
-    flat['musician.playedInstrumentId'] =
-      flat['musician.playedInstrumentId'] == null ? '' : String(flat['musician.playedInstrumentId']);
+    const document = item.document as
+      Record<string, unknown> | null | undefined;
+    flat["document.type"] = document?.type ?? "";
+    flat["document.number"] =
+      document?.type === "cpf"
+        ? formatCpf(String(document.number ?? ""))
+        : (document?.number ?? "");
+    flat.guardianId = item.guardianId == null ? "" : String(item.guardianId);
+    flat.guardianRelationship = item.guardianRelationship ?? "";
+    flat["student.level"] = String(flat["student.level"] ?? "1");
+    flat["musician.defaultVoice"] = String(
+      flat["musician.defaultVoice"] ?? "1",
+    );
+    flat["musician.experience"] = flat["musician.experience"] ?? "less_than_1";
+    flat["musician.playedInstrumentId"] =
+      flat["musician.playedInstrumentId"] == null
+        ? ""
+        : String(flat["musician.playedInstrumentId"]);
     flat.createUser = false;
-    flat.username = '';
+    flat.username = "";
     return flat;
   },
   toPayload: (values) => {
     const payload = unflattenEntity(values);
-    for (const key of ['id', 'age', 'user', 'userId', 'guardianName', 'createdAt', 'updatedAt', 'temporaryPassword']) {
+    for (const key of [
+      "id",
+      "age",
+      "user",
+      "userId",
+      "guardianName",
+      "createdAt",
+      "updatedAt",
+      "temporaryPassword",
+    ]) {
       delete payload[key];
     }
-    const documentType = String(values['document.type'] ?? '').trim();
-    const documentNumber = String(values['document.number'] ?? '').trim();
+    const documentType = String(values["document.type"] ?? "").trim();
+    const documentNumber = String(values["document.number"] ?? "").trim();
     payload.document =
-      documentType && documentType !== 'none' && documentNumber
+      documentType && documentType !== "none" && documentNumber
         ? { type: documentType, number: documentNumber }
         : null;
     payload.guardianId = toId(values.guardianId);
@@ -548,110 +580,128 @@ const people: DomainCrudConfig = {
 };
 
 const songs: DomainCrudConfig = {
-  resource: 'songs',
-  singular: 'música',
+  resource: "songs",
+  singular: "música",
   defaults: {
-    title: '',
-    composer: '',
-    arranger: '',
-    genre: '',
-    key: '',
-    durationSeconds: '',
-    scoreFile: '',
-    scoreFileName: '',
-    scoreMimeType: '',
-    status: 'active',
-    visibility: 'private',
+    title: "",
+    composer: "",
+    arranger: "",
+    genre: "",
+    key: "",
+    durationSeconds: "",
+    scoreFile: "",
+    scoreFileName: "",
+    scoreMimeType: "",
+    status: "active",
+    visibility: "private",
     visibleToStudents: false,
     visibleToMusicians: false,
-    videoUrl: '',
+    videoUrl: "",
   },
   fields: [
     {
-      name: 'scoreFile',
-      label: 'Partitura MusicXML',
-      type: 'xml',
-      section: 'Partitura',
-      accept: '.xml,.musicxml,application/xml,text/xml,application/vnd.recordare.musicxml+xml',
+      name: "scoreFile",
+      label: "Partitura MusicXML",
+      type: "xml",
+      section: "Partitura",
+      accept:
+        ".xml,.musicxml,application/xml,text/xml,application/vnd.recordare.musicxml+xml",
       helpText:
-        'Somente MusicXML (.xml ou .musicxml). Outros formatos (por exemplo .enc do Encore) não são aceitos — exporte como MusicXML antes de enviar. Título, compositor, arranjo, gênero, tonalidade e duração estimada entram sozinhos quando o arquivo permite calcular. A duração não inclui repetições desdobradas. Ao editar, deixe vazio para manter a partitura atual.',
+        "Somente MusicXML (.xml ou .musicxml). Outros formatos (por exemplo .enc do Encore) não são aceitos — exporte como MusicXML antes de enviar. Título, compositor, arranjo, gênero, tonalidade e duração estimada entram sozinhos quando o arquivo permite calcular. A duração não inclui repetições desdobradas. Ao editar, deixe vazio para manter a partitura atual.",
     },
     {
-      name: 'visibility',
-      label: 'Visualização',
-      type: 'select',
+      name: "visibility",
+      label: "Visualização",
+      type: "select",
       required: true,
-      section: 'Partitura',
+      wide: true,
+      section: "Partitura",
       options: [
-        { value: 'public', label: 'Pública — quem está logado' },
-        { value: 'private', label: 'Privada — escolher alunos e/ou músicos' },
+        {
+          value: "public",
+          label: "Pública — quem está logado",
+          icon: "public",
+        },
+        {
+          value: "private",
+          label: "Privada — escolher alunos e/ou músicos",
+          icon: "lock",
+        },
       ],
-      helpText: 'Pública aparece no estudo para qualquer login. Na privada, marque quem pode ver.',
+      helpText:
+        "Pública aparece no estudo para qualquer login. Na privada, marque quem pode ver.",
     },
     {
-      name: 'visibleToStudents',
-      label: 'Visível para alunos',
-      type: 'checkbox',
-      section: 'Partitura',
-      showWhen: (values) => values.visibility === 'private',
+      name: "visibleToStudents",
+      label: "Visível para alunos",
+      type: "checkbox",
+      icon: "school",
+      section: "Partitura",
+      showWhen: (values) => values.visibility === "private",
     },
     {
-      name: 'visibleToMusicians',
-      label: 'Visível para músicos',
-      type: 'checkbox',
-      section: 'Partitura',
-      showWhen: (values) => values.visibility === 'private',
+      name: "visibleToMusicians",
+      label: "Visível para músicos",
+      type: "checkbox",
+      icon: "music_note",
+      section: "Partitura",
+      showWhen: (values) => values.visibility === "private",
     },
-    { name: 'title', label: 'Título', required: true, section: 'Dados' },
-    { name: 'composer', label: 'Compositor', required: true, section: 'Dados' },
-    { name: 'arranger', label: 'Arranjador', section: 'Dados' },
-    { name: 'genre', label: 'Gênero', section: 'Dados' },
-    { name: 'key', label: 'Tonalidade', placeholder: 'Ex.: Bb', section: 'Dados' },
-    { name: 'durationSeconds', label: 'Duração (segundos)', type: 'number', section: 'Dados' },
+    { name: "title", label: "Título", required: true, section: "Dados" },
+    { name: "composer", label: "Compositor", required: true, section: "Dados" },
+    { name: "arranger", label: "Arranjador", section: "Dados" },
+    { name: "genre", label: "Gênero", section: "Dados" },
     {
-      name: 'videoUrl',
-      label: 'Vídeo no YouTube',
-      section: 'Dados',
-      placeholder: 'https://www.youtube.com/watch?v=…',
-      helpText: 'Opcional. O vídeo abre no estudo e nos detalhes da música.',
-      validate: (value) => {
-        const text = String(value ?? '').trim();
-        if (!text) return null;
-        return youtubeVideoId(text) ? null : 'Informe um link do YouTube.';
-      },
+      name: "key",
+      label: "Tonalidade",
+      placeholder: "Ex.: Bb",
+      section: "Dados",
     },
-    { ...commonStatus, section: 'Dados' },
+    {
+      name: "durationSeconds",
+      label: "Duração (segundos)",
+      type: "number",
+      section: "Dados",
+    },
+    {
+      name: "videoUrl",
+      label: "Vídeo no YouTube",
+      section: "Dados",
+      placeholder: "https://www.youtube.com/watch?v=…",
+      helpText: "Opcional. O vídeo abre no estudo e nos detalhes da música.",
+    },
+    { ...commonStatus, section: "Dados" },
   ],
   columns: [
-    { path: 'title', label: 'Título' },
-    { path: 'composer', label: 'Compositor' },
-    { path: 'arranger', label: 'Arranjador' },
-    { path: 'genre', label: 'Gênero' },
-    { path: 'key', label: 'Tonalidade' },
-    { path: 'visibility', label: 'Visualização', format: 'status' },
-    { path: 'hasScore', label: 'Partitura', format: 'boolean' },
+    { path: "title", label: "Título" },
+    { path: "composer", label: "Compositor" },
+    { path: "arranger", label: "Arranjador" },
+    { path: "genre", label: "Gênero" },
+    { path: "key", label: "Tonalidade" },
+    { path: "visibility", label: "Visualização", format: "status" },
+    { path: "hasScore", label: "Partitura", format: "boolean" },
     {
-      path: 'studyScoreStatus',
-      label: 'Prep. estudo',
-      format: 'status',
+      path: "studyScoreStatus",
+      label: "Prep. estudo",
+      format: "status",
     },
-    { path: 'status', label: 'Status', format: 'status' },
+    { path: "status", label: "Status", format: "status" },
     actorColumn,
   ],
-  itemLabel: (item) => String(item.title ?? 'Música'),
+  itemLabel: (item) => String(item.title ?? "Música"),
   toForm: (item) => {
     const score = Array.isArray(item.scores)
       ? (item.scores[0] as Record<string, unknown> | undefined)
       : undefined;
     return {
       ...item,
-      scoreFile: '',
-      scoreFileName: score?.fileName ?? '',
-      scoreMimeType: score?.mimeType ?? '',
-      visibility: item.visibility === 'public' ? 'public' : 'private',
+      scoreFile: "",
+      scoreFileName: score?.fileName ?? "",
+      scoreMimeType: score?.mimeType ?? "",
+      visibility: item.visibility === "public" ? "public" : "private",
       visibleToStudents: Boolean(item.visibleToStudents),
       visibleToMusicians: Boolean(item.visibleToMusicians),
-      videoUrl: item.videoUrl ?? '',
+      videoUrl: item.videoUrl ?? "",
     };
   },
   toPayload: (values, current) => {
@@ -666,8 +716,8 @@ const songs: DomainCrudConfig = {
     const scores = scoreFile
       ? [
           {
-            fileName: scoreFileName || 'partitura.musicxml',
-            mimeType: scoreMimeType || 'application/xml',
+            fileName: scoreFileName || "partitura.musicxml",
+            mimeType: scoreMimeType || "application/xml",
             url: scoreFile,
           },
         ]
@@ -686,108 +736,120 @@ const songs: DomainCrudConfig = {
 };
 
 const patrimony: DomainCrudConfig = {
-  resource: 'patrimony',
-  singular: 'item de patrimônio',
+  resource: "patrimony",
+  singular: "item de patrimônio",
   defaults: {
-    code: '',
-    name: '',
-    category: 'equipment',
-    acquisitionDate: '',
-    acquisitionValue: '',
-    status: 'available',
-    location: '',
-    notes: '',
-    assignedPersonId: '',
+    code: "",
+    name: "",
+    category: "equipment",
+    acquisitionDate: "",
+    acquisitionValue: "",
+    status: "available",
+    location: "",
+    notes: "",
+    assignedPersonId: "",
   },
   fields: [
-    { name: 'code', label: 'Código', required: true },
-    { name: 'name', label: 'Nome', required: true },
+    { name: "code", label: "Código", required: true },
+    { name: "name", label: "Nome", required: true },
     {
-      name: 'category',
-      label: 'Categoria',
-      type: 'select',
+      name: "category",
+      label: "Categoria",
+      type: "select",
       required: true,
       options: [
-        { value: 'instrument', label: 'Instrumento' },
-        { value: 'uniform', label: 'Uniforme' },
-        { value: 'equipment', label: 'Equipamento' },
-        { value: 'furniture', label: 'Mobiliário' },
-        { value: 'other', label: 'Outro' },
+        { value: "instrument", label: "Instrumento", icon: "music_note" },
+        { value: "uniform", label: "Uniforme", icon: "checkroom" },
+        { value: "equipment", label: "Equipamento", icon: "build" },
+        { value: "furniture", label: "Mobiliário", icon: "chair" },
+        { value: "other", label: "Outro", icon: "inventory_2" },
       ],
     },
-    { name: 'acquisitionDate', label: 'Data de aquisição', type: 'date', required: true },
-    { name: 'acquisitionValue', label: 'Valor de aquisição', type: 'number' },
     {
-      name: 'status',
-      label: 'Estado',
-      type: 'select',
+      name: "acquisitionDate",
+      label: "Data de aquisição",
+      type: "date",
+      required: true,
+    },
+    { name: "acquisitionValue", label: "Valor de aquisição", type: "number" },
+    {
+      name: "status",
+      label: "Estado",
+      type: "select",
       required: true,
       options: [
-        { value: 'available', label: 'Disponível' },
-        { value: 'in_use', label: 'Em uso' },
-        { value: 'maintenance', label: 'Manutenção' },
-        { value: 'retired', label: 'Baixado' },
+        { value: "available", label: "Disponível", icon: "check_circle" },
+        { value: "in_use", label: "Em uso", icon: "person" },
+        { value: "maintenance", label: "Manutenção", icon: "build" },
+        { value: "retired", label: "Baixado", icon: "archive" },
       ],
     },
-    { name: 'location', label: 'Localização' },
+    { name: "location", label: "Localização" },
     {
-      name: 'assignedPersonId',
-      label: 'Pessoa responsável',
-      type: 'select',
-      optionsSource: 'people',
-      helpText: 'Quem está com o item. Opcional.',
+      name: "assignedPersonId",
+      label: "Pessoa responsável",
+      type: "select",
+      optionsSource: "people",
+      helpText: "Quem está com o item. Opcional.",
     },
-    { name: 'notes', label: 'Observações', type: 'textarea' },
+    { name: "notes", label: "Observações", type: "textarea" },
     {
-      name: 'instrument.instrumentId',
-      label: 'Instrumento',
-      type: 'select',
+      name: "instrument.instrumentId",
+      label: "Instrumento",
+      type: "select",
       required: true,
-      optionsSource: 'instruments',
-      helpText: 'Qual instrumento do catálogo esta peça é.',
-      showWhen: (values) => values.category === 'instrument',
+      optionsSource: "instruments",
+      helpText: "Qual instrumento do catálogo esta peça é.",
+      showWhen: (values) => values.category === "instrument",
     },
     {
-      name: 'instrument.serialNumber',
-      label: 'Número de série',
-      showWhen: (values) => values.category === 'instrument',
+      name: "instrument.serialNumber",
+      label: "Número de série",
+      showWhen: (values) => values.category === "instrument",
     },
     {
-      name: 'instrument.manufacturer',
-      label: 'Fabricante',
-      showWhen: (values) => values.category === 'instrument',
+      name: "instrument.manufacturer",
+      label: "Fabricante",
+      showWhen: (values) => values.category === "instrument",
     },
     {
-      name: 'instrument.model',
-      label: 'Modelo',
-      showWhen: (values) => values.category === 'instrument',
+      name: "instrument.model",
+      label: "Modelo",
+      showWhen: (values) => values.category === "instrument",
     },
   ],
   columns: [
-    { path: 'code', label: 'Código' },
-    { path: 'name', label: 'Nome' },
-    { path: 'category', label: 'Categoria' },
-    { path: 'status', label: 'Estado', format: 'status' },
-    { path: 'location', label: 'Localização' },
-    { path: 'acquisitionValue', label: 'Valor', format: 'currency' },
+    { path: "code", label: "Código" },
+    { path: "name", label: "Nome" },
+    { path: "category", label: "Categoria" },
+    { path: "status", label: "Estado", format: "status" },
+    { path: "location", label: "Localização" },
+    { path: "acquisitionValue", label: "Valor", format: "currency" },
     actorColumn,
   ],
-  itemLabel: (item) => String(item.name ?? item.code ?? 'Patrimônio'),
+  itemLabel: (item) => String(item.name ?? item.code ?? "Patrimônio"),
   toForm: (item) => ({
     ...flattenEntity(item),
-    assignedPersonId: item.assignedPersonId == null ? '' : String(item.assignedPersonId),
-    'instrument.instrumentId':
-      item.instrument && typeof item.instrument === 'object' && item.instrument !== null
-        ? String((item.instrument as { instrumentId?: unknown }).instrumentId ?? '')
-        : '',
+    assignedPersonId:
+      item.assignedPersonId == null ? "" : String(item.assignedPersonId),
+    "instrument.instrumentId":
+      item.instrument &&
+      typeof item.instrument === "object" &&
+      item.instrument !== null
+        ? String(
+            (item.instrument as { instrumentId?: unknown }).instrumentId ?? "",
+          )
+        : "",
   }),
   toPayload: (values, current) => {
     const payload = unflattenEntity(values);
-    payload.acquisitionValue = values.acquisitionValue ? Number(values.acquisitionValue) : undefined;
+    payload.acquisitionValue = values.acquisitionValue
+      ? Number(values.acquisitionValue)
+      : undefined;
     payload.assignedPersonId = toId(values.assignedPersonId);
-    if (payload.category !== 'instrument') {
+    if (payload.category !== "instrument") {
       delete payload.instrument;
-    } else if (payload.instrument && typeof payload.instrument === 'object') {
+    } else if (payload.instrument && typeof payload.instrument === "object") {
       const instrument = payload.instrument as Record<string, unknown>;
       instrument.instrumentId = toId(instrument.instrumentId);
     }
@@ -796,63 +858,96 @@ const patrimony: DomainCrudConfig = {
 };
 
 const instruments: DomainCrudConfig = {
-  resource: 'instruments',
-  singular: 'instrumento',
+  resource: "instruments",
+  singular: "instrumento",
   defaults: {
-    name: '',
-    family: 'brass',
-    subclass: '',
-    tuning: '',
-    signalType: 'acoustic',
-    tessitura: '',
-    tags: '',
-    status: 'active',
+    name: "",
+    family: "brass",
+    subclass: "",
+    tuning: "",
+    signalType: "acoustic",
+    tessitura: "",
+    tags: "",
+    status: "active",
   },
   fields: [
-    { name: 'name', label: 'Nome', required: true, placeholder: 'Ex.: Saxofone Alto' },
     {
-      name: 'family',
-      label: 'Família',
-      type: 'select',
+      name: "name",
+      label: "Nome",
       required: true,
-      options: INSTRUMENT_FAMILY_OPTIONS,
+      placeholder: "Ex.: Saxofone Alto",
     },
-    { name: 'subclass', label: 'Subclasse', placeholder: 'Ex.: Madeiras, Palheta' },
-    { name: 'tuning', label: 'Afinação', placeholder: 'Ex.: Bb, Eb, F, C' },
     {
-      name: 'signalType',
-      label: 'Tipo de sinal',
-      type: 'select',
+      name: "family",
+      label: "Família",
+      type: "select",
       required: true,
-      options: INSTRUMENT_SIGNAL_OPTIONS,
+      options: INSTRUMENT_FAMILY_OPTIONS.map((option) => ({
+        ...option,
+        icon:
+          option.value === "woodwind"
+            ? "air"
+            : option.value === "brass"
+              ? "campaign"
+              : option.value === "percussion"
+                ? "piano"
+                : option.value === "keyboard"
+                  ? "piano"
+                  : option.value === "electronic"
+                    ? "memory"
+                    : "music_note",
+      })),
     },
-    { name: 'tessitura', label: 'Tessitura', placeholder: 'Ex.: Alto, Soprano, Tenor' },
     {
-      name: 'tags',
-      label: 'Tags',
-      placeholder: 'Jazz, Banda, Palheta',
-      helpText: 'Separadas por vírgula.',
+      name: "subclass",
+      label: "Subclasse",
+      placeholder: "Ex.: Madeiras, Palheta",
+    },
+    { name: "tuning", label: "Afinação", placeholder: "Ex.: Bb, Eb, F, C" },
+    {
+      name: "signalType",
+      label: "Tipo de sinal",
+      type: "select",
+      required: true,
+      options: INSTRUMENT_SIGNAL_OPTIONS.map((option) => ({
+        ...option,
+        icon:
+          option.value === "acoustic" ? "music_note" : "electrical_services",
+      })),
+    },
+    {
+      name: "tessitura",
+      label: "Tessitura",
+      placeholder: "Ex.: Alto, Soprano, Tenor",
+    },
+    {
+      name: "tags",
+      label: "Tags",
+      placeholder: "Jazz, Banda, Palheta",
+      helpText: "Separadas por vírgula.",
     },
     commonStatus,
   ],
   columns: [
-    { path: 'name', label: 'Instrumento' },
-    { path: 'familyLabel', label: 'Família' },
-    { path: 'subclass', label: 'Subclasse' },
-    { path: 'tuning', label: 'Afinação' },
-    { path: 'tessitura', label: 'Tessitura' },
-    { path: 'signalLabel', label: 'Sinal' },
-    { path: 'status', label: 'Status', format: 'status' },
+    { path: "name", label: "Instrumento" },
+    { path: "familyLabel", label: "Família" },
+    { path: "subclass", label: "Subclasse" },
+    { path: "tuning", label: "Afinação" },
+    { path: "tessitura", label: "Tessitura" },
+    { path: "signalLabel", label: "Sinal" },
+    { path: "status", label: "Status", format: "status" },
     actorColumn,
   ],
-  itemLabel: (item) => String(item.name ?? 'Instrumento'),
+  itemLabel: (item) => String(item.name ?? "Instrumento"),
   toForm: (item) => ({
     ...item,
-    tags: Array.isArray(item.tags) ? (item.tags as unknown[]).join(', ') : (item.tags ?? ''),
+    tags: Array.isArray(item.tags)
+      ? (item.tags as unknown[]).join(", ")
+      : (item.tags ?? ""),
   }),
   toPayload: (values, current) => {
-    const tags = String(values.tags ?? '')
-      .split(',')
+    const tags = String(values.tags ?? "")
+      .split(",")
       .map((tag) => tag.trim())
       .filter(Boolean);
     return withAudit({ ...values, tags }, current);
@@ -860,60 +955,76 @@ const instruments: DomainCrudConfig = {
 };
 
 const presentations: DomainCrudConfig = {
-  resource: 'presentations',
-  singular: 'apresentação',
+  resource: "presentations",
+  singular: "apresentação",
   defaults: {
-    title: '',
-    venue: '',
-    startsAt: '',
-    endsAt: '',
-    description: '',
-    repertoireIds: '',
-    coverUrl: '',
+    title: "",
+    venue: "",
+    startsAt: "",
+    endsAt: "",
+    description: "",
+    repertoireIds: "",
+    coverUrl: "",
     isPublic: true,
-    status: 'draft',
+    status: "draft",
+    notifyAll: true,
   },
   fields: [
-    { name: 'title', label: 'Título', required: true },
-    { name: 'venue', label: 'Local', required: true },
-    { name: 'startsAt', label: 'Início', type: 'datetime-local', required: true },
-    { name: 'endsAt', label: 'Fim', type: 'datetime-local' },
-    { name: 'description', label: 'Descrição', type: 'textarea' },
+    { name: "title", label: "Título", required: true },
+    { name: "venue", label: "Local", required: true },
     {
-      name: 'repertoireIds',
-      label: 'IDs das músicas',
-      helpText: 'Separe os IDs por vírgula.',
+      name: "startsAt",
+      label: "Início",
+      type: "datetime-local",
+      required: true,
     },
-    { name: 'coverUrl', label: 'URL da capa' },
-    { name: 'isPublic', label: 'Mostrar na agenda pública', type: 'checkbox' },
+    { name: "endsAt", label: "Fim", type: "datetime-local" },
+    { name: "description", label: "Descrição", type: "textarea" },
     {
-      name: 'status',
-      label: 'Status',
-      type: 'select',
+      name: "repertoireIds",
+      label: "IDs das músicas",
+      helpText: "Separe os IDs por vírgula.",
+    },
+    { name: "coverUrl", label: "URL da capa" },
+    { name: "isPublic", label: "Mostrar na agenda pública", type: "checkbox" },
+    {
+      name: "notifyAll",
+      label: "Notificar todas as contas quando esta apresentação for publicada",
+      type: "checkbox",
+      section: "Publicação",
+      helpText:
+        "Só envia ao salvar como agendada e pública; o padrão é enviar.",
+    },
+    {
+      name: "status",
+      label: "Status",
+      type: "select",
       required: true,
       options: [
-        { value: 'draft', label: 'Rascunho' },
-        { value: 'scheduled', label: 'Agendada' },
-        { value: 'done', label: 'Realizada' },
-        { value: 'cancelled', label: 'Cancelada' },
+        { value: "draft", label: "Rascunho", icon: "edit_note" },
+        { value: "scheduled", label: "Agendada", icon: "event" },
+        { value: "done", label: "Realizada", icon: "event_available" },
+        { value: "cancelled", label: "Cancelada", icon: "event_busy" },
       ],
     },
   ],
   columns: [
-    { path: 'title', label: 'Título' },
-    { path: 'venue', label: 'Local' },
-    { path: 'startsAt', label: 'Data', format: 'datetime' },
-    { path: 'isPublic', label: 'Pública', format: 'boolean' },
-    { path: 'status', label: 'Status', format: 'status' },
-    { path: 'repertoireIds', label: 'Repertório', format: 'count' },
+    { path: "title", label: "Título" },
+    { path: "venue", label: "Local" },
+    { path: "startsAt", label: "Data", format: "datetime" },
+    { path: "isPublic", label: "Pública", format: "boolean" },
+    { path: "status", label: "Status", format: "status" },
+    { path: "repertoireIds", label: "Repertório", format: "count" },
     actorColumn,
   ],
-  itemLabel: (item) => String(item.title ?? 'Apresentação'),
+  itemLabel: (item) => String(item.title ?? "Apresentação"),
   toForm: (item) => ({
     ...item,
     startsAt: toLocalDateTime(item.startsAt),
     endsAt: toLocalDateTime(item.endsAt),
-    repertoireIds: Array.isArray(item.repertoireIds) ? item.repertoireIds.join(', ') : '',
+    repertoireIds: Array.isArray(item.repertoireIds)
+      ? item.repertoireIds.join(", ")
+      : "",
   }),
   toPayload: (values, current) =>
     withAudit(
@@ -921,8 +1032,8 @@ const presentations: DomainCrudConfig = {
         ...values,
         startsAt: toIsoDateTime(values.startsAt),
         endsAt: values.endsAt ? toIsoDateTime(values.endsAt) : undefined,
-        repertoireIds: String(values.repertoireIds ?? '')
-          .split(',')
+        repertoireIds: String(values.repertoireIds ?? "")
+          .split(",")
           .map((id) => id.trim())
           .filter(Boolean),
       },
@@ -931,85 +1042,90 @@ const presentations: DomainCrudConfig = {
 };
 
 const media: DomainCrudConfig = {
-  resource: 'media',
-  singular: 'mídia',
+  resource: "media",
+  singular: "mídia",
   defaults: {
-    title: '',
-    slug: '',
-    excerpt: '',
-    body: '',
-    coverUrl: '',
-    videoUrl: '',
-    kind: 'article',
-    status: 'draft',
-    publishedAt: '',
+    title: "",
+    slug: "",
+    excerpt: "",
+    body: "",
+    coverUrl: "",
+    videoUrl: "",
+    kind: "article",
+    status: "draft",
+    publishedAt: "",
   },
   fields: [
-    { name: 'title', label: 'Título', required: true },
+    { name: "title", label: "Título", required: true },
     {
-      name: 'slug',
-      label: 'Slug',
+      name: "slug",
+      label: "Slug",
       required: true,
-      placeholder: 'titulo-da-publicacao',
+      placeholder: "titulo-da-publicacao",
       validate: (value) =>
-        /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(value ?? ''))
+        /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(String(value ?? ""))
           ? null
-          : 'Use somente letras minúsculas, números e hífens.',
+          : "Use somente letras minúsculas, números e hífens.",
     },
     {
-      name: 'kind',
-      label: 'Tipo',
-      type: 'select',
+      name: "kind",
+      label: "Tipo",
+      type: "select",
       required: true,
       options: [
-        { value: 'article', label: 'Artigo' },
-        { value: 'photo', label: 'Foto' },
-        { value: 'video', label: 'Vídeo' },
+        { value: "article", label: "Artigo" },
+        { value: "photo", label: "Foto" },
+        { value: "video", label: "Vídeo" },
       ],
     },
     {
-      name: 'status',
-      label: 'Status',
-      type: 'select',
+      name: "status",
+      label: "Status",
+      type: "select",
       required: true,
       options: [
-        { value: 'draft', label: 'Rascunho' },
-        { value: 'published', label: 'Publicado' },
+        { value: "draft", label: "Rascunho" },
+        { value: "published", label: "Publicado" },
       ],
     },
-    { name: 'excerpt', label: 'Resumo', type: 'textarea', required: true },
-    { name: 'body', label: 'Conteúdo', type: 'textarea', required: true },
-    { name: 'coverUrl', label: 'URL da capa' },
+    { name: "excerpt", label: "Resumo", type: "textarea", required: true },
+    { name: "body", label: "Conteúdo", type: "textarea", required: true },
+    { name: "coverUrl", label: "URL da capa" },
     {
-      name: 'videoUrl',
-      label: 'URL do vídeo',
-      showWhen: (values) => values.kind === 'video',
+      name: "videoUrl",
+      label: "URL do vídeo",
+      showWhen: (values) => values.kind === "video",
     },
     {
-      name: 'publishedAt',
-      label: 'Data da publicação',
-      type: 'datetime-local',
-      showWhen: (values) => values.status === 'published',
+      name: "publishedAt",
+      label: "Data da publicação",
+      type: "datetime-local",
+      showWhen: (values) => values.status === "published",
       validate: (value, values) =>
-        values.status === 'published' && !value ? 'Informe a data de publicação.' : null,
+        values.status === "published" && !value
+          ? "Informe a data de publicação."
+          : null,
     },
   ],
   columns: [
-    { path: 'title', label: 'Título' },
-    { path: 'kind', label: 'Tipo' },
-    { path: 'status', label: 'Status', format: 'status' },
-    { path: 'publishedAt', label: 'Publicação', format: 'datetime' },
-    { path: 'slug', label: 'Slug' },
+    { path: "title", label: "Título" },
+    { path: "kind", label: "Tipo" },
+    { path: "status", label: "Status", format: "status" },
+    { path: "publishedAt", label: "Publicação", format: "datetime" },
+    { path: "slug", label: "Slug" },
     actorColumn,
   ],
-  itemLabel: (item) => String(item.title ?? 'Mídia'),
-  toForm: (item) => ({ ...item, publishedAt: toLocalDateTime(item.publishedAt) }),
+  itemLabel: (item) => String(item.title ?? "Mídia"),
+  toForm: (item) => ({
+    ...item,
+    publishedAt: toLocalDateTime(item.publishedAt),
+  }),
   toPayload: (values, current) =>
     withAudit(
       {
         ...values,
         publishedAt:
-          values.status === 'published' && values.publishedAt
+          values.status === "published" && values.publishedAt
             ? toIsoDateTime(values.publishedAt)
             : undefined,
       },
@@ -1027,22 +1143,186 @@ const CONFIGS: Record<CrudResource, DomainCrudConfig> = {
   media,
 };
 
+const CRUD_FORM_STAGES: Partial<Record<CrudResource, CrudFormStage[]>> = {
+  people: [
+    {
+      id: "personal",
+      title: "Dados pessoais, contato e responsável",
+      shortTitle: "Pessoais",
+      icon: "person",
+      fields: [
+        "firstName",
+        "lastName",
+        "birthDate",
+        "registeredAt",
+        "document.type",
+        "document.number",
+        "photoUrl",
+        "status",
+        "phone",
+        "email",
+        "address",
+        "guardianId",
+        "guardianRelationship",
+      ],
+    },
+    {
+      id: "profiles",
+      title: "Perfis",
+      shortTitle: "Perfis",
+      icon: "groups",
+      fields: [
+        "isStudent",
+        "isMusician",
+        "student.enrollmentDate",
+        "student.classGroup",
+        "student.level",
+        "musician.section",
+        "musician.experience",
+        "musician.defaultVoice",
+        "musician.ownInstrument",
+        "musician.joinedAt",
+        "musician.playedInstrumentId",
+      ],
+    },
+    {
+      id: "access",
+      title: "Acesso",
+      shortTitle: "Acesso",
+      icon: "key",
+      fields: ["createUser", "username"],
+    },
+  ],
+  songs: [
+    {
+      id: "score",
+      title: "Partitura e acesso",
+      shortTitle: "Partitura",
+      icon: "music_note",
+      fields: [
+        "scoreFile",
+        "visibility",
+        "visibleToStudents",
+        "visibleToMusicians",
+      ],
+    },
+    {
+      id: "details",
+      title: "Dados da música",
+      shortTitle: "Dados",
+      icon: "edit_note",
+      fields: [
+        "title",
+        "composer",
+        "arranger",
+        "genre",
+        "key",
+        "durationSeconds",
+        "videoUrl",
+        "status",
+      ],
+    },
+  ],
+  patrimony: [
+    {
+      id: "item",
+      title: "Identificação e aquisição",
+      shortTitle: "Item",
+      icon: "inventory_2",
+      fields: [
+        "code",
+        "name",
+        "category",
+        "acquisitionDate",
+        "acquisitionValue",
+        "status",
+      ],
+    },
+    {
+      id: "details",
+      title: "Localização e detalhes",
+      shortTitle: "Detalhes",
+      icon: "place",
+      fields: [
+        "location",
+        "assignedPersonId",
+        "notes",
+        "instrument.instrumentId",
+        "instrument.serialNumber",
+        "instrument.manufacturer",
+        "instrument.model",
+      ],
+    },
+  ],
+  instruments: [
+    {
+      id: "identity",
+      title: "Identificação",
+      shortTitle: "Identificação",
+      icon: "music_note",
+      fields: ["name", "family", "subclass"],
+    },
+    {
+      id: "musical",
+      title: "Características musicais",
+      shortTitle: "Características",
+      icon: "tune",
+      fields: ["tuning", "signalType", "tessitura", "tags", "status"],
+    },
+  ],
+  presentations: [
+    {
+      id: "event",
+      title: "Dados e datas",
+      shortTitle: "Evento",
+      icon: "event",
+      fields: ["title", "venue", "startsAt", "endsAt", "description"],
+    },
+    {
+      id: "publication",
+      title: "Repertório e publicação",
+      shortTitle: "Publicação",
+      icon: "campaign",
+      fields: ["repertoireIds", "coverUrl", "isPublic", "status", "notifyAll"],
+    },
+  ],
+};
+
+export type DomainCrudFormResource = keyof typeof CRUD_FORM_STAGES;
+
+export function isDomainCrudFormResource(
+  resource: CrudResource,
+): resource is DomainCrudFormResource {
+  return Object.prototype.hasOwnProperty.call(CRUD_FORM_STAGES, resource);
+}
+
 export function getCrudConfig(resource: CrudResource): DomainCrudConfig {
   return CONFIGS[resource];
 }
 
-export function getValue(entity: Record<string, unknown>, path: string): unknown {
-  return path.split('.').reduce<unknown>((current, part) => {
-    if (!current || typeof current !== 'object') return undefined;
+export function getCrudFormStages(resource: CrudResource): CrudFormStage[] {
+  return CRUD_FORM_STAGES[resource] ?? [];
+}
+
+export function getValue(
+  entity: Record<string, unknown>,
+  path: string,
+): unknown {
+  return path.split(".").reduce<unknown>((current, part) => {
+    if (!current || typeof current !== "object") return undefined;
     return (current as Record<string, unknown>)[part];
   }, entity);
 }
 
-function flattenEntity(entity: Record<string, unknown>): Record<string, unknown> {
+function flattenEntity(
+  entity: Record<string, unknown>,
+): Record<string, unknown> {
   const flat = { ...entity };
   for (const [key, value] of Object.entries(entity)) {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      for (const [nestedKey, nestedValue] of Object.entries(value as Record<string, unknown>)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      for (const [nestedKey, nestedValue] of Object.entries(
+        value as Record<string, unknown>,
+      )) {
         flat[`${key}.${nestedKey}`] = Array.isArray(nestedValue)
           ? nestedValue.map(String)
           : nestedValue;
@@ -1052,15 +1332,18 @@ function flattenEntity(entity: Record<string, unknown>): Record<string, unknown>
   return flat;
 }
 
-function unflattenEntity(values: Record<string, unknown>): Record<string, unknown> {
+function unflattenEntity(
+  values: Record<string, unknown>,
+): Record<string, unknown> {
   const entity: Record<string, unknown> = {};
   for (const [path, value] of Object.entries(values)) {
-    if (!path.includes('.')) {
+    if (!path.includes(".")) {
       entity[path] = value;
       continue;
     }
-    const [parent, child] = path.split('.');
-    const nested = (entity[parent] as Record<string, unknown> | undefined) ?? {};
+    const [parent, child] = path.split(".");
+    const nested =
+      (entity[parent] as Record<string, unknown> | undefined) ?? {};
     nested[child] = value;
     entity[parent] = nested;
   }
@@ -1080,14 +1363,14 @@ function withAudit(
 }
 
 function toLocalDateTime(value: unknown): string {
-  if (!value) return '';
+  if (!value) return "";
   const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return '';
+  if (Number.isNaN(date.getTime())) return "";
   const offset = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
 function toIsoDateTime(value: unknown): string {
   const date = new Date(String(value));
-  return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
 }

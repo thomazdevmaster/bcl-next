@@ -48,6 +48,33 @@ const placementClasses: Record<EntityDialogPlacement, string> = {
 
 const CLOSE_MS = 180;
 
+let activeDocumentScrollLocks = 0;
+let previousDocumentOverflow: { body: string; root: string } | null = null;
+
+function acquireDocumentScrollLock(): () => void {
+  if (activeDocumentScrollLocks === 0) {
+    previousDocumentOverflow = {
+      body: document.body.style.overflow,
+      root: document.documentElement.style.overflow,
+    };
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+  }
+  activeDocumentScrollLocks += 1;
+
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    activeDocumentScrollLocks = Math.max(0, activeDocumentScrollLocks - 1);
+    if (activeDocumentScrollLocks !== 0 || !previousDocumentOverflow) return;
+
+    document.body.style.overflow = previousDocumentOverflow.body;
+    document.documentElement.style.overflow = previousDocumentOverflow.root;
+    previousDocumentOverflow = null;
+  };
+}
+
 export function EntityDialog({
   open,
   title,
@@ -92,6 +119,11 @@ export function EntityDialog({
   useEffect(() => {
     if (confirmingClose) confirmationCancelRef.current?.focus();
   }, [confirmingClose]);
+
+  useEffect(() => {
+    if (!renderOpen) return;
+    return acquireDocumentScrollLock();
+  }, [renderOpen]);
 
   const clearCloseTimeout = useCallback(() => {
     if (closeTimeoutRef.current) {
@@ -253,10 +285,10 @@ export function EntityDialog({
             type="button"
             aria-label={`Fechar: ${title}`}
             onClick={requestCloseIntent}
-            className="group inline-flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-[var(--radius)] text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
+            className="group inline-flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-[var(--radius)] text-[var(--destructive)] hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)]"
           >
             <span
-              className="material-icons transition-transform duration-150 group-hover:rotate-90 motion-reduce:transition-none motion-reduce:group-hover:rotate-0"
+              className="material-icons transition-transform duration-150 group-hover:rotate-90 group-active:rotate-90 group-focus-visible:rotate-90 motion-reduce:transition-none motion-reduce:group-hover:rotate-0 motion-reduce:group-active:rotate-0 motion-reduce:group-focus-visible:rotate-0"
               aria-hidden="true"
             >
               close
@@ -265,7 +297,7 @@ export function EntityDialog({
         ) : null}
       </header>
       <div
-        className={`flex min-h-0 flex-1 flex-col overflow-y-auto ${confirmingClose ? "hidden" : ""}`}
+        className={`flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain ${confirmingClose ? "hidden" : ""}`}
         aria-hidden={confirmingClose}
       >
         {children}
