@@ -1,4 +1,19 @@
 import type { RhythmFigure } from '@/domains/games/ritmos/rhythmFigures';
+import { GAME_STAFF_LINE_GAP_PX } from '@/domains/games/notas/trebleStaffLayout';
+
+const VIEW_W = 40;
+const VIEW_H = 64;
+/** Diâmetro vertical da cabeça (2 × ry 6.2), no viewBox. */
+const HEAD_DIAMETER = 12.4;
+/** Cabeça da colcheia na pauta: 2 × lineGap × 0.52. */
+const TREBLE_HEAD_PX = GAME_STAFF_LINE_GAP_PX * 1.04;
+
+export const RHYTHM_GLYPH_HEIGHT_PX = Math.round(
+  (TREBLE_HEAD_PX * VIEW_H) / HEAD_DIAMETER,
+);
+export const RHYTHM_GLYPH_WIDTH_PX = Math.round(
+  RHYTHM_GLYPH_HEIGHT_PX * (VIEW_W / VIEW_H),
+);
 
 const HEAD_Y = 34;
 
@@ -116,10 +131,15 @@ interface RhythmGlyphProps {
   className?: string;
 }
 
-/** Figura rítmica isolada, com a cabeça alinhada ao centro vertical. */
+/** Figura rítmica isolada, no mesmo tamanho da cabeça das notas da pauta. */
 export function RhythmGlyph({ figure, className = '' }: RhythmGlyphProps) {
   return (
-    <svg viewBox="0 0 40 64" className={className} aria-hidden>
+    <svg
+      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+      className={`shrink-0 ${className}`}
+      style={{ height: RHYTHM_GLYPH_HEIGHT_PX, width: RHYTHM_GLYPH_WIDTH_PX }}
+      aria-hidden
+    >
       {figure.rest ? <RestShape id={figure.id} /> : <NoteShape figure={figure} />}
     </svg>
   );

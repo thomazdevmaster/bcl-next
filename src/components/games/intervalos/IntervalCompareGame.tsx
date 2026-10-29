@@ -110,7 +110,6 @@ export function IntervalCompareGame() {
                     {feedback !== 'idle' ? ` · ${example.interval.label}` : ''}
                   </p>
                   <IntervalPairStaff
-                    compact
                     lower={example.lower}
                     upperStep={example.upper.staffStep}
                   />

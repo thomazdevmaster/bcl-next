@@ -11,6 +11,7 @@ import type {
 } from '@/domains/games/notas/trebleNaturals1Notes';
 import {
   TREBLE_STAFF_METRICS,
+  gameStaffSize,
   trebleStaffLineYs,
 } from '@/domains/games/notas/trebleStaffLayout';
 
@@ -50,17 +51,22 @@ export function TrebleStaffPair({
   onPick,
 }: TrebleStaffPairProps) {
   const lines = trebleStaffLineYs(TREBLE_STAFF_METRICS);
+  const staff = gameStaffSize(220, 116, TREBLE_STAFF_METRICS.lineGap);
 
   return (
     <div
-      className="relative mx-auto flex w-full max-w-md items-center"
+      className="relative mx-auto flex w-full items-center justify-center overflow-x-auto"
       role="group"
       aria-label="Duas notas na partitura. Escolha a mais aguda."
     >
-      <TrebleClefSymbol className="pointer-events-none h-[6.4rem] w-[3.2rem] shrink-0 -mr-2 text-[var(--foreground)] sm:h-[7rem] sm:w-[3.5rem]" />
+      <TrebleClefSymbol
+        className="pointer-events-none shrink-0 -mr-2 text-[var(--foreground)]"
+        style={{ height: staff.height, width: staff.clefWidth }}
+      />
       <svg
         viewBox="0 -10 220 116"
-        className="h-[6.4rem] w-full flex-1 text-[var(--foreground)] sm:h-[7rem]"
+        className="shrink-0 text-[var(--foreground)]"
+        style={{ height: staff.height, width: staff.width }}
         aria-hidden
       >
         {lines.map((y) => (

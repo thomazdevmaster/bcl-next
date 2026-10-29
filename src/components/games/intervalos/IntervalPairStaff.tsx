@@ -9,6 +9,7 @@ import type { TrebleNaturalNote } from '@/domains/games/notas/trebleNaturals1Not
 import {
   TREBLE_STAFF_METRICS,
   TREBLE_STAFF_METRICS_TOUCH,
+  gameStaffSize,
   trebleStaffLineYs,
   trebleYToStaffStep,
   type TrebleStaffLayoutMetrics,
@@ -23,7 +24,6 @@ interface IntervalPairStaffProps {
   upperStep: number | null;
   upperTone?: EighthNoteTone;
   lowerTone?: EighthNoteTone;
-  compact?: boolean;
   className?: string;
 }
 
@@ -32,20 +32,22 @@ export function IntervalPairStaff({
   upperStep,
   upperTone = 'default',
   lowerTone = 'default',
-  compact = false,
   className = '',
 }: IntervalPairStaffProps) {
   const metrics = TREBLE_STAFF_METRICS;
   const lines = trebleStaffLineYs(metrics);
+  const staff = gameStaffSize(220, metrics.viewHeight + 20, metrics.lineGap);
 
   return (
-    <div className={`relative mx-auto flex w-full items-center text-[var(--foreground)] ${className}`}>
+    <div className={`relative mx-auto flex w-full items-center justify-center overflow-x-auto text-[var(--foreground)] ${className}`}>
       <TrebleClefSymbol
-        className={`pointer-events-none shrink-0 -mr-2 ${compact ? 'h-16 w-8' : 'h-[6.4rem] w-[3.2rem]'}`}
+        className="pointer-events-none shrink-0 -mr-2"
+        style={{ height: staff.height, width: staff.clefWidth }}
       />
       <svg
         viewBox={`0 -10 220 ${metrics.viewHeight + 20}`}
-        className={compact ? 'h-16 w-full flex-1' : 'h-[6.4rem] w-full flex-1'}
+        className="shrink-0"
+        style={{ height: staff.height, width: staff.width }}
         aria-hidden
       >
         {lines.map((y) => (
@@ -95,6 +97,7 @@ export function IntervalWriteStaff({
 }: IntervalWriteStaffProps) {
   const metrics: TrebleStaffLayoutMetrics = TREBLE_STAFF_METRICS_TOUCH;
   const lines = trebleStaffLineYs(metrics);
+  const staff = gameStaffSize(200, metrics.viewHeight, metrics.lineGap);
   const svgRef = useRef<SVGSVGElement>(null);
 
   const pickFromY = useCallback(
@@ -115,14 +118,18 @@ export function IntervalWriteStaff({
   };
 
   return (
-    <div className="relative mx-auto flex w-full items-center text-[var(--foreground)]">
-      <TrebleClefSymbol className="pointer-events-none h-[11rem] w-[5.5rem] shrink-0 self-center text-[var(--foreground)] sm:h-[12rem] sm:w-[6rem]" />
+    <div className="relative mx-auto flex w-full items-center justify-center overflow-x-auto text-[var(--foreground)]">
+      <TrebleClefSymbol
+        className="pointer-events-none shrink-0 self-center text-[var(--foreground)]"
+        style={{ height: staff.height, width: staff.clefWidth }}
+      />
       <svg
         ref={svgRef}
         viewBox={`0 0 200 ${metrics.viewHeight}`}
-        className={`h-[11rem] min-h-[11rem] w-full flex-1 touch-none sm:h-[12rem] ${
+        className={`shrink-0 touch-none ${
           disabled ? 'cursor-default' : 'cursor-crosshair'
         }`}
+        style={{ height: staff.height, width: staff.width }}
         aria-label="Partitura. Toque na altura da nota aguda."
         onPointerDown={onPointerDown}
       >

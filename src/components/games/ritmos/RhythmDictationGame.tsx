@@ -93,7 +93,7 @@ export function RhythmDictationGame() {
         }`}
       >
         <p className="text-center text-xs font-medium text-[var(--muted)]">
-          Quatro cliques de contagem, depois o ritmo
+          Um compasso só no metrônomo, o seguinte com metrônomo e notas
         </p>
         <button
           type="button"
@@ -125,7 +125,7 @@ export function RhythmDictationGame() {
                 <span className="w-5 shrink-0 text-center text-sm font-semibold text-[var(--muted)]">
                   {index + 1}
                 </span>
-                <RhythmStaff figures={option} compact className="min-w-0 flex-1" />
+                <RhythmStaff figures={option} className="min-w-0 flex-1" />
               </button>
             );
           })}

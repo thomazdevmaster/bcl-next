@@ -23,19 +23,26 @@ type Feedback = 'idle' | 'correct' | 'wrong';
 export function RhythmBarGame() {
   const progress = useRhythmProgress(RHYTHM_BAR_STORAGE_KEY);
   const { playWrongFeedback } = useNotePlayer();
-  const { playSuccess } = useRhythmPlayer();
+  const { playFigures, playSuccess, stop } = useRhythmPlayer();
   const [question, setQuestion] = useState<BarCompletion | null>(null);
   const [feedback, setFeedback] = useState<Feedback>('idle');
 
-  const nextQuestion = useCallback((level: RhythmLevel) => {
-    setQuestion(buildBarCompletion(level));
-    setFeedback('idle');
-  }, []);
+  const nextQuestion = useCallback(
+    (level: RhythmLevel) => {
+      const next = buildBarCompletion(level);
+      setQuestion(next);
+      setFeedback('idle');
+      playFigures(next.prefix);
+    },
+    [playFigures],
+  );
 
   useEffect(() => {
     if (!progress.ready || question) return;
     nextQuestion(progress.level);
   }, [nextQuestion, progress.level, progress.ready, question]);
+
+  useEffect(() => () => stop(), [stop]);
 
   const answer = useCallback(
     (choice: RhythmFigure) => {
@@ -92,6 +99,18 @@ export function RhythmBarGame() {
         <p className="text-center text-xs font-medium text-[var(--muted)]">
           Qual figura completa os 4 tempos?
         </p>
+        <button
+          type="button"
+          className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] px-3 text-sm font-semibold"
+          onClick={() => {
+            if (question) playFigures(question.prefix);
+          }}
+        >
+          <span className="material-icons text-xl" aria-hidden>
+            volume_up
+          </span>
+          Ouvir de novo
+        </button>
         {question ? (
           <RhythmStaff
             className="mt-2"
@@ -119,7 +138,7 @@ export function RhythmBarGame() {
                     : 'border-[var(--border)] bg-[var(--card)]'
                 }`}
               >
-                <RhythmGlyph figure={option} className="h-10 w-7" />
+                <RhythmGlyph figure={option} />
                 <span className="text-left leading-tight">
                   {option.label}
                   <span className="mt-0.5 block text-[10px] font-normal text-[var(--muted)]">

@@ -7,6 +7,7 @@ import type { TrebleNaturalNote } from '@/domains/games/notas/trebleNaturals1Not
 import {
   TREBLE_NOTE_X,
   TREBLE_STAFF_METRICS_TOUCH,
+  gameStaffSize,
   trebleStaffLineYs,
   trebleStaffStepsInRange,
   trebleStepCenterY,
@@ -63,6 +64,7 @@ export function TrebleInteractiveStaff({
   const svgRef = useRef<SVGSVGElement>(null);
   const lines = trebleStaffLineYs(STAFF);
   const touchSteps = trebleStaffStepsInRange();
+  const staff = gameStaffSize(200, STAFF.viewHeight, STAFF.lineGap);
 
   const handlePointerY = useCallback(
     (clientY: number) => {
@@ -102,15 +104,19 @@ export function TrebleInteractiveStaff({
 
   return (
     <div
-      className={`relative mx-auto flex w-full max-w-full touch-none select-none items-stretch ${className}`}
+      className={`relative mx-auto flex w-full touch-none select-none items-center justify-center overflow-x-auto ${className}`}
     >
-      <TrebleClefSymbol className="pointer-events-none h-[14rem] w-[7rem] shrink-0 self-center -mr-1 text-[var(--foreground)] sm:h-[15rem] sm:w-[7.5rem]" />
+      <TrebleClefSymbol
+        className="pointer-events-none shrink-0 self-center -mr-1 text-[var(--foreground)]"
+        style={{ height: staff.height, width: staff.clefWidth }}
+      />
       <svg
         ref={svgRef}
         viewBox={`0 0 200 ${STAFF.viewHeight}`}
-        className={`min-h-[14rem] h-[14rem] w-full flex-1 text-[var(--foreground)] sm:h-[15rem] sm:min-h-[15rem] ${
+        className={`shrink-0 text-[var(--foreground)] ${
           disabled ? 'cursor-default' : useTouchBands ? 'cursor-pointer' : 'cursor-crosshair'
         }`}
+        style={{ height: staff.height, width: staff.width }}
         role="img"
         aria-label="Partitura em clave de sol. Toque na altura da nota."
         onPointerDown={

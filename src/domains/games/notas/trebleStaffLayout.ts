@@ -1,3 +1,26 @@
+/**
+ * Espaço entre linhas, em pixels, igual em todos os jogos.
+ * A cabeça da nota acompanha esse espaço, então o desenho fica do mesmo tamanho.
+ */
+export const GAME_STAFF_LINE_GAP_PX = 13;
+
+export function gameStaffHeightPx(viewBoxHeight: number, lineGap: number): number {
+  return Math.round((viewBoxHeight * GAME_STAFF_LINE_GAP_PX) / lineGap);
+}
+
+export function gameStaffSize(
+  viewBoxWidth: number,
+  viewBoxHeight: number,
+  lineGap: number,
+): { height: number; width: number; clefWidth: number } {
+  const height = gameStaffHeightPx(viewBoxHeight, lineGap);
+  return {
+    height,
+    width: Math.round(height * (viewBoxWidth / viewBoxHeight)),
+    clefWidth: Math.round(height / 2),
+  };
+}
+
 /** Geometria da pauta em clave de sol (viewBox 200×96 no modo leitura). */
 export const TREBLE_NOTE_X = 132;
 export const TREBLE_LEDGER_HALF = 22;

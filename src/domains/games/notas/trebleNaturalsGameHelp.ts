@@ -109,6 +109,38 @@ export const TREBLE_HIGHER_NOTE_HELP: GameHelpSection[] = [
   },
 ];
 
+export const TREBLE_ROTATE_STAFF_HELP: GameHelpSection[] = [
+  {
+    heading: 'Objetivo',
+    paragraphs: [
+      'Leia a colcheia de cima e gire a pauta de baixo até a colcheia tracejada cair na linha ou no espaço desse nome. Dó₄, Dó₅ e Dó₆ usam o mesmo encaixe — vale o nome, não a oitava.',
+    ],
+  },
+  {
+    heading: 'Níveis',
+    list: [
+      'Fácil — Mi₄ a Dó₅, só dentro da pauta.',
+      'Médio — Ré₄ a Sol₅, pauta um pouco estendida.',
+      'Difícil — Dó₄ a Dó₆, com linhas suplementares.',
+    ],
+  },
+  {
+    heading: 'Como responder',
+    list: [
+      'Esquerda e Direita giram a pauta, um nome por toque (… Si, Dó, Ré, Mi …).',
+      'Confirmar envia a posição que está no centro.',
+      'No teclado: seta ← e seta → giram; Enter confirma.',
+    ],
+  },
+  {
+    heading: 'Pontuação e feedback',
+    list: [
+      'Sequência e recorde são por nível, salvos neste aparelho.',
+      'No acerto, toca a nota lida. No erro, a pauta gira até o encaixe certo e o nome aparece.',
+    ],
+  },
+];
+
 export const TREBLE_LISTEN_WRITE_HELP: GameHelpSection[] = [
   {
     heading: 'Objetivo',

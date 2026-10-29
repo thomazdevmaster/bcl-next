@@ -28,19 +28,26 @@ const CHOICES: Array<{ id: DurationWinner; label: string; key: string }> = [
 export function RhythmDurationGame() {
   const progress = useRhythmProgress(RHYTHM_DURATION_STORAGE_KEY);
   const { playWrongFeedback } = useNotePlayer();
-  const { playSuccess } = useRhythmPlayer();
+  const { playFigures, playSuccess, stop } = useRhythmPlayer();
   const [pair, setPair] = useState<DurationPair | null>(null);
   const [feedback, setFeedback] = useState<Feedback>('idle');
 
-  const nextQuestion = useCallback((level: RhythmLevel) => {
-    setPair(pickDurationPair(level));
-    setFeedback('idle');
-  }, []);
+  const nextQuestion = useCallback(
+    (level: RhythmLevel) => {
+      const next = pickDurationPair(level);
+      setPair(next);
+      setFeedback('idle');
+      playFigures([next.left, next.right], { gapBeats: 0.5 });
+    },
+    [playFigures],
+  );
 
   useEffect(() => {
     if (!progress.ready || pair) return;
     nextQuestion(progress.level);
   }, [nextQuestion, pair, progress.level, progress.ready]);
+
+  useEffect(() => () => stop(), [stop]);
 
   const answer = useCallback(
     (choice: DurationWinner) => {
@@ -95,6 +102,18 @@ export function RhythmDurationGame() {
         <p className="text-center text-xs font-medium text-[var(--muted)]">
           Qual figura dura mais?
         </p>
+        <button
+          type="button"
+          className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] px-3 text-sm font-semibold"
+          onClick={() => {
+            if (pair) playFigures([pair.left, pair.right], { gapBeats: 0.5 });
+          }}
+        >
+          <span className="material-icons text-xl" aria-hidden>
+            volume_up
+          </span>
+          Ouvir de novo
+        </button>
         {pair ? (
           <div className="mt-3 grid grid-cols-2 gap-2 text-[var(--foreground)]">
             {(['left', 'right'] as const).map((side) => {
@@ -110,7 +129,7 @@ export function RhythmDurationGame() {
                       : 'border-[var(--border)]'
                   }`}
                 >
-                  <RhythmGlyph figure={figure} className="h-20 w-12" />
+                  <RhythmGlyph figure={figure} />
                   {feedback !== 'idle' ? (
                     <p className="text-xs text-[var(--muted)]">{formatBeats(figure.beats)}</p>
                   ) : (

@@ -25,20 +25,26 @@ interface Question {
 export function RhythmFiguresGame() {
   const progress = useRhythmProgress(RHYTHM_FIGURES_STORAGE_KEY);
   const { playWrongFeedback } = useNotePlayer();
-  const { playSuccess } = useRhythmPlayer();
+  const { playFigures, playSuccess, stop } = useRhythmPlayer();
   const [question, setQuestion] = useState<Question | null>(null);
   const [feedback, setFeedback] = useState<Feedback>('idle');
 
-  const nextQuestion = useCallback((level: RhythmLevel) => {
-    const answer = pickRhythmFigure(level);
-    setQuestion({ answer, options: figureChoices(answer, level) });
-    setFeedback('idle');
-  }, []);
+  const nextQuestion = useCallback(
+    (level: RhythmLevel) => {
+      const answer = pickRhythmFigure(level);
+      setQuestion({ answer, options: figureChoices(answer, level) });
+      setFeedback('idle');
+      playFigures([answer]);
+    },
+    [playFigures],
+  );
 
   useEffect(() => {
     if (!progress.ready || question) return;
     nextQuestion(progress.level);
   }, [nextQuestion, progress.level, progress.ready, question]);
+
+  useEffect(() => () => stop(), [stop]);
 
   const answer = useCallback(
     (choice: RhythmFigure) => {
@@ -92,9 +98,21 @@ export function RhythmFiguresGame() {
         <p className="text-center text-xs font-medium text-[var(--muted)]">
           Qual é o nome desta figura?
         </p>
+        <button
+          type="button"
+          className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] px-3 text-sm font-semibold"
+          onClick={() => {
+            if (question) playFigures([question.answer]);
+          }}
+        >
+          <span className="material-icons text-xl" aria-hidden>
+            volume_up
+          </span>
+          Ouvir de novo
+        </button>
         <div className="mt-2 flex justify-center text-[var(--foreground)]">
           {question ? (
-            <RhythmGlyph figure={question.answer} className="h-28 w-16" />
+            <RhythmGlyph figure={question.answer} />
           ) : null}
         </div>
         <div className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2">

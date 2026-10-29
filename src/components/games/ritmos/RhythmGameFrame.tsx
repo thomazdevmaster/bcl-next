@@ -1,13 +1,14 @@
-'use client';
+"use client";
 
-import { type ReactNode } from 'react';
-import { GameHelpBody } from '@/components/games/GameHelpDialog';
-import { GamePlayHeader } from '@/components/games/GamePlayHeader';
-import type { GameHelpSection } from '@/domains/games/gameHelp.types';
+import { type ReactNode } from "react";
+
+import { GameHelpBody } from "@/components/games/GameHelpDialog";
+import { GamePlayHeader } from "@/components/games/GamePlayHeader";
+import type { GameHelpSection } from "@/domains/games/gameHelp.types";
 import {
   RHYTHM_LEVELS,
   type RhythmLevel,
-} from '@/domains/games/ritmos/rhythmFigures';
+} from "@/domains/games/ritmos/rhythmFigures";
 
 interface RhythmGameFrameProps {
   title: string;
@@ -19,6 +20,8 @@ interface RhythmGameFrameProps {
   levelLocked: boolean;
   streak: number;
   best: number;
+  scoreLabel?: string;
+  recordLabel?: string;
   children: ReactNode;
 }
 
@@ -32,6 +35,8 @@ export function RhythmGameFrame({
   levelLocked,
   streak,
   best,
+  scoreLabel = "Sequência",
+  recordLabel = "Recorde",
   children,
 }: RhythmGameFrameProps) {
   const levelMeta = RHYTHM_LEVELS.find((item) => item.id === level)!;
@@ -48,7 +53,10 @@ export function RhythmGameFrame({
       />
 
       <div className="space-y-2">
-        <p className="text-xs font-medium text-[var(--muted)]" id="rhythm-level-label">
+        <p
+          className="text-xs font-medium text-[var(--muted)]"
+          id="rhythm-level-label"
+        >
           Nível
         </p>
         <div
@@ -68,8 +76,8 @@ export function RhythmGameFrame({
                 onClick={() => onChangeLevel(item.id)}
                 className={`inline-flex min-h-11 items-center justify-center rounded-lg border px-2 text-sm font-medium transition disabled:opacity-60 ${
                   selected
-                    ? 'border-[var(--color-brand)] bg-[var(--color-brand)]/15 text-[var(--foreground)]'
-                    : 'border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]'
+                    ? "border-[var(--color-brand)] bg-[var(--color-brand)]/15 text-[var(--foreground)]"
+                    : "border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]"
                 }`}
               >
                 {item.label}
@@ -84,11 +92,11 @@ export function RhythmGameFrame({
 
       <dl className="grid grid-cols-2 gap-3 rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] px-4 py-2.5 text-sm">
         <div>
-          <dt className="text-[var(--muted)]">Sequência</dt>
+          <dt className="text-[var(--muted)]">{scoreLabel}</dt>
           <dd className="font-semibold">{streak}</dd>
         </div>
         <div>
-          <dt className="text-[var(--muted)]">Recorde</dt>
+          <dt className="text-[var(--muted)]">{recordLabel}</dt>
           <dd className="font-semibold">{best}</dd>
         </div>
       </dl>

@@ -277,6 +277,43 @@ export const TREBLE_HIGHER_NOTE_STORAGE_KEY =
 export const TREBLE_LISTEN_WRITE_STORAGE_KEY =
   'bcl.game.notas-clave-sol-ouca-escreva';
 
+export const TREBLE_ROTATE_STAFF_STORAGE_KEY =
+  'bcl.game.notas-clave-sol-gire-a-pauta';
+
+/** Sete encaixes, um por nome (Mi₄ na linha de baixo até Ré₅). A oitava não muda o encaixe. */
+export const TREBLE_WHEEL_SLOT_COUNT = 7;
+
+export function trebleWheelSlotForStaffStep(staffStep: number): number {
+  return ((staffStep % TREBLE_WHEEL_SLOT_COUNT) + TREBLE_WHEEL_SLOT_COUNT) %
+    TREBLE_WHEEL_SLOT_COUNT;
+}
+
+export function trebleWheelSlotForNote(note: TrebleNaturalNote): number {
+  return trebleWheelSlotForStaffStep(note.staffStep);
+}
+
+/** Posição inicial diferente da resposta, para a pauta não nascer alinhada. */
+export function pickTrebleWheelStart(correctSlot: number): number {
+  const offset =
+    1 + Math.floor(Math.random() * (TREBLE_WHEEL_SLOT_COUNT - 1));
+  return (correctSlot + offset) % TREBLE_WHEEL_SLOT_COUNT;
+}
+
+export function pickTrebleRotatePrompt(
+  level: TrebleNaturals1Level,
+  excludeSlot?: number,
+): TrebleNaturalNote {
+  const levelPool = notesForLevel(level);
+  const pool =
+    excludeSlot === undefined
+      ? levelPool
+      : levelPool.filter(
+          (note) => trebleWheelSlotForNote(note) !== excludeSlot,
+        );
+  const source = pool.length > 0 ? pool : levelPool;
+  return source[Math.floor(Math.random() * source.length)]!;
+}
+
 export function readTrebleGameLevelStats(
   storageKey: string,
 ): TrebleNaturals1PersistedStats {

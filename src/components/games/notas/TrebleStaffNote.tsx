@@ -6,6 +6,7 @@ import type { TrebleNaturalNote } from '@/domains/games/notas/trebleNaturals1Not
 import {
   TREBLE_NOTE_X,
   TREBLE_STAFF_METRICS,
+  gameStaffSize,
   trebleStaffLineYs,
 } from '@/domains/games/notas/trebleStaffLayout';
 
@@ -17,17 +18,22 @@ interface TrebleStaffNoteProps {
 /** Partitura (clave de sol + pauta) com uma colcheia. */
 export function TrebleStaffNote({ note, className = '' }: TrebleStaffNoteProps) {
   const lines = trebleStaffLineYs(TREBLE_STAFF_METRICS);
+  const staff = gameStaffSize(200, 116, TREBLE_STAFF_METRICS.lineGap);
 
   return (
     <div
-      className={`relative mx-auto flex max-w-[17.5rem] items-center ${className}`}
+      className={`relative mx-auto flex w-full items-center justify-center overflow-x-auto ${className}`}
       role="img"
       aria-label="Nota na partitura em clave de sol"
     >
-      <TrebleClefSymbol className="pointer-events-none h-[6.4rem] w-[3.2rem] shrink-0 -mr-3 text-[var(--foreground)]" />
+      <TrebleClefSymbol
+        className="pointer-events-none shrink-0 -mr-3 text-[var(--foreground)]"
+        style={{ height: staff.height, width: staff.clefWidth }}
+      />
       <svg
         viewBox="0 -10 200 116"
-        className="h-[6.4rem] flex-1 text-[var(--foreground)]"
+        className="shrink-0 text-[var(--foreground)]"
+        style={{ height: staff.height, width: staff.width }}
         aria-hidden
       >
         {lines.map((y) => (

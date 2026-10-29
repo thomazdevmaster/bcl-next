@@ -1,10 +1,12 @@
-import { RhythmGlyph } from '@/components/games/ritmos/RhythmGlyph';
+import {
+  RHYTHM_GLYPH_HEIGHT_PX,
+  RhythmGlyph,
+} from '@/components/games/ritmos/RhythmGlyph';
 import type { RhythmFigure } from '@/domains/games/ritmos/rhythmFigures';
 
 interface RhythmStaffProps {
   figures: RhythmFigure[];
   missingBeats?: number;
-  compact?: boolean;
   className?: string;
 }
 
@@ -12,7 +14,6 @@ interface RhythmStaffProps {
 export function RhythmStaff({
   figures,
   missingBeats = 0,
-  compact = false,
   className = '',
 }: RhythmStaffProps) {
   const label = [
@@ -24,7 +25,8 @@ export function RhythmStaff({
 
   return (
     <div
-      className={`relative flex w-full items-center ${compact ? 'h-16' : 'h-24'} ${className}`}
+      className={`relative flex w-full items-center ${className}`}
+      style={{ height: RHYTHM_GLYPH_HEIGHT_PX }}
       role="img"
       aria-label={label || 'Compasso vazio'}
     >
@@ -36,10 +38,7 @@ export function RhythmStaff({
             className="flex h-full min-w-0 items-center justify-center"
             style={{ flexGrow: figure.beats, flexBasis: 0 }}
           >
-            <RhythmGlyph
-              figure={figure}
-              className={compact ? 'h-14 w-8' : 'h-[5.25rem] w-10'}
-            />
+            <RhythmGlyph figure={figure} />
           </div>
         ))}
         {missingBeats > 0 ? (
