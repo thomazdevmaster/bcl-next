@@ -117,11 +117,10 @@ function NoteShape({ figure }: { figure: RhythmFigure }) {
   }
   const filled = figure.id !== 'half' && figure.id !== 'dotted-half';
   const flags = figure.id === 'sixteenth' ? 2 : figure.id === 'eighth' ? 1 : 0;
-  const stemmed = figure.id !== 'whole';
   return (
     <>
       <NoteHead filled={filled} dotted={figure.dotted} />
-      {stemmed ? <Stem flags={flags} /> : null}
+      <Stem flags={flags} />
     </>
   );
 }
