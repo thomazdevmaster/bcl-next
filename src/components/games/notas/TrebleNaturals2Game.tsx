@@ -4,14 +4,20 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { GameHelpBody } from '@/components/games/GameHelpDialog';
 import { GamePlayHeader } from '@/components/games/GamePlayHeader';
 import { TrebleInteractiveStaff } from '@/components/games/notas/TrebleInteractiveStaff';
-import { TREBLE_NATURALS_2_HELP } from '@/domains/games/notas/trebleNaturalsGameHelp';
 import {
+  TREBLE_LISTEN_WRITE_HELP,
+  TREBLE_NATURALS_2_HELP,
+} from '@/domains/games/notas/trebleNaturalsGameHelp';
+import {
+  TREBLE_LISTEN_WRITE_STORAGE_KEY,
   TREBLE_NATURAL_LEVELS,
   formatTrebleNaturalLabel,
   isCorrectStaffStepAnswer,
   notesForLevel,
   pickRandomTrebleNatural,
+  readTrebleGameLevelStats,
   readTrebleNaturals2Stats,
+  writeTrebleGameLevelStats,
   writeTrebleNaturals2Stats,
   type TrebleNaturalNote,
   type TrebleNaturals1Level,
@@ -36,7 +42,14 @@ function useMobileGameLayout(): boolean {
   return mobile;
 }
 
-export function TrebleNaturals2Game() {
+type PlacementMode = 'name' | 'listen';
+
+export function TrebleNaturals2Game({
+  mode = 'name',
+}: {
+  mode?: PlacementMode;
+} = {}) {
+  const listen = mode === 'listen';
   const mobileLayout = useMobileGameLayout();
   const { playMidi, playWrongFeedback } = useNotePlayer();
   const [level, setLevel] = useState<TrebleNaturals1Level>('medio');
@@ -66,12 +79,17 @@ export function TrebleNaturals2Game() {
       nextLevel: TrebleNaturals1Level,
       nextBest: Record<TrebleNaturals1Level, number>,
     ) => {
-      writeTrebleNaturals2Stats({
+      const stats = {
         selectedLevel: nextLevel,
         bestStreakByLevel: nextBest,
-      });
+      };
+      if (listen) {
+        writeTrebleGameLevelStats(TREBLE_LISTEN_WRITE_STORAGE_KEY, stats);
+      } else {
+        writeTrebleNaturals2Stats(stats);
+      }
     },
-    [],
+    [listen],
   );
 
   const defaultPreviewStep = useCallback((activeLevel: TrebleNaturals1Level) => {
@@ -93,7 +111,9 @@ export function TrebleNaturals2Game() {
   );
 
   useEffect(() => {
-    const stats = readTrebleNaturals2Stats();
+    const stats = listen
+      ? readTrebleGameLevelStats(TREBLE_LISTEN_WRITE_STORAGE_KEY)
+      : readTrebleNaturals2Stats();
     setLevel(stats.selectedLevel);
     setBestByLevel(stats.bestStreakByLevel);
     const note = pickRandomTrebleNatural(stats.selectedLevel);
@@ -102,7 +122,13 @@ export function TrebleNaturals2Game() {
     setReduceMotion(
       window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     );
-  }, [defaultPreviewStep]);
+  }, [defaultPreviewStep, listen]);
+
+  const heardNoteId = current?.id;
+  useEffect(() => {
+    if (!listen || !current || feedback !== 'idle') return;
+    playMidi(current.midi, 700);
+  }, [current, feedback, heardNoteId, listen, playMidi]);
 
   const changeLevel = (next: TrebleNaturals1Level) => {
     if (next === level || feedback !== 'idle') return;
@@ -216,11 +242,21 @@ export function TrebleNaturals2Game() {
     <div className="mx-auto max-w-xl space-y-4 px-3 py-4 md:space-y-5 md:px-6 md:py-6">
       <GamePlayHeader
         categoryLine="Notas · Clave de sol"
-        title="Naturais 2"
+        title={listen ? 'Ouça e escreva' : 'Naturais 2'}
         backHref="/jogos/notas"
-        helpTitle="Como jogar — Naturais 2"
-        helpDescription="Colocar a nota na partitura"
-        helpContent={<GameHelpBody sections={TREBLE_NATURALS_2_HELP} />}
+        helpTitle={
+          listen ? 'Como jogar — Ouça e escreva' : 'Como jogar — Naturais 2'
+        }
+        helpDescription={
+          listen
+            ? 'Ouça a nota e escreva a colcheia'
+            : 'Colocar a nota na partitura'
+        }
+        helpContent={
+          <GameHelpBody
+            sections={listen ? TREBLE_LISTEN_WRITE_HELP : TREBLE_NATURALS_2_HELP}
+          />
+        }
       />
 
       <div className="space-y-2">
@@ -266,16 +302,40 @@ export function TrebleNaturals2Game() {
         }`}
       >
         <p className="text-center text-xs font-medium text-[var(--muted)]">
-          {mobileLayout
-            ? 'Toque na pauta ou use os botões, depois confirme'
-            : 'Toque na partitura na altura da nota'}
+          {listen
+            ? 'Ouça e escreva a colcheia na pauta'
+            : mobileLayout
+              ? 'Toque na pauta ou use os botões, depois confirme'
+              : 'Toque na partitura na altura da nota'}
         </p>
-        <p
-          className="mt-1 text-center text-3xl font-semibold tracking-tight text-[var(--foreground)]"
-          aria-live="polite"
-        >
-          {promptLabel}
-        </p>
+        {listen ? (
+          <div className="mt-2 flex flex-col items-center gap-2">
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--card-secondary)] px-4 text-sm font-semibold"
+              onClick={() => {
+                if (current) playMidi(current.midi, 700);
+              }}
+            >
+              <span className="material-icons text-xl" aria-hidden>
+                volume_up
+              </span>
+              Ouvir de novo
+            </button>
+            {feedback !== 'idle' ? (
+              <p className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">
+                {promptLabel}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <p
+            className="mt-1 text-center text-3xl font-semibold tracking-tight text-[var(--foreground)]"
+            aria-live="polite"
+          >
+            {promptLabel}
+          </p>
+        )}
         {current ? (
           <TrebleInteractiveStaff
             className="mt-4 px-0.5"
@@ -328,7 +388,9 @@ export function TrebleNaturals2Game() {
             ? 'Resposta correta.'
             : feedback === 'wrong'
               ? `Resposta incorreta. A nota era ${promptLabel}.`
-              : `Coloque ${promptLabel} na partitura.`}
+              : listen
+                ? 'Ouça a nota e coloque a colcheia na partitura.'
+                : `Coloque ${promptLabel} na partitura.`}
         </p>
         <p className="mt-2 hidden text-center text-[10px] text-[var(--muted)] md:block md:text-xs">
           Teclado: setas ↑↓ movem a prévia · Enter confirma
@@ -347,4 +409,8 @@ export function TrebleNaturals2Game() {
       </dl>
     </div>
   );
+}
+
+export function TrebleListenWriteGame() {
+  return <TrebleNaturals2Game mode="listen" />;
 }

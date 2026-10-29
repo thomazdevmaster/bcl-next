@@ -32,6 +32,118 @@ const TrebleNaturals2Game = dynamic(
   { ssr: false, loading: () => gameLoading },
 );
 
+const TrebleHigherNoteGame = dynamic(
+  () =>
+    import('@/components/games/notas/TrebleHigherNoteGame').then((module) => ({
+      default: module.TrebleHigherNoteGame,
+    })),
+  { ssr: false, loading: () => gameLoading },
+);
+
+const TrebleListenWriteGame = dynamic(
+  () =>
+    import('@/components/games/notas/TrebleNaturals2Game').then((module) => ({
+      default: module.TrebleListenWriteGame,
+    })),
+  { ssr: false, loading: () => gameLoading },
+);
+
+const RhythmFiguresGame = dynamic(
+  () =>
+    import('@/components/games/ritmos/RhythmFiguresGame').then((module) => ({
+      default: module.RhythmFiguresGame,
+    })),
+  { ssr: false, loading: () => gameLoading },
+);
+
+const RhythmDurationGame = dynamic(
+  () =>
+    import('@/components/games/ritmos/RhythmDurationGame').then((module) => ({
+      default: module.RhythmDurationGame,
+    })),
+  { ssr: false, loading: () => gameLoading },
+);
+
+const RhythmBarGame = dynamic(
+  () =>
+    import('@/components/games/ritmos/RhythmBarGame').then((module) => ({
+      default: module.RhythmBarGame,
+    })),
+  { ssr: false, loading: () => gameLoading },
+);
+
+const RhythmDictationGame = dynamic(
+  () =>
+    import('@/components/games/ritmos/RhythmDictationGame').then((module) => ({
+      default: module.RhythmDictationGame,
+    })),
+  { ssr: false, loading: () => gameLoading },
+);
+
+const IntervalNameGame = dynamic(
+  () =>
+    import('@/components/games/intervalos/IntervalNameGame').then((module) => ({
+      default: module.IntervalNameGame,
+    })),
+  { ssr: false, loading: () => gameLoading },
+);
+
+const IntervalCompareGame = dynamic(
+  () =>
+    import('@/components/games/intervalos/IntervalCompareGame').then((module) => ({
+      default: module.IntervalCompareGame,
+    })),
+  { ssr: false, loading: () => gameLoading },
+);
+
+const IntervalListenGame = dynamic(
+  () =>
+    import('@/components/games/intervalos/IntervalListenGame').then((module) => ({
+      default: module.IntervalListenGame,
+    })),
+  { ssr: false, loading: () => gameLoading },
+);
+
+const IntervalWriteGame = dynamic(
+  () =>
+    import('@/components/games/intervalos/IntervalWriteGame').then((module) => ({
+      default: module.IntervalWriteGame,
+    })),
+  { ssr: false, loading: () => gameLoading },
+);
+
+const InstrumentFamilyGame = dynamic(
+  () =>
+    import('@/components/games/instrumentos/InstrumentFamilyGame').then((module) => ({
+      default: module.InstrumentFamilyGame,
+    })),
+  { ssr: false, loading: () => gameLoading },
+);
+
+const InstrumentMethodGame = dynamic(
+  () =>
+    import('@/components/games/instrumentos/InstrumentMethodGame').then((module) => ({
+      default: module.InstrumentMethodGame,
+    })),
+  { ssr: false, loading: () => gameLoading },
+);
+
+const InstrumentRegisterGame = dynamic(
+  () =>
+    import('@/components/games/instrumentos/InstrumentRegisterGame').then((module) => ({
+      default: module.InstrumentRegisterGame,
+    })),
+  { ssr: false, loading: () => gameLoading },
+);
+
+const InstrumentClueGame = dynamic(
+  () =>
+    import('@/components/games/instrumentos/InstrumentClueGame').then((module) => ({
+      default: module.InstrumentClueGame,
+    })),
+  { ssr: false, loading: () => gameLoading },
+);
+
 interface GamesPlayPageProps {
   categorySlug: string;
   gameSlug: string;
@@ -43,6 +155,34 @@ function GameRenderer({ gameId }: { gameId: string }) {
       return <TrebleNaturals1Game />;
     case 'notas-clave-sol-naturais-2':
       return <TrebleNaturals2Game />;
+    case 'notas-clave-sol-mais-aguda':
+      return <TrebleHigherNoteGame />;
+    case 'notas-clave-sol-ouca-escreva':
+      return <TrebleListenWriteGame />;
+    case 'ritmos-figuras':
+      return <RhythmFiguresGame />;
+    case 'ritmos-qual-dura-mais':
+      return <RhythmDurationGame />;
+    case 'ritmos-complete-o-compasso':
+      return <RhythmBarGame />;
+    case 'ritmos-ouca-o-ritmo':
+      return <RhythmDictationGame />;
+    case 'intervalos-nomeie':
+      return <IntervalNameGame />;
+    case 'intervalos-qual-e-maior':
+      return <IntervalCompareGame />;
+    case 'intervalos-ouca':
+      return <IntervalListenGame />;
+    case 'intervalos-escreva':
+      return <IntervalWriteGame />;
+    case 'instrumentos-familia':
+      return <InstrumentFamilyGame />;
+    case 'instrumentos-como-se-toca':
+      return <InstrumentMethodGame />;
+    case 'instrumentos-mais-agudo':
+      return <InstrumentRegisterGame />;
+    case 'instrumentos-quem-e':
+      return <InstrumentClueGame />;
     default:
       return (
         <div className="mx-auto max-w-xl px-4 py-12 text-sm text-[var(--muted)]">

@@ -2,9 +2,9 @@
 
 import { useCallback, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { TrebleClefSymbol } from '@/components/games/notas/TrebleClefSymbol';
+import { TrebleEighthNoteGlyph } from '@/components/games/notas/TrebleEighthNote';
 import type { TrebleNaturalNote } from '@/domains/games/notas/trebleNaturals1Notes';
 import {
-  TREBLE_LEDGER_HALF,
   TREBLE_NOTE_X,
   TREBLE_STAFF_METRICS_TOUCH,
   trebleStaffLineYs,
@@ -32,10 +32,6 @@ interface TrebleInteractiveStaffProps {
   className?: string;
 }
 
-function ledgerForStep(staffStep: number): boolean {
-  return staffStep <= -2 || staffStep >= 10;
-}
-
 function NoteHead({
   staffStep,
   tone,
@@ -43,41 +39,13 @@ function NoteHead({
   staffStep: number;
   tone: 'default' | 'preview' | 'correct' | 'wrong';
 }) {
-  const noteY = trebleStepCenterY(staffStep, STAFF);
-  const stroke =
-    tone === 'correct'
-      ? 'var(--color-brand)'
-      : tone === 'wrong'
-        ? 'var(--destructive)'
-        : 'currentColor';
-  const dash = tone === 'preview' ? '4 3' : undefined;
-  const opacity = tone === 'preview' ? 0.85 : 1;
-
   return (
-    <>
-      {ledgerForStep(staffStep) ? (
-        <line
-          x1={TREBLE_NOTE_X - TREBLE_LEDGER_HALF}
-          y1={noteY}
-          x2={TREBLE_NOTE_X + TREBLE_LEDGER_HALF}
-          y2={noteY}
-          stroke="currentColor"
-          strokeWidth={1.2}
-          opacity={0.55}
-        />
-      ) : null}
-      <ellipse
-        cx={TREBLE_NOTE_X}
-        cy={noteY}
-        rx={11}
-        ry={8}
-        fill="none"
-        stroke={stroke}
-        strokeWidth={2.2}
-        strokeDasharray={dash}
-        opacity={opacity}
-      />
-    </>
+    <TrebleEighthNoteGlyph
+      staffStep={staffStep}
+      metrics={STAFF}
+      cx={TREBLE_NOTE_X}
+      tone={tone}
+    />
   );
 }
 
