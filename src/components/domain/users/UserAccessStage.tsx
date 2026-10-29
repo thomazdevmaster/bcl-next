@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useRef } from "react";
 import { Controller, FormProvider, useForm, useWatch } from "react-hook-form";
+
 import { FormStageBlock } from "@/components/forms/FormStageBlock";
 import { FormStageField } from "@/components/forms/FormStageField";
 import { FormFieldValidationShell } from "@/components/forms/validations/FormFieldValidationShell";
+import { IconCheckbox } from "@/components/shared/IconCheckbox";
 import {
-  accessSchema,
   type AccessFormValues,
+  accessSchema,
 } from "@/domains/users/schemas/access.schema";
 
 export type AccessStageHandlers = {
@@ -53,7 +55,10 @@ export function UserAccessStage({
     isActive: getValues("isActive"),
   });
   const syncToParentRef = useRef(syncToParent);
-  syncToParentRef.current = syncToParent;
+
+  useEffect(() => {
+    syncToParentRef.current = syncToParent;
+  });
 
   useEffect(() => {
     onRegisterHandlers({
@@ -72,8 +77,8 @@ export function UserAccessStage({
             readOnly
               ? "Dados de acesso desta conta."
               : editing
-              ? "Atualize o nome de usuário, a situação da conta e, se desejar, a senha."
-              : "Configure a conta que será criada junto com o integrante."
+                ? "Atualize o nome de usuário, a situação da conta e, se desejar, a senha."
+                : "Configure a conta que será criada junto com o integrante."
           }
           surface="plain"
           className="!pb-0"
@@ -110,7 +115,9 @@ export function UserAccessStage({
                       : "Opcional. Em branco, será gerada uma senha temporária para o primeiro acesso."
                   }
                   validateOnChange={["password", "confirmPassword"]}
-                  onEdit={() => onChange("password", form.getValues("password"))}
+                  onEdit={() =>
+                    onChange("password", form.getValues("password"))
+                  }
                 />
                 <FormStageField<AccessFormValues>
                   name="confirmPassword"
@@ -121,7 +128,10 @@ export function UserAccessStage({
                   optionalMessage="Opcional enquanto a senha inicial estiver vazia."
                   validateOnChange={["password", "confirmPassword"]}
                   onEdit={() =>
-                    onChange("confirmPassword", form.getValues("confirmPassword"))
+                    onChange(
+                      "confirmPassword",
+                      form.getValues("confirmPassword"),
+                    )
                   }
                 />
               </>
@@ -138,29 +148,25 @@ export function UserAccessStage({
                   state="valid"
                   disabled={readOnly}
                   description="Quando ativo, o integrante pode entrar no sistema com esta conta."
+                  labelForControl={false}
                   renderControl={({ id, describedBy }) => (
-                    <div className="flex min-h-11 items-center gap-3">
-                      <input
-                        ref={field.ref}
-                        id={id}
-                        name={field.name}
-                        type="checkbox"
-                        disabled={readOnly}
-                        checked={field.value}
-                        onBlur={field.onBlur}
-                        onChange={(event) => {
-                          field.onChange(event);
-                          onChange("isActive", event.target.checked);
-                        }}
-                        aria-describedby={describedBy}
-                        className="size-5 accent-[var(--ring)]"
-                      />
-                      <span className="text-sm text-[var(--foreground)]">
-                        {field.value
-                          ? "Conta habilitada"
-                          : "Conta desabilitada"}
-                      </span>
-                    </div>
+                    <IconCheckbox
+                      id={id}
+                      name={field.name}
+                      inputRef={field.ref}
+                      label={
+                        field.value ? "Conta habilitada" : "Conta desabilitada"
+                      }
+                      icon={field.value ? "toggle_on" : "toggle_off"}
+                      checked={field.value}
+                      disabled={readOnly}
+                      aria-describedby={describedBy}
+                      onBlur={field.onBlur}
+                      onChange={(checked) => {
+                        field.onChange(checked);
+                        onChange("isActive", checked);
+                      }}
+                    />
                   )}
                 />
               )}

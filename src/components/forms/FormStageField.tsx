@@ -1,13 +1,20 @@
 "use client";
 
-import { useEffect, useState, type InputHTMLAttributes, type ReactNode } from "react";
 import {
-  useController,
-  useFormContext,
+  type InputHTMLAttributes,
+  type ReactNode,
+  useEffect,
+  useState,
+} from "react";
+import {
   type FieldPath,
   type FieldPathByValue,
   type FieldValues,
+  useController,
+  useFormContext,
 } from "react-hook-form";
+
+import { IconCalendar } from "../shared/IconCalendar";
 import { FormFieldValidationShell } from "./validations/FormFieldValidationShell";
 
 export type FormStageFieldProps<TFieldValues extends FieldValues> = {
@@ -18,6 +25,8 @@ export type FormStageFieldProps<TFieldValues extends FieldValues> = {
   autoComplete?: string;
   required?: boolean;
   disabled?: boolean;
+  readOnly?: boolean;
+  step?: InputHTMLAttributes<HTMLInputElement>["step"];
   className?: string;
   infoMessage?: ReactNode;
   optionalMessage?: ReactNode;
@@ -45,6 +54,8 @@ export function FormStageField<TFieldValues extends FieldValues>({
   autoComplete,
   required = true,
   disabled,
+  readOnly,
+  step,
   className,
   infoMessage,
   optionalMessage,
@@ -87,7 +98,11 @@ export function FormStageField<TFieldValues extends FieldValues>({
       ? "warning"
       : emptyOptionalField && optionalMessage != null
         ? "warning"
-        : (fieldState.isDirty || fieldState.isTouched || isSubmitted || validatedOnMount) && hasValue
+        : (fieldState.isDirty ||
+              fieldState.isTouched ||
+              isSubmitted ||
+              validatedOnMount) &&
+            hasValue
           ? "valid"
           : "info";
   const message =
@@ -125,6 +140,8 @@ export function FormStageField<TFieldValues extends FieldValues>({
       autoComplete={autoComplete}
       required={required}
       disabled={disabled}
+      readOnly={readOnly}
+      step={step}
       minLength={minLength}
       max={max}
       maxLength={maxLength}
@@ -135,6 +152,25 @@ export function FormStageField<TFieldValues extends FieldValues>({
       onValueChange={handleChange}
       onBlur={handleBlur}
       inputRef={field.ref}
+      renderControl={
+        type === "date"
+          ? (control) => (
+              <IconCalendar
+                {...control}
+                value={value}
+                onValueChange={handleChange}
+                onBlur={handleBlur}
+                inputRef={field.ref}
+                label={typeof label === "string" ? label : "data"}
+                placeholder={placeholder}
+                max={max}
+                disabled={disabled}
+                readOnly={readOnly}
+                required={required}
+              />
+            )
+          : undefined
+      }
       state={state}
       message={message}
       endAdornment={

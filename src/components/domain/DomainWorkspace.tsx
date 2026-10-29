@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  type FormEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ConfirmationDialog } from "@/components/shared/ConfirmationDialog";
 import { EntityDialog } from "@/components/shared/EntityDialog";
@@ -20,18 +14,20 @@ import { hasRole, roleLabels } from "@/core/auth/roles";
 import { getDomain } from "@/domains/catalog";
 import {
   type CrudColumn,
-  type CrudField,
   type CrudOption,
   type CrudOptionSource,
   getCrudConfig,
+  getCrudFormStages,
   getValue,
+  isDomainCrudFormResource,
 } from "@/domains/crudConfig";
 import type { Person } from "@/domains/people/types";
 import { filterPeopleForRole } from "@/domains/people/visibility";
+import { shouldNotifyOnPresentationSave } from "@/domains/presentations/notificationPayload";
 import { filterSongRecordsForCatalog } from "@/domains/songs/catalogAccess";
+import { apiFetch } from "@/lib/api";
 import { gestaoDeepLinkParam } from "@/lib/deepLink/gestaoDeepLinkParams";
 import { useGestaoDeepLink } from "@/lib/deepLink/useGestaoDeepLink";
-import { apiFetch } from "@/lib/api";
 import { sealPassword } from "@/lib/passwordCipher";
 import { failureMessage, userFacingError } from "@/lib/userMessages";
 
@@ -81,10 +77,9 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
   const [selected, setSelected] = useState<Record<string, unknown> | null>(
     null,
   );
-  const [values, setValues] = useState<Record<string, unknown>>(
+  const [initialValues, setInitialValues] = useState<Record<string, unknown>>(
     config.defaults,
   );
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [deleteTarget, setDeleteTarget] = useState<Record<
     string,
     unknown
@@ -95,8 +90,6 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
   const [issuedPassword, setIssuedPassword] = useState<IssuedPassword | null>(
     null,
   );
-  const [sendPublicationNotification, setSendPublicationNotification] =
-    useState(true);
   const [roleChoices, setRoleChoices] = useState<CrudOption[] | null>(null);
   const [choices, setChoices] = useState<EntityFormDynamicChoices>({
     people: null,
@@ -143,7 +136,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
 
   useEffect(() => {
     // A listagem precisa iniciar quando o workspace monta.
-     
+
     void fetchItems();
   }, [fetchItems]);
 
@@ -277,21 +270,19 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
 
   const openCreate = () => {
     setSelected(null);
-    setValues({ ...config.defaults });
-    setSendPublicationNotification(true);
-    setFormErrors({});
+    setInitialValues({ ...config.defaults });
+    setError(null);
     setDialogMode("create");
   };
 
   const openItem = useCallback(
     (item: Record<string, unknown>, mode: "view" | "edit") => {
       setSelected(item);
-      setSendPublicationNotification(true);
-      setValues({
+      setInitialValues({
         ...config.defaults,
         ...(config.toForm ? config.toForm(item) : item),
       });
-      setFormErrors({});
+      setError(null);
       setDialogMode(mode);
     },
     [config],
@@ -349,7 +340,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
   const dismissEntityDialog = useCallback(() => {
     setDialogMode(null);
     setSelected(null);
-    setFormErrors({});
+    setError(null);
   }, []);
 
   const closeDialog = () => {
@@ -357,23 +348,9 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
     dismissEntityDialog();
   };
 
-  const handleSave = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const errors = validateValues(config.fields, values);
-
-    if (resource === "users" && !managesRoles) {
-      const previous = Array.isArray(selected?.roles)
-        ? selected.roles.map(String).sort()
-        : [];
-      const next = Array.isArray(values.roles)
-        ? values.roles.map(String).sort()
-        : [];
-      if (previous.join("|") !== next.join("|")) {
-        errors.roles =
-          "Somente um administrador pode vincular ou desvincular papéis.";
-      }
-    }
-
+  const handleSave = async (values: Record<string, unknown>) => {
+    setError(null);
+    const errors: Record<string, string> = {};
     for (const uniqueField of uniqueFieldsForResource(resource)) {
       const candidate = normalizeUniqueValue(values[uniqueField]);
       if (
@@ -388,8 +365,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
       }
     }
 
-    setFormErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.keys(errors).length > 0) return errors;
 
     setSaving(true);
     setError(null);
@@ -398,9 +374,14 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
       const mapped = config.toPayload
         ? config.toPayload(values, selected ?? undefined)
         : withAudit(values, selected ?? undefined);
-      const payload: Record<string, unknown> = dialogMode === "create" ? mapped : { ...selected, ...mapped };
+      const payload: Record<string, unknown> =
+        dialogMode === "create" ? mapped : { ...selected, ...mapped };
       if (resource === "presentations") {
-        payload.notifyAll = sendPublicationNotification;
+        payload.notifyAll = shouldNotifyOnPresentationSave(
+          Boolean(values.notifyAll),
+          selected,
+          dialogMode === "create",
+        );
       }
       // Senhas de usuário são cifradas antes de serem enviadas à API.
       if (typeof payload.password === "string") {
@@ -631,60 +612,33 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
                 : config.singular
         }
         size="xl"
-        placement="bottom"
+        placement="mobile-full"
         closeOnBackdropClick
         onClose={closeDialog}
       >
-        {dialogMode ? (
+        {dialogMode && isDomainCrudFormResource(resource) ? (
           <EntityForm
+            key={`${resource}:${dialogMode}:${String(selected?.id ?? "novo")}`}
+            resource={resource}
             fields={config.fields.filter(
               (field) =>
-                (field.name !== "createUser" && field.name !== "username") ||
-                resource === "users" ||
-                can(roles, "users", "create", permissions),
+                ((field.name !== "createUser" && field.name !== "username") ||
+                  resource === "users" ||
+                  can(roles, "users", "create", permissions)) &&
+                (field.name !== "notifyAll" ||
+                  (dialogMode !== "view" &&
+                    (dialogMode === "create" ||
+                      selected?.status !== "scheduled" ||
+                      selected?.isPublic !== true))),
             )}
-            values={values}
-            errors={formErrors}
+            values={initialValues}
             readOnly={dialogMode === "view"}
             editing={dialogMode === "edit"}
             saving={saving}
-            roleChoices={roleChoices}
+            error={error}
             dynamicChoices={choices}
-            rolesLocked={resource === "users" && !managesRoles}
-            onChange={(name, value) => {
-              setValues((current) => ({ ...current, [name]: value }));
-              setFormErrors((current) => ({ ...current, [name]: "" }));
-            }}
-            onClose={closeDialog}
+            stages={getCrudFormStages(resource)}
             onSubmit={handleSave}
-            extraContent={
-              resource === "presentations" &&
-              dialogMode !== "view" &&
-              (dialogMode === "create" ||
-                selected?.status !== "scheduled" ||
-                selected?.isPublic !== true) ? (
-                <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] p-3">
-                  <label className="flex min-h-11 items-center gap-3 text-sm font-medium">
-                    <input
-                      type="checkbox"
-                      className="h-5 w-5 accent-[var(--primary)]"
-                      checked={sendPublicationNotification}
-                      onChange={(event) =>
-                        setSendPublicationNotification(event.target.checked)
-                      }
-                    />
-                    <span>
-                      Notificar todas as contas quando esta apresentação for
-                      publicada
-                    </span>
-                  </label>
-                  <p className="text-sm text-[var(--muted)]">
-                    Só envia ao salvar como agendada e pública; o padrão é
-                    enviar.
-                  </p>
-                </div>
-              ) : null
-            }
             onEdit={
               dialogMode === "view" && canUpdate && selected
                 ? () => openItem(selected, "edit")
@@ -784,28 +738,6 @@ function songHasScore(row: Record<string, unknown>): boolean {
       return typeof url === "string" && url.length > 0;
     })
   );
-}
-
-function validateValues(
-  fields: CrudField[],
-  values: Record<string, unknown>,
-): Record<string, string> {
-  const errors: Record<string, string> = {};
-  for (const field of fields) {
-    if (field.showWhen && !field.showWhen(values)) continue;
-    const value = values[field.name];
-    const empty =
-      value === undefined ||
-      value === null ||
-      (Array.isArray(value) ? value.length === 0 : String(value).trim() === "");
-    if (field.required && empty) {
-      errors[field.name] = `${field.label} é obrigatório.`;
-      continue;
-    }
-    const customError = field.validate?.(value, values);
-    if (customError) errors[field.name] = customError;
-  }
-  return errors;
 }
 
 function uniqueFieldsForResource(resource: CrudResource): string[] {

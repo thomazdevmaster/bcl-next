@@ -16,6 +16,7 @@ type Props = {
   desktop?: boolean;
   centered?: boolean;
   fullWidth?: boolean;
+  className?: string;
 };
 
 const buttonMotion =
@@ -37,12 +38,23 @@ export function FormStageActions({
   desktop = false,
   centered = false,
   fullWidth = false,
+  className = "",
 }: Props) {
-  const alignmentClass = fullWidth ? "w-full pt-3" : centered ? "mx-auto w-fit justify-center" : desktop ? "justify-end border-t border-[var(--border)] pt-5" : "pt-3";
-  const buttonWidthClass = fullWidth ? "w-full" : centered ? "flex-none" : "flex-1 sm:flex-none";
+  const alignmentClass = fullWidth
+    ? "w-full pt-3"
+    : centered
+      ? "mx-auto w-fit justify-center"
+      : desktop
+        ? "justify-end border-t border-[var(--border)] pt-5"
+        : "pt-3";
+  const buttonWidthClass = fullWidth
+    ? "w-full"
+    : centered
+      ? "flex-none"
+      : "flex-1 sm:flex-none";
 
   return (
-    <div className={`flex gap-3 ${alignmentClass}`}>
+    <div className={`flex gap-3 ${alignmentClass} ${className}`}>
       {active > 0 ? (
         <button
           type="button"
@@ -67,7 +79,7 @@ export function FormStageActions({
           disabled={busy || submitDisabled}
           className={`btn-primary inline-flex min-h-12 ${buttonWidthClass} items-center justify-center rounded-xl px-5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${buttonMotion}`}
         >
-          {busy ? pendingContent ?? pendingLabel : submitLabel}
+          {busy ? (pendingContent ?? pendingLabel) : submitLabel}
         </button>
       )}
     </div>
