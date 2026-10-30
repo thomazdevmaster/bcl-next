@@ -20,6 +20,7 @@ import type { MeasureTimemapEntry } from '@/study/studyTimemap';
 import { patchMusicXmlPlayerAudioWorklet } from './patchMusicXmlPlayerForNext';
 import type { PlaygroundZoomState } from './playgroundZoomTypes';
 import type { InstrumentInfo } from '@/study/studyUtils';
+import { clampPlaygroundVolume, connectMasterGain } from './playgroundVolume';
 
 /** O Player indexa compassos em 0…n-1; o backend pode enviar números escritos na partitura. */
 function timemapForPlayer(entries: MeasureTimemapEntry[]): MeasureTimemapEntry[] {
@@ -52,6 +53,7 @@ export interface ScorePlaygroundViewState {
   instruments: InstrumentInfo[];
   scoreInstrumentIds: string[];
   midiInstrumentIds: string[];
+  volume: number;
 }
 
 const INITIAL: ScorePlaygroundViewState = {
@@ -68,6 +70,7 @@ const INITIAL: ScorePlaygroundViewState = {
   instruments: [],
   scoreInstrumentIds: [],
   midiInstrumentIds: [],
+  volume: 1,
 };
 
 export function useScorePlaygroundPlayer(ownerId: string | null) {
@@ -78,6 +81,9 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
   const rafRef = useRef<number | null>(null);
   const optionsRef = useRef<StudyStartOptions | null>(null);
   const velocityRef = useRef(1);
+  const volumeRef = useRef(1);
+  const volumeBeforeMuteRef = useRef(1);
+  const gainRef = useRef<{ gain: { value: number } } | null>(null);
   const [state, setState] = useState<ScorePlaygroundViewState>(INITIAL);
 
   const stopPositionLoop = useCallback(() => {
@@ -108,6 +114,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     stopPositionLoop();
     playerRef.current?.destroy();
     playerRef.current = null;
+    gainRef.current = null;
     rendererRef.current = null;
     if (sheetRef.current) sheetRef.current.replaceChildren();
   }, [stopPositionLoop]);
@@ -122,12 +129,14 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
 
   const resetToCatalog = useCallback(() => {
     optionsRef.current = null;
+    volumeRef.current = 1;
+    volumeBeforeMuteRef.current = 1;
     teardownPlayer();
     setState(INITIAL);
   }, [teardownPlayer]);
 
   const openSession = useCallback(
-    async (options: StudyStartOptions, velocity: number) => {
+    async (options: StudyStartOptions, velocity: number, volume: number) => {
       const token = loadTokenRef.current + 1;
       loadTokenRef.current = token;
       teardownPlayer();
@@ -142,6 +151,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
       };
       optionsRef.current = options;
       velocityRef.current = velocity;
+      volumeRef.current = volume;
       if (scoreIds.length === 0 || midiIds.length === 0) {
         setState({
           ...INITIAL,
@@ -168,6 +178,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
         songTitle: options.song.title,
         scoreLoading: true,
         velocity,
+        volume,
       });
 
       try {
@@ -223,6 +234,16 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
         }
 
         playerRef.current = player;
+        gainRef.current = null;
+        try {
+          const audio = player as unknown as {
+            _synthesizer: Parameters<typeof connectMasterGain>[0];
+            _context: Parameters<typeof connectMasterGain>[1];
+          };
+          gainRef.current = connectMasterGain(audio._synthesizer, audio._context, volume);
+        } catch (caught) {
+          console.error('[score_playground] volume', caught);
+        }
         if (process.env.NODE_ENV === 'development') {
           (window as unknown as { __scorePlayground?: unknown }).__scorePlayground = {
             player,
@@ -239,6 +260,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
           positionMs: 0,
           durationMs: player.duration,
           velocity,
+          volume,
           scoreLoading: false,
           zoom: renderer.getZoomState(),
           ...selection,
@@ -266,7 +288,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
   );
 
   const startSession = useCallback(
-    (options: StudyStartOptions) => openSession(options, 1),
+    (options: StudyStartOptions) => openSession(options, 1, 1),
     [openSession],
   );
 
@@ -278,6 +300,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
       void openSession(
         { ...options, scoreInstrumentIds, midiInstrumentIds },
         velocityRef.current,
+        volumeRef.current,
       );
     },
     [openSession],
@@ -309,6 +332,23 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     window.setTimeout(() => refreshZoomState(), 1200);
   }, [refreshZoomState]);
 
+  const applyVolume = useCallback((value: number) => {
+    const clamped = clampPlaygroundVolume(value);
+    volumeRef.current = clamped;
+    if (clamped > 0) volumeBeforeMuteRef.current = clamped;
+    if (gainRef.current) gainRef.current.gain.value = clamped;
+    setState((prev) => ({ ...prev, volume: clamped }));
+  }, []);
+
+  const setVolume = useCallback((value: number) => {
+    applyVolume(value);
+  }, [applyVolume]);
+
+  const toggleMute = useCallback(() => {
+    if (volumeRef.current <= 0) applyVolume(volumeBeforeMuteRef.current || 1);
+    else applyVolume(0);
+  }, [applyVolume]);
+
   const setVelocity = useCallback((value: number) => {
     const player = playerRef.current;
     if (!player) return;
@@ -328,6 +368,8 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     pause,
     rewind,
     setVelocity,
+    setVolume,
+    toggleMute,
     zoomIn,
     zoomOut,
   };

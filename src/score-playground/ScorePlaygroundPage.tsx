@@ -11,6 +11,7 @@ import { StudyPublicRepertoireNotice } from '@/components/study/StudyPublicReper
 import { useScorePlaygroundPlayer } from './useScorePlaygroundPlayer';
 import { ScorePlaygroundZoomControls } from './ScorePlaygroundZoomControls';
 import { ScorePlaygroundInstrumentDialog } from './ScorePlaygroundInstrumentDialog';
+import { playgroundVolumeIcon } from './playgroundVolume';
 
 function formatMs(ms: number): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
@@ -32,6 +33,8 @@ export default function ScorePlaygroundPage() {
     pause,
     rewind,
     setVelocity,
+    setVolume,
+    toggleMute,
     zoomIn,
     zoomOut,
   } = useScorePlaygroundPlayer(ownerId);
@@ -252,7 +255,37 @@ export default function ScorePlaygroundPage() {
                   ) : null}
                 </div>
 
-                <div className="flex flex-col gap-2 sm:min-w-[14rem]">
+                <div className="flex flex-col gap-2 sm:min-w-[16rem]">
+                  <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
+                    <button
+                      type="button"
+                      aria-label={state.volume <= 0 ? 'Ativar som' : 'Silenciar'}
+                      className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-[var(--secondary)] disabled:cursor-not-allowed disabled:opacity-40"
+                      onClick={toggleMute}
+                      disabled={!state.playerReady}
+                    >
+                      <span className="material-icons" aria-hidden>
+                        {playgroundVolumeIcon(state.volume)}
+                      </span>
+                    </button>
+                    <label className="flex min-w-0 flex-1 items-center gap-2">
+                      <span className="whitespace-nowrap">Volume</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={state.volume}
+                        className="min-h-11 min-w-0 flex-1"
+                        onChange={(event) => setVolume(Number(event.target.value))}
+                        aria-label="Volume geral"
+                        aria-valuetext={`${Math.round(state.volume * 100)} por cento`}
+                      />
+                      <span className="w-10 text-right tabular-nums">
+                        {Math.round(state.volume * 100)}%
+                      </span>
+                    </label>
+                  </div>
                   <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
                     <span className="whitespace-nowrap">Andamento</span>
                     <input
