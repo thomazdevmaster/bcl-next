@@ -125,16 +125,12 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
       const songId = String(options.song.id);
       const scoreIds = options.scoreInstrumentIds;
       const midiIds = options.midiInstrumentIds;
-      const sameSelection =
-        scoreIds.length === midiIds.length &&
-        scoreIds.every((id) => midiIds.includes(id));
-      if (!sameSelection) {
+      if (scoreIds.length === 0 || midiIds.length === 0) {
         setState({
           ...INITIAL,
           phase: 'error',
           songTitle: options.song.title,
-          error:
-            'No playground, use os mesmos instrumentos na partitura e no áudio para sincronizar cursor e MIDI. Ajuste a seleção e tente de novo.',
+          error: 'Selecione ao menos um instrumento na partitura e no áudio.',
         });
         return;
       }
@@ -208,6 +204,13 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
         }
 
         playerRef.current = player;
+        if (process.env.NODE_ENV === 'development') {
+          (window as unknown as { __scorePlayground?: unknown }).__scorePlayground = {
+            player,
+            renderer,
+            timemap: playerTimemap,
+          };
+        }
         setState({
           phase: 'ready',
           songTitle: options.song.title,

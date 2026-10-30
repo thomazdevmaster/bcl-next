@@ -11,6 +11,7 @@ import {
   measuresPerDesktopLine,
   measuresPerMobileLine,
 } from './osmdPlaygroundLayout';
+import { followPlaygroundCursor } from './playgroundFollowCursor';
 import type { PlaygroundZoomState } from './playgroundZoomTypes';
 import {
   DESKTOP_MEASURES_MAX,
@@ -174,11 +175,7 @@ export class OsmdSheetRenderer implements ISheetRenderer {
     cursor.style.zIndex = '50';
 
     if (this.followCursor) {
-      const scrollRoot = this.container.closest('[data-score-scroll]') ?? this.container;
-      if (scrollRoot instanceof HTMLElement) {
-        const targetY = mountTop + bounds.y - scrollRoot.clientHeight * 0.35;
-        scrollRoot.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
-      }
+      followPlaygroundCursor(this.container, cursor);
     }
   }
 

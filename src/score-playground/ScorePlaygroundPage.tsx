@@ -77,6 +77,34 @@ export default function ScorePlaygroundPage() {
   }, [state.phase, zoomIn, zoomOut]);
 
   useEffect(() => {
+    if (state.phase !== 'ready') return;
+    const onHide = () => {
+      if (document.hidden) pause();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.code !== 'Space') return;
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLButtonElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      if (state.playing) pause();
+      else play();
+    };
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [pause, play, state.phase, state.playing]);
+
+  useEffect(() => {
     const mq = window.matchMedia('(max-width: 600px)');
     const apply = () => setMobile(mq.matches);
     apply();
@@ -134,6 +162,9 @@ export default function ScorePlaygroundPage() {
                 {state.songTitle ? (
                   <p className="text-sm text-[var(--muted)]">{state.songTitle}</p>
                 ) : null}
+                <p className="max-w-sm text-center text-xs text-[var(--muted)]">
+                  Partituras longas levam mais tempo para desenhar. O áudio começa junto com a pauta.
+                </p>
               </div>
             ) : null}
 
@@ -189,24 +220,13 @@ export default function ScorePlaygroundPage() {
                   </button>
                   <button
                     type="button"
-                    aria-label="Tocar"
+                    aria-label={state.playing ? 'Pausar' : 'Tocar'}
                     className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-transparent text-[var(--primary)] hover:bg-[var(--secondary)] ${!state.playerReady ? 'cursor-not-allowed opacity-40' : ''}`}
-                    onClick={play}
+                    onClick={state.playing ? pause : play}
                     disabled={!state.playerReady}
                   >
                     <span className="material-icons" aria-hidden>
-                      play_arrow
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Pausar"
-                    className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full bg-transparent hover:bg-[var(--secondary)] ${!state.playerReady ? 'cursor-not-allowed opacity-40' : ''}`}
-                    onClick={pause}
-                    disabled={!state.playerReady}
-                  >
-                    <span className="material-icons" aria-hidden>
-                      pause
+                      {state.playing ? 'pause' : 'play_arrow'}
                     </span>
                   </button>
                 </div>

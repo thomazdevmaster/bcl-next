@@ -25,6 +25,7 @@ import {
   measuresPerMobileLine,
   playgroundEngravingZoom,
 } from './osmdPlaygroundLayout';
+import { followPlaygroundCursor } from './playgroundFollowCursor';
 
 const CURSOR_CLASS = 'score-playground-cursor';
 
@@ -107,6 +108,14 @@ export class WebMscoreSheetRenderer implements ISheetRenderer {
   }
 
   getZoomState(): PlaygroundZoomState {
+    if (!this.compactLayout) {
+      return {
+        engine: 'webmscore',
+        label: 'Página original',
+        canZoomIn: false,
+        canZoomOut: false,
+      };
+    }
     const measures = this.currentMeasuresPerLine();
     const mobile = isMobileView();
     const min = mobile ? MOBILE_MEASURES_MIN : DESKTOP_MEASURES_MIN;
@@ -114,10 +123,8 @@ export class WebMscoreSheetRenderer implements ISheetRenderer {
     return {
       engine: 'webmscore',
       label: `${measures} comp./linha`,
-      canZoomIn:
-        this.compactLayout && !this.layoutRendering && measures > min,
-      canZoomOut:
-        this.compactLayout && !this.layoutRendering && measures < max,
+      canZoomIn: !this.layoutRendering && measures > min,
+      canZoomOut: !this.layoutRendering && measures < max,
     };
   }
 
@@ -230,24 +237,18 @@ export class WebMscoreSheetRenderer implements ISheetRenderer {
       const svgText = await score.saveSvg(page, true);
       const wrap = document.createElement('div');
       wrap.className =
-        'score-playground-page overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--score-paper)] shadow-sm';
+        'score-playground-page overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--score-paper)] shadow-sm';
       wrap.dataset.page = String(page);
       wrap.innerHTML = svgText;
       const svg = wrap.querySelector('svg');
       if (svg) {
-        const vb = svg.viewBox?.baseVal;
         svg.removeAttribute('width');
         svg.removeAttribute('height');
         svg.style.display = 'block';
+        svg.style.width = '100%';
+        svg.style.maxWidth = '100%';
+        svg.style.minWidth = '0';
         svg.style.height = 'auto';
-        if (vb && vb.width > 0) {
-          svg.style.width = `${vb.width}px`;
-          svg.style.maxWidth = 'none';
-          svg.style.minWidth = `${Math.min(vb.width, 960)}px`;
-        } else {
-          svg.style.width = '100%';
-          svg.style.maxWidth = '100%';
-        }
       }
       pagesHost.appendChild(wrap);
     }
@@ -282,10 +283,8 @@ export class WebMscoreSheetRenderer implements ISheetRenderer {
     this.cursorEl.style.height = `${point.height}px`;
     this.cursorEl.style.zIndex = '50';
 
-    if (this.followCursor) {
-      const scrollRoot = this.container.closest('[data-score-scroll]') ?? this.container;
-      const targetY = point.y - scrollRoot.clientHeight * 0.35;
-      scrollRoot.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+    if (this.followCursor && this.cursorEl) {
+      followPlaygroundCursor(this.container, this.cursorEl);
     }
   }
 

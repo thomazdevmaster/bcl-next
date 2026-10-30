@@ -13,7 +13,7 @@ export function ScorePlaygroundZoomControls({
   onZoomOut: () => void;
   compact?: boolean;
 }) {
-  if (!zoom) return null;
+  if (!zoom || (!zoom.canZoomIn && !zoom.canZoomOut)) return null;
 
   return (
     <div className="flex items-center gap-1">
