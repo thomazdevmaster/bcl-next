@@ -10,6 +10,7 @@ import {
 import { StudyPublicRepertoireNotice } from '@/components/study/StudyPublicRepertoireNotice';
 import { useScorePlaygroundPlayer } from './useScorePlaygroundPlayer';
 import { ScorePlaygroundZoomControls } from './ScorePlaygroundZoomControls';
+import { ScorePlaygroundInstrumentDialog } from './ScorePlaygroundInstrumentDialog';
 
 function formatMs(ms: number): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
@@ -25,6 +26,7 @@ export default function ScorePlaygroundPage() {
     sheetRef,
     state,
     startSession,
+    changeInstruments,
     resetToCatalog,
     play,
     pause,
@@ -35,6 +37,7 @@ export default function ScorePlaygroundPage() {
   } = useScorePlaygroundPlayer(ownerId);
 
   const [mobile, setMobile] = useState(false);
+  const [instrumentsOpen, setInstrumentsOpen] = useState(false);
   const scoreScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -229,6 +232,24 @@ export default function ScorePlaygroundPage() {
                       {state.playing ? 'pause' : 'play_arrow'}
                     </span>
                   </button>
+                  {state.instruments.length > 0 ? (
+                    <button
+                      type="button"
+                      aria-label="Alterar instrumentos"
+                      aria-haspopup="dialog"
+                      className="ml-2 inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 text-sm font-medium hover:bg-[var(--secondary)] disabled:cursor-not-allowed disabled:opacity-40"
+                      onClick={() => {
+                        pause();
+                        setInstrumentsOpen(true);
+                      }}
+                      disabled={state.phase !== 'ready'}
+                    >
+                      <span className="material-icons text-lg" aria-hidden>
+                        tune
+                      </span>
+                      Instrumentos
+                    </button>
+                  ) : null}
                 </div>
 
                 <div className="flex flex-col gap-2 sm:min-w-[14rem]">
@@ -256,6 +277,19 @@ export default function ScorePlaygroundPage() {
             </div>
           </>
         )}
+        {instrumentsOpen ? (
+          <ScorePlaygroundInstrumentDialog
+            instruments={state.instruments}
+            scoreInstrumentIds={state.scoreInstrumentIds}
+            midiInstrumentIds={state.midiInstrumentIds}
+            singleScore={mobile}
+            onClose={() => setInstrumentsOpen(false)}
+            onApply={(scoreIds, midiIds) => {
+              setInstrumentsOpen(false);
+              changeInstruments(scoreIds, midiIds);
+            }}
+          />
+        ) : null}
       </div>
     );
   }

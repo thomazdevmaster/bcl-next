@@ -5,6 +5,7 @@ import type {
   Player,
   PlayerOptions,
 } from '@music-i18n/musicxml-player';
+import { isLargeScoreForWebMscoreLayout } from './prepareMusicXmlForWebMscoreDisplay';
 import { resetWebMscoreModule } from './webmscoreLoader';
 import { WebMscoreSheetRenderer } from './WebMscoreSheetRenderer';
 import { OsmdSheetRenderer } from './OsmdSheetRenderer';
@@ -35,16 +36,19 @@ export class ScorePlaygroundSheetRenderer implements ISheetRenderer {
   ): Promise<void> {
     this.destroy();
 
-    const webm = new WebMscoreSheetRenderer();
-    try {
-      await webm.initialize(container, musicXml, options);
-      this.inner = webm;
-      this.sheetEngine = 'webmscore';
-      return;
-    } catch (first) {
-      resetWebMscoreModule();
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('[score_playground] webmscore falhou; fallback OSMD', first);
+    const skipWebMscore = isLargeScoreForWebMscoreLayout(musicXml);
+    if (!skipWebMscore) {
+      const webm = new WebMscoreSheetRenderer();
+      try {
+        await webm.initialize(container, musicXml, options);
+        this.inner = webm;
+        this.sheetEngine = 'webmscore';
+        return;
+      } catch (first) {
+        resetWebMscoreModule();
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[score_playground] webmscore falhou; fallback OSMD', first);
+        }
       }
     }
 

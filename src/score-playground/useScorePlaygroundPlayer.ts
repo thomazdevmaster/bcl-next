@@ -19,6 +19,7 @@ import { failureMessage } from '@/lib/userMessages';
 import type { MeasureTimemapEntry } from '@/study/studyTimemap';
 import { patchMusicXmlPlayerAudioWorklet } from './patchMusicXmlPlayerForNext';
 import type { PlaygroundZoomState } from './playgroundZoomTypes';
+import type { InstrumentInfo } from '@/study/studyUtils';
 
 /** O Player indexa compassos em 0…n-1; o backend pode enviar números escritos na partitura. */
 function timemapForPlayer(entries: MeasureTimemapEntry[]): MeasureTimemapEntry[] {
@@ -48,6 +49,9 @@ export interface ScorePlaygroundViewState {
   velocity: number;
   scoreLoading: boolean;
   zoom: PlaygroundZoomState | null;
+  instruments: InstrumentInfo[];
+  scoreInstrumentIds: string[];
+  midiInstrumentIds: string[];
 }
 
 const INITIAL: ScorePlaygroundViewState = {
@@ -61,6 +65,9 @@ const INITIAL: ScorePlaygroundViewState = {
   velocity: 1,
   scoreLoading: false,
   zoom: null,
+  instruments: [],
+  scoreInstrumentIds: [],
+  midiInstrumentIds: [],
 };
 
 export function useScorePlaygroundPlayer(ownerId: string | null) {
@@ -69,6 +76,8 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
   const rendererRef = useRef<ScorePlaygroundSheetRenderer | null>(null);
   const loadTokenRef = useRef(0);
   const rafRef = useRef<number | null>(null);
+  const optionsRef = useRef<StudyStartOptions | null>(null);
+  const velocityRef = useRef(1);
   const [state, setState] = useState<ScorePlaygroundViewState>(INITIAL);
 
   const stopPositionLoop = useCallback(() => {
@@ -112,12 +121,13 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
   useEffect(() => () => teardownPlayer(), [teardownPlayer]);
 
   const resetToCatalog = useCallback(() => {
+    optionsRef.current = null;
     teardownPlayer();
     setState(INITIAL);
   }, [teardownPlayer]);
 
-  const startSession = useCallback(
-    async (options: StudyStartOptions) => {
+  const openSession = useCallback(
+    async (options: StudyStartOptions, velocity: number) => {
       const token = loadTokenRef.current + 1;
       loadTokenRef.current = token;
       teardownPlayer();
@@ -125,6 +135,13 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
       const songId = String(options.song.id);
       const scoreIds = options.scoreInstrumentIds;
       const midiIds = options.midiInstrumentIds;
+      const selection = {
+        instruments: options.instruments ?? [],
+        scoreInstrumentIds: scoreIds,
+        midiInstrumentIds: midiIds,
+      };
+      optionsRef.current = options;
+      velocityRef.current = velocity;
       if (scoreIds.length === 0 || midiIds.length === 0) {
         setState({
           ...INITIAL,
@@ -146,9 +163,11 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
 
       setState({
         ...INITIAL,
+        ...selection,
         phase: 'loading',
         songTitle: options.song.title,
         scoreLoading: true,
+        velocity,
       });
 
       try {
@@ -196,7 +215,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
           unroll: false,
           followCursor: true,
           repeat: 1,
-          velocity: 1,
+          velocity,
         });
         if (token !== loadTokenRef.current) {
           player.destroy();
@@ -219,9 +238,10 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
           playing: false,
           positionMs: 0,
           durationMs: player.duration,
-          velocity: 1,
+          velocity,
           scoreLoading: false,
           zoom: renderer.getZoomState(),
+          ...selection,
         });
         startPositionLoop();
       } catch (caught) {
@@ -243,6 +263,24 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
       }
     },
     [ownerId, startPositionLoop, teardownPlayer],
+  );
+
+  const startSession = useCallback(
+    (options: StudyStartOptions) => openSession(options, 1),
+    [openSession],
+  );
+
+  const changeInstruments = useCallback(
+    (scoreInstrumentIds: string[], midiInstrumentIds: string[]) => {
+      const options = optionsRef.current;
+      if (!options) return;
+      playerRef.current?.pause();
+      void openSession(
+        { ...options, scoreInstrumentIds, midiInstrumentIds },
+        velocityRef.current,
+      );
+    },
+    [openSession],
   );
 
   const play = useCallback(() => {
@@ -276,6 +314,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     if (!player) return;
     const clamped = Math.min(1.5, Math.max(0.5, value));
     player.velocity = clamped;
+    velocityRef.current = clamped;
     setState((prev) => ({ ...prev, velocity: clamped }));
   }, []);
 
@@ -283,6 +322,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     sheetRef,
     state,
     startSession,
+    changeInstruments,
     resetToCatalog,
     play,
     pause,

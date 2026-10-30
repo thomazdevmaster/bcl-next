@@ -2,8 +2,9 @@
  * MuseScore exporta `<print new-page="yes">` em quase cada sistema — no webmscore vira
  * uma página SVG por linha. Neutralizamos quebras e alargamos a página para layout web.
  *
- * Partituras grandes (ex. Africa, banda completa): só remove `new-page`. Compactar demais
- * (sem new-system + página larga) estoura a memória do WASM no layout.
+ * Pauta longa ou XML pesado não entra nesse reflow: o WASM estoura a memória e o zoom
+ * some, porque a página original não muda de compassos por linha. Esses casos vão para
+ * o OSMD, que aplica o mesmo zoom do estudo.
  */
 /** Página de referência (~4 compassos por linha no playground). */
 const DEFAULT_PAGE_WIDTH_TENTHS = 1100;
