@@ -1,12 +1,14 @@
-'use client';
+"use client";
 
-import { useEffect, useId, useRef, useState } from 'react';
-import type { AlbumImage, AlbumLayout, MediaSize } from '@/domains/media/types';
+import { useEffect, useRef, useState } from "react";
+
+import { EntityDialog } from "@/components/shared/EntityDialog";
+import type { AlbumImage, AlbumLayout, MediaSize } from "@/domains/media/types";
 
 const GALLERY_SPAN: Record<MediaSize, string> = {
-  small: 'col-span-1',
-  medium: 'col-span-1 sm:col-span-2',
-  large: 'col-span-2 sm:col-span-3',
+  small: "col-span-1",
+  medium: "col-span-1 sm:col-span-2",
+  large: "col-span-2 sm:col-span-3",
 };
 
 interface AlbumBlockProps {
@@ -24,8 +26,9 @@ export function AlbumBlock({ images, layout, caption }: AlbumBlockProps) {
   const photoCount = photos.length;
 
   useEffect(() => {
-    if (layout !== 'carousel' || photoCount < 2 || galleryOpen || paused) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (layout !== "carousel" || photoCount < 2 || galleryOpen || paused)
+      return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const timer = window.setInterval(() => {
       setDirection(1);
       setIndex((value) => (value + 1) % photoCount);
@@ -47,25 +50,37 @@ export function AlbumBlock({ images, layout, caption }: AlbumBlockProps) {
 
   return (
     <figure className="m-0">
-      {layout === 'gallery' ? (
+      {layout === "gallery" ? (
         <GalleryGrid photos={photos} />
-      ) : layout === 'carousel' ? (
+      ) : layout === "carousel" ? (
         <div
           onMouseEnter={() => setPaused(true)}
           onMouseLeave={(event) => {
-            if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+            if (
+              event.currentTarget.contains(event.relatedTarget as Node | null)
+            )
+              return;
             if (event.currentTarget.contains(document.activeElement)) return;
             setPaused(false);
           }}
           onFocus={() => setPaused(true)}
           onBlur={(event) => {
-            if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+            if (
+              event.currentTarget.contains(event.relatedTarget as Node | null)
+            )
+              return;
             setPaused(false);
           }}
         >
           <div className="mx-auto w-full max-w-4xl overflow-hidden rounded-2xl bg-black shadow-[var(--shadow-soft)]">
             <div className="relative aspect-video">
-              <CarouselTrack photos={photos} index={Math.min(index, photos.length - 1)} direction={direction} onSwipe={showNext} onSwipeBack={showPrevious} />
+              <CarouselTrack
+                photos={photos}
+                index={Math.min(index, photos.length - 1)}
+                direction={direction}
+                onSwipe={showNext}
+                onSwipeBack={showPrevious}
+              />
               <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/75 to-transparent" />
               {photos.length > 1 ? (
                 <>
@@ -75,7 +90,9 @@ export function AlbumBlock({ images, layout, caption }: AlbumBlockProps) {
                     aria-label="Foto anterior"
                     onClick={showPrevious}
                   >
-                    <span className="material-icons" aria-hidden>chevron_left</span>
+                    <span className="material-icons" aria-hidden>
+                      chevron_left
+                    </span>
                   </button>
                   <button
                     type="button"
@@ -83,7 +100,9 @@ export function AlbumBlock({ images, layout, caption }: AlbumBlockProps) {
                     aria-label="Próxima foto"
                     onClick={showNext}
                   >
-                    <span className="material-icons" aria-hidden>chevron_right</span>
+                    <span className="material-icons" aria-hidden>
+                      chevron_right
+                    </span>
                   </button>
                 </>
               ) : null}
@@ -92,7 +111,11 @@ export function AlbumBlock({ images, layout, caption }: AlbumBlockProps) {
                   {Math.min(index, photos.length - 1) + 1} / {photos.length}
                 </p>
                 {photos.length > 1 && photos.length <= 8 ? (
-                  <div className="flex items-center" role="tablist" aria-label="Fotos do carrossel">
+                  <div
+                    className="flex items-center"
+                    role="tablist"
+                    aria-label="Fotos do carrossel"
+                  >
                     {photos.map((image, photoIndex) => (
                       <button
                         key={`${image.src}-${photoIndex}`}
@@ -106,7 +129,9 @@ export function AlbumBlock({ images, layout, caption }: AlbumBlockProps) {
                           setIndex(photoIndex);
                         }}
                       >
-                        <span className={`h-2 w-2 rounded-full ${photoIndex === index ? 'bg-white' : 'bg-white/45'}`} />
+                        <span
+                          className={`h-2 w-2 rounded-full ${photoIndex === index ? "bg-white" : "bg-white/45"}`}
+                        />
                       </button>
                     ))}
                   </div>
@@ -119,14 +144,20 @@ export function AlbumBlock({ images, layout, caption }: AlbumBlockProps) {
             className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-full bg-[var(--card-secondary)] px-4 text-sm font-medium text-[var(--foreground)]"
             onClick={() => setGalleryOpen(true)}
           >
-            <span className="material-icons text-xl" aria-hidden>photo_library</span>
+            <span className="material-icons text-xl" aria-hidden>
+              photo_library
+            </span>
             Ver imagens
           </button>
         </div>
       ) : (
         <div>
           <div className="relative mx-auto w-full max-w-4xl overflow-hidden rounded-2xl bg-black">
-            <img src={current.src} alt={current.alt} className="mx-auto block h-auto max-h-[28rem] w-auto max-w-full" />
+            <img
+              src={current.src}
+              alt={current.alt}
+              className="mx-auto block h-auto max-h-[28rem] w-auto max-w-full"
+            />
             {photos.length > 1 ? (
               <>
                 <button
@@ -135,7 +166,9 @@ export function AlbumBlock({ images, layout, caption }: AlbumBlockProps) {
                   aria-label="Foto anterior"
                   onClick={showPrevious}
                 >
-                  <span className="material-icons" aria-hidden>chevron_left</span>
+                  <span className="material-icons" aria-hidden>
+                    chevron_left
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -143,7 +176,9 @@ export function AlbumBlock({ images, layout, caption }: AlbumBlockProps) {
                   aria-label="Próxima foto"
                   onClick={showNext}
                 >
-                  <span className="material-icons" aria-hidden>chevron_right</span>
+                  <span className="material-icons" aria-hidden>
+                    chevron_right
+                  </span>
                 </button>
               </>
             ) : null}
@@ -154,19 +189,33 @@ export function AlbumBlock({ images, layout, caption }: AlbumBlockProps) {
                 <button
                   key={`${image.src}-${photoIndex}`}
                   type="button"
-                  className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 ${photoIndex === index ? 'border-[var(--primary)]' : 'border-transparent'}`}
+                  className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 ${photoIndex === index ? "border-[var(--primary)]" : "border-transparent"}`}
                   aria-label={image.alt || `Foto ${photoIndex + 1}`}
                   onClick={() => setIndex(photoIndex)}
                 >
-                  <img src={image.src} alt="" className="h-full w-full object-cover" />
+                  <img
+                    src={image.src}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
                 </button>
               ))}
             </div>
           ) : null}
         </div>
       )}
-      {caption ? <figcaption className="mt-2 text-sm text-[var(--muted)]">{caption}</figcaption> : null}
-      {galleryOpen ? <GalleryDialog photos={photos} caption={caption} onClose={() => setGalleryOpen(false)} /> : null}
+      {caption ? (
+        <figcaption className="mt-2 text-sm text-[var(--muted)]">
+          {caption}
+        </figcaption>
+      ) : null}
+      {galleryOpen ? (
+        <GalleryDialog
+          photos={photos}
+          caption={caption}
+          onClose={() => setGalleryOpen(false)}
+        />
+      ) : null}
     </figure>
   );
 }
@@ -223,7 +272,11 @@ function CarouselTrack({
     <div
       className="h-full overflow-hidden"
       onPointerDown={(event) => {
-        if (event.button !== 0 || (event.target as HTMLElement).closest('button')) return;
+        if (
+          event.button !== 0 ||
+          (event.target as HTMLElement).closest("button")
+        )
+          return;
         drag.current = { x: event.clientX, y: event.clientY };
       }}
       onPointerUp={(event) => {
@@ -231,7 +284,8 @@ function CarouselTrack({
         const deltaX = event.clientX - drag.current.x;
         const deltaY = event.clientY - drag.current.y;
         drag.current = null;
-        if (Math.abs(deltaX) < 48 || Math.abs(deltaX) < Math.abs(deltaY)) return;
+        if (Math.abs(deltaX) < 48 || Math.abs(deltaX) < Math.abs(deltaY))
+          return;
         if (deltaX < 0) onSwipe();
         else onSwipeBack();
       }}
@@ -240,10 +294,14 @@ function CarouselTrack({
       }}
     >
       <div
-        className={`flex h-full ${sliding ? 'transition-transform duration-500 ease-out motion-reduce:transition-none' : ''}`}
+        className={`flex h-full ${sliding ? "transition-transform duration-500 ease-out motion-reduce:transition-none" : ""}`}
         style={{ transform: `translateX(-${offset * 100}%)` }}
         onTransitionEnd={(event) => {
-          if (event.target !== event.currentTarget || event.propertyName !== 'transform') return;
+          if (
+            event.target !== event.currentTarget ||
+            event.propertyName !== "transform"
+          )
+            return;
           settleClone();
         }}
       >
@@ -268,7 +326,7 @@ function GalleryGrid({ photos }: { photos: AlbumImage[] }) {
           key={`${image.src}-${photoIndex}`}
           src={image.src}
           alt={image.alt}
-          className={`${GALLERY_SPAN[image.size] ?? GALLERY_SPAN.medium} ${image.size === 'large' ? 'h-52 sm:h-64' : image.size === 'small' ? 'h-32 sm:h-40' : 'h-40 sm:h-52'} w-full rounded-xl object-cover`}
+          className={`${GALLERY_SPAN[image.size] ?? GALLERY_SPAN.medium} ${image.size === "large" ? "h-52 sm:h-64" : image.size === "small" ? "h-32 sm:h-40" : "h-40 sm:h-52"} w-full rounded-xl object-cover`}
         />
       ))}
     </div>
@@ -284,55 +342,25 @@ function GalleryDialog({
   caption: string;
   onClose: () => void;
 }) {
-  const titleId = useId();
-  const closeRef = useRef<HTMLButtonElement>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
   useEffect(() => {
-    closeRef.current?.focus();
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCloseRef.current();
-    };
-    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', onKey);
     };
   }, []);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-3 sm:items-center"
-      style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
-      onClick={onClose}
+    <EntityDialog
+      open
+      title={caption.trim() || "Galeria de fotos"}
+      size="xl"
+      placement="bottom"
+      onClose={onClose}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="flex max-h-[min(92dvh,44rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-[var(--card)] text-[var(--foreground)] shadow-[var(--shadow-soft)]"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
-          <h2 id={titleId} className="m-0 text-base font-semibold">
-            {caption.trim() || 'Galeria de fotos'}
-          </h2>
-          <button
-            ref={closeRef}
-            type="button"
-            className="inline-flex h-11 items-center rounded-full px-4 text-sm font-medium"
-            onClick={onClose}
-          >
-            Fechar
-          </button>
-        </div>
-        <div className="overflow-y-auto p-4">
-          <GalleryGrid photos={photos} />
-        </div>
+      <div className="overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <GalleryGrid photos={photos} />
       </div>
-    </div>
+    </EntityDialog>
   );
 }

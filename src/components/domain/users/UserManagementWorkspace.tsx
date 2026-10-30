@@ -1,72 +1,80 @@
 "use client";
 
+import { createColumnHelper } from "@tanstack/react-table";
+import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api";
+import { sealPassword } from "@/lib/passwordCipher";
+import { failureMessage, userFacingError } from "@/lib/userMessages";
 import {
+  type FormEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type FormEvent,
 } from "react";
-import { createColumnHelper } from "@tanstack/react-table";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/api";
-import { sealPassword } from "@/lib/passwordCipher";
-import { failureMessage, userFacingError } from "@/lib/userMessages";
-import { usesRemoteApi } from "@/core/auth/accessToken";
-import { can } from "@/core/auth/permissions";
-import { hasRole, roleLabels } from "@/core/auth/roles";
-import { useAuth } from "@/contexts/AuthContext";
-import { getDomain } from "@/domains/catalog";
-import {
-  getCrudConfig,
-  getValue,
-  type CrudColumn,
-  type CrudField,
-  type CrudOption,
-  type CrudOptionSource,
-} from "@/domains/crudConfig";
-import type { CrudResource } from "@/core/auth/permissions";
-import { filterPeopleForRole } from "@/domains/people/visibility";
-import type { Person } from "@/domains/people/types";
-import { isPersonUnderage } from "@/domains/people/types";
-import { TableView } from "@/components/tables/core/TableView";
-import { EntityDialog } from "@/components/shared/EntityDialog";
-import { IconSelect } from "@/components/shared/IconSelect";
+
+import { createDomainTableColumns } from "@/components/domain/table-columns";
 import { FormStageActions } from "@/components/forms/FormStageActions";
 import {
   FormStageProgress,
   type FormStageStatus,
 } from "@/components/forms/FormStageProgress";
+import { ConfirmationDialog } from "@/components/shared/ConfirmationDialog";
+import { EntityDialog } from "@/components/shared/EntityDialog";
+import { IconSelect } from "@/components/shared/IconSelect";
+import { TableMobileIconAction } from "@/components/tables/core/TableMobileIconAction";
+import { TableRowActions } from "@/components/tables/core/TableRowActions";
+import { TableView } from "@/components/tables/core/TableView";
+import { createCrudTableRowActions } from "@/components/tables/core/table-actions";
+import { tableFeatures } from "@/components/tables/core/table-features";
+import type { TableColumnDef } from "@/components/tables/core/table-features";
+import { useAuth } from "@/contexts/AuthContext";
+import { can } from "@/core/auth/permissions";
+import type { CrudResource } from "@/core/auth/permissions";
+import { hasRole, roleLabels } from "@/core/auth/roles";
+import { getDomain } from "@/domains/catalog";
+import {
+  type CrudColumn,
+  type CrudField,
+  type CrudOption,
+  type CrudOptionSource,
+  getCrudConfig,
+  getValue,
+} from "@/domains/crudConfig";
+import type { Person } from "@/domains/people/types";
+import { isPersonUnderage } from "@/domains/people/types";
+import { mergeParsedAddressIntoValues } from "@/domains/people/composeAddress";
+import { gestaoDeepLinkParam } from "@/lib/deepLink/gestaoDeepLinkParams";
+import { useGestaoDeepLink } from "@/lib/deepLink/useGestaoDeepLink";
+import { filterPeopleForRole } from "@/domains/people/visibility";
+import {
+  type AdministrativeCompletionStatus,
+  enrichPersonForAdministrativeCompletion,
+  evaluateAdministrativeCompletion,
+  getAdministrativeCompletionStatuses,
+} from "@/domains/users/administrativeCompletion";
+import { accessSchema } from "@/domains/users/schemas/access.schema";
+import { guardianSchema } from "@/domains/users/schemas/guardian.schema";
+import { permissionsSchema } from "@/domains/users/schemas/permissions.schema";
+import {
+  type PersonDetailsFormValues,
+  personDetailsSchema,
+} from "@/domains/users/schemas/person-details.schema";
+import { personProfilesSchema } from "@/domains/users/schemas/person-profiles.schema";
+
+import type { AccessStageHandlers } from "./UserAccessStage";
+import {
+  type GuardianStageHandlers,
+  NEW_GUARDIAN_VALUE,
+} from "./UserGuardianStage";
 import {
   EntityForm as UserManagementForm,
   type EntityFormDynamicChoices as UserManagementFormDynamicChoices,
 } from "./UserManagementForm";
-import type { PersonalContactFormHandlers } from "./UserPersonalContactStage";
-import {
-  NEW_GUARDIAN_VALUE,
-  type GuardianStageHandlers,
-} from "./UserGuardianStage";
-import type { ProfilesStageHandlers } from "./UserProfilesStage";
-import type { AccessStageHandlers } from "./UserAccessStage";
 import type { PermissionsStageHandlers } from "./UserPermissionsStage";
-import {
-  personDetailsSchema,
-  type PersonDetailsFormValues,
-} from "@/domains/users/schemas/person-details.schema";
-import { guardianSchema } from "@/domains/users/schemas/guardian.schema";
-import { personProfilesSchema } from "@/domains/users/schemas/person-profiles.schema";
-import { accessSchema } from "@/domains/users/schemas/access.schema";
-import { permissionsSchema } from "@/domains/users/schemas/permissions.schema";
-import { createDomainTableColumns } from "@/components/domain/table-columns";
-import { tableFeatures } from "@/components/tables/core/table-features";
-import type { TableColumnDef } from "@/components/tables/core/table-features";
-import {
-  getAdministrativeCompletionStatuses,
-  evaluateAdministrativeCompletion,
-  type AdministrativeCompletionStatus,
-} from "@/domains/users/administrativeCompletion";
+import type { PersonalContactFormHandlers } from "./UserPersonalContactStage";
 
 interface UserManagementWorkspaceProps {
   resource: CrudResource;
@@ -83,6 +91,8 @@ interface UserManagementWorkspaceProps {
   combinedUser?: boolean;
   refreshKey?: number;
   onCreated?: () => void;
+  onCreateHandlerReady?: (handler: (() => void) | null) => void;
+  mobilePrimaryAction?: ReactNode;
   /** @deprecated Columns and fields now come from the domain CRUD configuration. */
   entityFields?: string[];
 }
@@ -91,8 +101,6 @@ type DialogMode = "create" | "view" | "edit" | null;
 
 const buttonMotion =
   "transition-[transform,background-color,color,border-color,box-shadow] duration-150 ease-out active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100";
-const iconMotion =
-  "transition-transform duration-200 ease-out group-hover:scale-110 group-active:scale-75 motion-reduce:transition-none motion-reduce:group-hover:scale-100 motion-reduce:group-active:scale-100";
 const controlMotion =
   "transition-[border-color,background-color,box-shadow] duration-150 ease-out motion-reduce:transition-none";
 /** Opção de pessoa com o que o formulário precisa para filtrar (sem conta, não é a própria). */
@@ -155,6 +163,8 @@ export function UserManagementWorkspace({
   combinedUser = false,
   refreshKey,
   onCreated,
+  onCreateHandlerReady,
+  mobilePrimaryAction,
 }: UserManagementWorkspaceProps) {
   const domain = getDomain(resource);
   const config = getCrudConfig(resource);
@@ -206,6 +216,11 @@ export function UserManagementWorkspace({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
+  const [incompleteUserNotice, setIncompleteUserNotice] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const incompleteUserEditTarget = useRef<Record<string, unknown> | null>(null);
   const [selected, setSelected] = useState<Record<string, unknown> | null>(
     null,
   );
@@ -217,6 +232,9 @@ export function UserManagementWorkspace({
     string,
     unknown
   > | null>(null);
+  const [bulkDeleteTargets, setBulkDeleteTargets] = useState<
+    Record<string, unknown>[] | null
+  >(null);
   const [issuedPasswords, setIssuedPasswords] = useState<IssuedPassword[]>([]);
   const [roleChoices, setRoleChoices] = useState<CrudOption[] | null>(null);
   const [choices, setChoices] = useState<UserManagementFormDynamicChoices>({
@@ -264,7 +282,6 @@ export function UserManagementWorkspace({
     null,
   );
   const guardianStageHandlers = useRef<GuardianStageHandlers | null>(null);
-  const profilesStageHandlers = useRef<ProfilesStageHandlers | null>(null);
   const accessStageHandlers = useRef<AccessStageHandlers | null>(null);
   const permissionsStageHandlers = useRef<PermissionsStageHandlers | null>(
     null,
@@ -278,12 +295,6 @@ export function UserManagementWorkspace({
   const registerGuardianStageHandlers = useCallback(
     (handlers: GuardianStageHandlers | null) => {
       guardianStageHandlers.current = handlers;
-    },
-    [],
-  );
-  const registerProfilesStageHandlers = useCallback(
-    (handlers: ProfilesStageHandlers | null) => {
-      profilesStageHandlers.current = handlers;
     },
     [],
   );
@@ -324,7 +335,30 @@ export function UserManagementWorkspace({
           apiFetch<unknown>("/people"),
         ]);
         if (usersResult.status === "rejected") throw usersResult.reason;
-        setItems(usersResult.value);
+        const peopleById = new Map<string, Record<string, unknown>>();
+        if (
+          peopleResult.status === "fulfilled" &&
+          Array.isArray(peopleResult.value)
+        ) {
+          peopleResult.value.forEach((person) => {
+            if (
+              typeof person === "object" &&
+              person !== null &&
+              "id" in person
+            ) {
+              peopleById.set(String(person.id), person);
+            }
+          });
+        }
+        setItems(
+          usersResult.value.map((account) => {
+            const person = peopleById.get(String(account.personId));
+            const personName = person
+              ? `${String(person.firstName ?? "")} ${String(person.lastName ?? "")}`.trim()
+              : "";
+            return { ...account, personName };
+          }),
+        );
         setCompletionStatuses(
           peopleResult.status === "fulfilled"
             ? getAdministrativeCompletionStatuses(
@@ -354,10 +388,18 @@ export function UserManagementWorkspace({
     } finally {
       setLoading(false);
     }
-  }, [domain.apiResource, resource]);
+  }, [
+    domain.apiResource,
+    resource,
+    setCompletionStatuses,
+    setError,
+    setItems,
+    setLoading,
+  ]);
 
   useEffect(() => {
     // A listagem precisa iniciar quando o workspace monta.
+     
     void fetchItems();
   }, [fetchItems, refreshKey]);
 
@@ -536,31 +578,13 @@ export function UserManagementWorkspace({
     ? [...tableColumns, userCompletionColumn]
     : tableColumns;
 
-  const renderMobileUserIncompleteIndicator = useCallback(
-    (row: Record<string, unknown>) => {
-      if (resource !== "users") return null;
-      const status = completionStatuses.get(String(row.id));
-      if (status !== "incomplete") return null;
-      return (
-        <span
-          className="inline-flex min-h-11 min-w-11 items-center justify-center text-[var(--warning)]"
-          title="Cadastro incompleto"
-          aria-label="Cadastro incompleto"
-        >
-          <span className="material-icons text-[1.75rem]" aria-hidden>
-            warning
-          </span>
-        </span>
-      );
-    },
-    [completionStatuses, resource],
-  );
-
-  const openCreate = () => {
+  const openCreate = useCallback(() => {
+    const createConfig = getCrudConfig(resource);
+    const createUserConfig = combinedUser ? getCrudConfig("users") : null;
     setSelected(null);
     setValues({
-      ...config.defaults,
-      ...(userConfig?.defaults ?? {}),
+      ...createConfig.defaults,
+      ...(createUserConfig?.defaults ?? {}),
       ...createInitialValues,
       ...(combinedUser ? { status: "", photoSource: "" } : {}),
     });
@@ -569,7 +593,34 @@ export function UserManagementWorkspace({
     setActiveStage(0);
     setValidatedStageTitles([]);
     setDialogMode("create");
-  };
+  }, [
+    combinedUser,
+    createInitialValues,
+    resource,
+    setActiveStage,
+    setDialogMode,
+    setFormErrors,
+    setGuardianError,
+    setSelected,
+    setValidatedStageTitles,
+    setValues,
+  ]);
+
+  useEffect(() => {
+    if (!createOnly || !canCreate || !canCreateAccount) {
+      onCreateHandlerReady?.(null);
+      return;
+    }
+
+    onCreateHandlerReady?.(openCreate);
+    return () => onCreateHandlerReady?.(null);
+  }, [
+    canCreate,
+    canCreateAccount,
+    createOnly,
+    onCreateHandlerReady,
+    openCreate,
+  ]);
 
   const openItem = async (
     item: Record<string, unknown>,
@@ -605,67 +656,89 @@ export function UserManagementWorkspace({
         setError(userFacingError(caught));
       }
     }
+    const roles = Array.isArray(itemValues.roles)
+      ? itemValues.roles.map(String)
+      : [];
+    itemValues.isStudent = roles.includes("aluno");
+    itemValues.isMusician = roles.includes("musico");
+    const normalized = mergeParsedAddressIntoValues(itemValues);
     setSelected(item);
-    setValues(itemValues);
+    setValues(normalized);
     setFormErrors({});
     setActiveStage(0);
     setValidatedStageTitles([]);
     setDialogMode(mode);
   };
 
-  const renderRowActions = (row: Record<string, unknown>) => (
-    <div className="flex justify-end gap-1">
-      {resource === "songs" ? (
-        songHasScore(row) ? (
-          <Link
-            href={`/study/${row.id}`}
-            title="Estudar"
-            aria-label="Estudar"
-            className={`group inline-flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-brand-strong)] hover:bg-[var(--color-brand-soft)] ${buttonMotion}`}
-          >
-            <span
-              className={`material-icons text-lg ${iconMotion}`}
-              aria-hidden="true"
-            >
-              school
-            </span>
-          </Link>
-        ) : (
-          <button
-            type="button"
-            disabled
-            title="Sem partitura"
-            aria-label="Estudar"
-            className="inline-flex h-11 w-11 cursor-not-allowed items-center justify-center rounded-full text-[var(--muted)] opacity-40"
-          >
-            <span className="material-icons text-lg" aria-hidden="true">
-              school
-            </span>
-          </button>
-        )
-      ) : null}
-      <ActionButton
-        icon="visibility"
-        label="Visualizar"
-        onClick={() => openItem(row, "view")}
+  useGestaoDeepLink({
+    param: gestaoDeepLinkParam(resource),
+    items,
+    loading,
+    onOpen: openItem,
+  });
+
+  const handleIncompleteUserNoticeClosed = () => {
+    const target = incompleteUserEditTarget.current;
+    incompleteUserEditTarget.current = null;
+    if (target) void openItem(target, "edit");
+  };
+
+  const renderMobileUserIncompleteIndicator = (
+    row: Record<string, unknown>,
+  ) => {
+    if (resource !== "users") return null;
+    const status = completionStatuses.get(String(row.id));
+    if (status !== "incomplete") return null;
+    return (
+      <TableMobileIconAction
+        ariaLabel={`Abrir aviso de cadastro incompleto para ${String(row.username ?? row.id)}`}
+        icon="warning"
+        onClick={() => setIncompleteUserNotice(row)}
+        className="text-[var(--warning)]"
       />
-      {canUpdate && (
-        <ActionButton
-          icon="edit"
-          label="Editar"
-          onClick={() => openItem(row, "edit")}
-        />
-      )}
-      {canDelete && (
-        <ActionButton
-          icon="delete"
-          label="Excluir"
-          danger
-          disabled={resource === "users" && String(row.id) === String(user?.id)}
-          onClick={() => setDeleteTarget(row)}
-        />
-      )}
-    </div>
+    );
+  };
+
+  const getRowActions = (
+    row: Record<string, unknown>,
+    includeView: boolean,
+    mobile = false,
+  ) => {
+    const hasScore = resource === "songs" && songHasScore(row);
+    return createCrudTableRowActions({
+      extras:
+        resource === "songs" && (hasScore || !mobile)
+          ? [
+              {
+                id: "study",
+                label: "Estudar",
+                icon: "school",
+                href: hasScore ? `/study/${row.id}` : undefined,
+                onSelect: () => window.location.assign(`/study/${row.id}`),
+                disabled: !hasScore,
+                disabledTitle: "Sem partitura",
+              },
+            ]
+          : [],
+      view: includeView
+        ? { onSelect: () => void openItem(row, "view") }
+        : undefined,
+      edit: canUpdate
+        ? { onSelect: () => void openItem(row, "edit") }
+        : undefined,
+      remove: canDelete
+        ? {
+            onSelect: () => setDeleteTarget(row),
+            disabled:
+              resource === "users" && String(row.id) === String(user?.id),
+            disabledTitle: "Não é possível excluir o usuário da sessão.",
+          }
+        : undefined,
+    });
+  };
+
+  const renderRowActions = (row: Record<string, unknown>) => (
+    <TableRowActions actions={getRowActions(row, false)} />
   );
 
   const closeDialog = () => {
@@ -675,22 +748,37 @@ export function UserManagementWorkspace({
     setFormErrors({});
   };
 
+  const mergeActiveStageValues = (
+    base: Record<string, unknown>,
+  ): Record<string, unknown> => {
+    let merged = base;
+    const accessPatch = accessStageHandlers.current?.syncToParent?.();
+    if (accessPatch) merged = { ...merged, ...accessPatch };
+    const profilePatch = permissionsStageHandlers.current?.syncProfiles?.();
+    if (profilePatch) merged = { ...merged, ...profilePatch };
+    return merged;
+  };
+
   const handleSave = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
+    let saveValues = mergeActiveStageValues({ ...values });
+    if (isAccountWorkflow) setValues(saveValues);
     const fieldsToValidate =
       combinedUser && dialogMode === "create"
         ? combinedFields.filter(
             (field) => !stageFieldNames.personal?.includes(field.name),
           )
         : combinedFields;
-    const errors = validateValues(fieldsToValidate, values);
+    const errors: Record<string, string> = isAccountEdit
+      ? {}
+      : validateValues(fieldsToValidate, saveValues);
 
     if ((resource === "users" || combinedUser) && !managesRoles) {
       const previous = Array.isArray(selected?.roles)
         ? selected.roles.map(String).sort()
         : [];
-      const next = Array.isArray(values.roles)
-        ? values.roles.map(String).sort()
+      const next = Array.isArray(saveValues.roles)
+        ? saveValues.roles.map(String).sort()
         : [];
       if (previous.join("|") !== next.join("|")) {
         errors.roles =
@@ -703,7 +791,7 @@ export function UserManagementWorkspace({
       ...(combinedUser ? ["username"] : []),
     ]);
     for (const uniqueField of uniqueFields) {
-      const candidate = normalizeUniqueValue(values[uniqueField]);
+      const candidate = normalizeUniqueValue(saveValues[uniqueField]);
       if (
         candidate &&
         items.some(
@@ -719,24 +807,107 @@ export function UserManagementWorkspace({
     setFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
     if (isAccountEdit) {
-      const accessResult = accessSchema.safeParse(accessDetailsFrom(values));
-      const accessErrors: Record<string, string> = accessResult.success
-        ? {}
-        : Object.fromEntries(
-            accessResult.error.issues.map((issue) => [
-              String(issue.path[0] ?? "access"),
+      const personResult = personDetailsSchema.safeParse(
+        personDetailsFrom(saveValues),
+      );
+      if (!personResult.success) {
+        const personErrors = Object.fromEntries(
+          personResult.error.issues.map((issue) => [
+            issue.path.join("."),
+            issue.message,
+          ]),
+        );
+        setFormErrors((current) => ({ ...current, ...personErrors }));
+        setActiveStage(
+          wizardStages.findIndex((stage) => stage.id === "personal"),
+        );
+        return;
+      }
+
+      if (isPersonUnderage(String(saveValues.birthDate ?? ""))) {
+        const guardianResult = guardianSchema.safeParse(
+          guardianDetailsFrom(saveValues),
+        );
+        if (!guardianResult.success) {
+          const guardianErrors = Object.fromEntries(
+            guardianResult.error.issues.map((issue) => [
+              issue.path.join("."),
               issue.message,
             ]),
           );
-      if (!String(values.username ?? "").trim()) {
-        accessErrors.username = "Informe o nome de usuário.";
+          setFormErrors((current) => ({ ...current, ...guardianErrors }));
+          setActiveStage(
+            wizardStages.findIndex((stage) => stage.id === "guardian"),
+          );
+          return;
+        }
       }
-      if (Object.keys(accessErrors).length > 0) {
-        setFormErrors((current) => ({ ...current, ...accessErrors }));
+
+      if (accessStageHandlers.current) {
+        const accessValid = await accessStageHandlers.current.validate();
+        if (!accessValid) {
+          setActiveStage(
+            wizardStages.findIndex((stage) => stage.id === "access"),
+          );
+          return;
+        }
+        saveValues = mergeActiveStageValues(saveValues);
+      } else {
+        const accessResult = accessSchema.safeParse(
+          accessDetailsFrom(saveValues),
+        );
+        const accessErrors: Record<string, string> = accessResult.success
+          ? {}
+          : Object.fromEntries(
+              accessResult.error.issues.map((issue) => [
+                String(issue.path[0] ?? "access"),
+                issue.message,
+              ]),
+            );
+        if (!String(saveValues.username ?? "").trim()) {
+          accessErrors.username = "Informe o nome de usuário.";
+        }
+        if (Object.keys(accessErrors).length > 0) {
+          setFormErrors((current) => ({ ...current, ...accessErrors }));
+          setActiveStage(
+            wizardStages.findIndex((stage) => stage.id === "access"),
+          );
+          return;
+        }
+      }
+
+      if (!String(saveValues.username ?? "").trim()) {
         setActiveStage(
           wizardStages.findIndex((stage) => stage.id === "access"),
         );
         return;
+      }
+
+      if (permissionsStageHandlers.current) {
+        const permissionsValid =
+          await permissionsStageHandlers.current.validate();
+        if (!permissionsValid) {
+          setActiveStage(
+            wizardStages.findIndex((stage) => stage.id === "permissions"),
+          );
+          return;
+        }
+        saveValues = mergeActiveStageValues(saveValues);
+      } else {
+        const roles = Array.isArray(saveValues.roles)
+          ? saveValues.roles.map(String)
+          : [];
+        const profilesResult = personProfilesSchema.safeParse({
+          ...personProfilesFrom(saveValues),
+          isStudent: roles.includes("aluno"),
+          isMusician: roles.includes("musico"),
+        });
+        if (!profilesResult.success) {
+          setActiveStage(
+            wizardStages.findIndex((stage) => stage.id === "permissions"),
+          );
+          return;
+        }
       }
     }
 
@@ -748,7 +919,7 @@ export function UserManagementWorkspace({
     try {
       if (isAccountEdit && selected) {
         const peopleConfig = getCrudConfig("people");
-        const personValues = { ...values };
+        const personValues = { ...saveValues };
         for (const field of [
           "confirmPassword",
           "isActive",
@@ -757,6 +928,14 @@ export function UserManagementWorkspace({
           "personId",
           "roles",
           "username",
+          "postalCode",
+          "street",
+          "addressNumber",
+          "complement",
+          "unit",
+          "neighborhood",
+          "city",
+          "state",
         ]) {
           delete personValues[field];
         }
@@ -765,21 +944,22 @@ export function UserManagementWorkspace({
           : personValues;
         const personPayload = {
           ...withAudit(mappedPerson, {
-            createdAt: values.createdAt,
+            createdAt: saveValues.createdAt,
           }),
           userId: selected.id,
         };
-        updatedPerson = await apiFetch<Record<string, unknown>>(
+        const savedPerson = await apiFetch<Record<string, unknown>>(
           `/people/${encodeURIComponent(String(selected.personId))}`,
           {
             method: "PUT",
             body: JSON.stringify(personPayload),
           },
         );
+        updatedPerson = savedPerson;
 
         const mappedAccount = config.toPayload
-          ? config.toPayload(values, selected)
-          : values;
+          ? config.toPayload(saveValues, selected)
+          : saveValues;
         const accountPayload: Record<string, unknown> = {
           ...selected,
           ...mappedAccount,
@@ -787,7 +967,7 @@ export function UserManagementWorkspace({
         };
         delete accountPayload.confirmPassword;
         if (typeof accountPayload.password === "string") {
-          if (!usesRemoteApi() || !accountPayload.password) {
+          if (!accountPayload.password) {
             delete accountPayload.password;
           } else {
             accountPayload.password = await sealPassword(
@@ -805,21 +985,24 @@ export function UserManagementWorkspace({
         const stored = {
           ...selected,
           ...updatedAccount,
-          name: `${String(updatedPerson.firstName ?? "")} ${String(updatedPerson.lastName ?? "")}`.trim(),
-          email: updatedPerson.email,
+          name: `${String(savedPerson.firstName ?? "")} ${String(savedPerson.lastName ?? "")}`.trim(),
+          email: savedPerson.email,
         };
         setItems((current) =>
           current.map((item) =>
             String(item.id) === String(selected.id) ? stored : item,
           ),
         );
-        setCompletionStatuses((current) =>
-          new Map(current).set(
-            String(selected.id),
-            evaluateAdministrativeCompletion(updatedPerson),
+        const completionStatus = evaluateAdministrativeCompletion(
+          enrichPersonForAdministrativeCompletion(
+            savedPerson,
+            updatedAccount.roles ?? saveValues.roles,
           ),
         );
-        refreshPeopleChoices(updatedPerson);
+        setCompletionStatuses((current) =>
+          new Map(current).set(String(selected.id), completionStatus),
+        );
+        refreshPeopleChoices(savedPerson);
         setDialogMode(null);
         setSelected(null);
         setFormErrors({});
@@ -939,7 +1122,7 @@ export function UserManagementWorkspace({
         delete accountPayload.confirmPassword;
         accountPayload.personId = createdPerson.id;
         if (typeof accountPayload.password === "string") {
-          if (!usesRemoteApi() || !accountPayload.password) {
+          if (!accountPayload.password) {
             delete accountPayload.password;
           } else {
             accountPayload.password = await sealPassword(
@@ -982,11 +1165,10 @@ export function UserManagementWorkspace({
       const mapped = config.toPayload
         ? config.toPayload(values, selected ?? undefined)
         : withAudit(values, selected ?? undefined);
-      const payload: Record<string, unknown> =
-        dialogMode === "create" ? mapped : { ...selected, ...mapped };
-      // Senha de usuário nunca sai em claro: cifrada para a API; no mock, nem é enviada.
+      const payload: Record<string, unknown> = dialogMode === "create" ? mapped : { ...selected, ...mapped };
+      // Senhas de usuário são cifradas antes de serem enviadas à API.
       if (typeof payload.password === "string") {
-        if (!usesRemoteApi() || !payload.password) {
+        if (!payload.password) {
           delete payload.password;
         } else {
           payload.password = await sealPassword(payload.password);
@@ -1042,22 +1224,27 @@ export function UserManagementWorkspace({
       if (dialogMode === "create") onCreated?.();
     } catch (caught) {
       if (updatedPerson && selected) {
-        setCompletionStatuses((current) =>
-          new Map(current).set(
-            String(selected.id),
-            evaluateAdministrativeCompletion(updatedPerson),
+        const personAfterSave = updatedPerson;
+        const selectedAccount = selected;
+        const completionStatus = evaluateAdministrativeCompletion(
+          enrichPersonForAdministrativeCompletion(
+            personAfterSave,
+            selectedAccount.roles,
           ),
         );
+        setCompletionStatuses((current) =>
+          new Map(current).set(String(selectedAccount.id), completionStatus),
+        );
         const name =
-          `${String(updatedPerson.firstName ?? "")} ${String(updatedPerson.lastName ?? "")}`.trim();
+          `${String(personAfterSave.firstName ?? "")} ${String(personAfterSave.lastName ?? "")}`.trim();
         setItems((current) =>
           current.map((item) =>
-            String(item.id) === String(selected.id)
-              ? { ...item, name, email: updatedPerson?.email }
+            String(item.id) === String(selectedAccount.id)
+              ? { ...item, name, email: personAfterSave.email }
               : item,
           ),
         );
-        refreshPeopleChoices(updatedPerson);
+        refreshPeopleChoices(personAfterSave);
         setError(
           `Os dados pessoais foram salvos, mas não foi possível concluir a atualização da conta. ${userFacingError(caught)}`,
         );
@@ -1087,20 +1274,42 @@ export function UserManagementWorkspace({
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    const targets = bulkDeleteTargets ?? (deleteTarget ? [deleteTarget] : []);
+    if (targets.length === 0) return;
     setSaving(true);
     setError(null);
     try {
-      await apiFetch<void>(
-        `/${domain.apiResource}/${String(deleteTarget.id)}`,
-        {
-          method: "DELETE",
-        },
+      const results = await Promise.allSettled(
+        targets.map((target) =>
+          apiFetch<void>(`/${domain.apiResource}/${String(target.id)}`, {
+            method: "DELETE",
+          }),
+        ),
       );
-      setItems((current) =>
-        current.filter((item) => item.id !== deleteTarget.id),
+      const deletedIds = targets
+        .filter((_, index) => results[index].status === "fulfilled")
+        .map((target) => target.id);
+      const failedTargets = targets.filter(
+        (_, index) => results[index].status === "rejected",
       );
-      setDeleteTarget(null);
+      if (deletedIds.length > 0) {
+        setItems((current) =>
+          current.filter((item) => !deletedIds.includes(item.id)),
+        );
+      }
+      if (failedTargets.length > 0) {
+        const failure = results.find((result) => result.status === "rejected");
+        setError(
+          userFacingError(
+            failure?.status === "rejected" ? failure.reason : undefined,
+            `Não foi possível excluir ${failedTargets.length} registro(s).`,
+          ),
+        );
+        if (bulkDeleteTargets) setBulkDeleteTargets(failedTargets);
+      } else {
+        setBulkDeleteTargets(null);
+        setDeleteTarget(null);
+      }
     } catch (caught) {
       setError(userFacingError(caught));
     } finally {
@@ -1127,16 +1336,10 @@ export function UserManagementWorkspace({
                   id: "guardian",
                   title: "Responsável",
                   shortTitle: "Responsável",
-                icon: "supervisor_account",
+                  icon: "supervisor_account",
                 },
               ]
             : []),
-          {
-            id: "profiles",
-            title: "Perfis da pessoa",
-            shortTitle: "Perfis",
-            icon: "groups",
-          },
           { id: "access", title: "Acesso", shortTitle: "Acesso", icon: "key" },
           {
             id: "permissions",
@@ -1155,15 +1358,14 @@ export function UserManagementWorkspace({
       )
       .map((field) => field.name),
     guardian: ["guardianId", "guardianRelationship"],
-    profiles: combinedFields
+    access: ["username", "password", "confirmPassword", "isActive"],
+    permissions: combinedFields
       .filter(
         (field) =>
-          ["Perfis", "Aluno", "Músico"].includes(field.section ?? "") &&
-          field.name !== "roles",
+          field.name === "roles" ||
+          ["Aluno", "Músico"].includes(field.section ?? ""),
       )
       .map((field) => field.name),
-    access: ["username", "password", "confirmPassword", "isActive"],
-    permissions: ["roles"],
   };
   const activeWizardStage = wizardStages[activeStage];
   const stageFields =
@@ -1175,8 +1377,10 @@ export function UserManagementWorkspace({
         )
       : combinedFields;
 
-  const stageStatuses = Object.fromEntries(
-    wizardStages.flatMap((stage) => {
+  const stageStatuses = useMemo(
+    () =>
+      Object.fromEntries(
+        wizardStages.flatMap((stage) => {
       if (!validatedStageTitles.includes(stage.title)) return [];
       if (stage.id === "personal") {
         const parsed = personDetailsSchema.safeParse(personDetailsFrom(values));
@@ -1218,23 +1422,6 @@ export function UserManagementWorkspace({
         const status: FormStageStatus = hasInvalidValue ? "error" : "warning";
         return [[stage.title, status] as const];
       }
-      if (stage.id === "profiles") {
-        const parsed = personProfilesSchema.safeParse(
-          personProfilesFrom(values),
-        );
-        if (parsed.success) return [[stage.title, "complete"] as const];
-        const missingPaths = new Set([
-          "student.enrollmentDate",
-          "musician.section",
-        ]);
-        const hasInvalidValue = parsed.error.issues.some((issue) => {
-          const path = issue.path.join(".");
-          return (
-            !missingPaths.has(path) || String(values[path] ?? "").trim() !== ""
-          );
-        });
-        return [[stage.title, hasInvalidValue ? "error" : "warning"] as const];
-      }
       if (stage.id === "access") {
         const parsed = accessSchema.safeParse(accessDetailsFrom(values));
         const usernameMissing =
@@ -1247,10 +1434,34 @@ export function UserManagementWorkspace({
         ];
       }
       if (stage.id === "permissions") {
-        const parsed = permissionsSchema.safeParse({
-          roles: Array.isArray(values.roles) ? values.roles.map(String) : [],
+        const roles = Array.isArray(values.roles)
+          ? values.roles.map(String)
+          : [];
+        const rolesParsed = permissionsSchema.safeParse({ roles });
+        const profilesParsed = personProfilesSchema.safeParse({
+          ...personProfilesFrom(values),
+          isStudent: roles.includes("aluno"),
+          isMusician: roles.includes("musico"),
         });
-        return [[stage.title, parsed.success ? "complete" : "error"] as const];
+        if (rolesParsed.success && profilesParsed.success) {
+          return [[stage.title, "complete"] as const];
+        }
+        const missingPaths = new Set([
+          "student.enrollmentDate",
+          "musician.section",
+          "musician.playedInstrumentId",
+        ]);
+        const hasInvalidValue = profilesParsed.success
+          ? !rolesParsed.success
+          : profilesParsed.error.issues.some((issue) => {
+              const path = issue.path.join(".");
+              return (
+                !missingPaths.has(path) ||
+                String(values[path] ?? "").trim() !== ""
+              );
+            });
+        const status: FormStageStatus = hasInvalidValue ? "error" : "warning";
+        return [[stage.title, rolesParsed.success ? status : "error"] as const];
       }
       const fields = combinedFields.filter((field) =>
         stageFieldNames[stage.id]?.includes(field.name),
@@ -1273,13 +1484,28 @@ export function UserManagementWorkspace({
           ? "warning"
           : "complete";
       return [[stage.title, status] as const];
-    }),
+        }),
+      ),
+    [
+      combinedFields,
+      isAccountEdit,
+      validatedStageTitles,
+      values,
+      wizardStages,
+    ],
   );
 
   const validateCurrentStage = async (): Promise<boolean> => {
+    const stageValues = mergeActiveStageValues({ ...values });
+    if (
+      activeWizardStage?.id === "access" ||
+      activeWizardStage?.id === "permissions"
+    ) {
+      setValues(stageValues);
+    }
     let isValid = false;
     if (isAccountEdit && activeWizardStage?.id === "access") {
-      const result = accessSchema.safeParse(accessDetailsFrom(values));
+      const result = accessSchema.safeParse(accessDetailsFrom(stageValues));
       const errors = result.success
         ? {}
         : Object.fromEntries(
@@ -1288,7 +1514,7 @@ export function UserManagementWorkspace({
               issue.message,
             ]),
           );
-      if (!String(values.username ?? "").trim()) {
+      if (!String(stageValues.username ?? "").trim()) {
         errors.username = "Informe o nome de usuário.";
       }
       setFormErrors((current) => {
@@ -1297,13 +1523,12 @@ export function UserManagementWorkspace({
           delete next[field];
         return { ...next, ...errors };
       });
-      isValid = result.success && Boolean(String(values.username ?? "").trim());
+      isValid =
+        result.success && Boolean(String(stageValues.username ?? "").trim());
     } else if (activeWizardStage?.id === "personal") {
       isValid = await (personalContactHandlers.current?.validate() ?? false);
     } else if (activeWizardStage?.id === "guardian") {
       isValid = await (guardianStageHandlers.current?.validate() ?? false);
-    } else if (activeWizardStage?.id === "profiles") {
-      isValid = await (profilesStageHandlers.current?.validate() ?? false);
     } else if (activeWizardStage?.id === "access") {
       isValid = await (accessStageHandlers.current?.validate() ?? false);
     } else if (activeWizardStage?.id === "permissions") {
@@ -1402,13 +1627,15 @@ export function UserManagementWorkspace({
             </div>
           ) : null}
           {!hideCreateAction && canCreate && canCreateAccount && (
-            <button
-              type="button"
-              className={`btn-primary min-h-11 ${createOnly && createButtonFullWidth ? "w-full" : ""} ${buttonMotion}`}
-              onClick={openCreate}
-            >
-              {createButtonLabel ?? "Novo cadastro"}
-            </button>
+            <div className="hidden min-[960px]:block">
+              <button
+                type="button"
+                className={`btn-primary min-h-11 ${createOnly && createButtonFullWidth ? "w-full" : ""} ${buttonMotion}`}
+                onClick={openCreate}
+              >
+                {createButtonLabel ?? "Novo cadastro"}
+              </button>
+            </div>
           )}
         </header>
 
@@ -1448,9 +1675,86 @@ export function UserManagementWorkspace({
                 emptyMessage={`Nenhum registro de ${domain.label.toLocaleLowerCase("pt-BR")} encontrado.`}
                 noResultsMessage="Nenhum registro corresponde à busca ou aos filtros."
                 getRowLabel={(row) => config.itemLabel(row)}
+                mobilePrimaryLabel={
+                  resource === "people" ? "Informações de" : undefined
+                }
+                getMobilePrimary={
+                  resource === "users"
+                    ? (row) =>
+                        String(
+                          row.personName ??
+                            row.name ??
+                            row.username ??
+                            "Usuário",
+                        )
+                    : resource === "people"
+                      ? (row) =>
+                          `${String(row.firstName ?? "")} ${String(row.lastName ?? "")}`.trim()
+                      : resource === "patrimony"
+                        ? (row) => String(row.name ?? "—")
+                        : resource === "songs"
+                          ? (row) => String(row.title ?? "—")
+                          : undefined
+                }
+                getMobilePrimaryLabel={
+                  resource === "users"
+                    ? (row) => String(row.username ?? "Usuário")
+                    : resource === "patrimony"
+                      ? (row) => String(row.code ?? "Código")
+                      : resource === "songs"
+                        ? (row) => String(row.composer ?? "Compositor")
+                        : undefined
+                }
+                mobilePrimaryAction={
+                  mobilePrimaryAction ??
+                  (!hideCreateAction && canCreate && canCreateAccount ? (
+                    <button
+                      type="button"
+                      className={"btn-primary min-h-11 w-full " + buttonMotion}
+                      onClick={openCreate}
+                    >
+                      {createButtonLabel ?? "Novo cadastro"}
+                    </button>
+                  ) : undefined)
+                }
+                mobileSelectionEnabled={canDelete}
+                onDeleteSelected={(targets, clearSelection) => {
+                  if (!canDelete || targets.length === 0) return;
+                  const ownAccountId = String(user?.id ?? "");
+                  const ownAccountSelected =
+                    resource === "users" &&
+                    targets.some(
+                      (target) => String(target.id) === ownAccountId,
+                    );
+                  const deletableTargets =
+                    resource === "users"
+                      ? targets.filter(
+                          (target) => String(target.id) !== ownAccountId,
+                        )
+                      : targets;
+                  clearSelection();
+                  if (deletableTargets.length === 0) {
+                    setBulkDeleteTargets(null);
+                    setDeleteTarget(null);
+                    setError("Sua própria conta não pode ser excluída.");
+                    return;
+                  }
+                  setError(
+                    ownAccountSelected
+                      ? "Sua própria conta será ignorada na exclusão em lote."
+                      : null,
+                  );
+                  setBulkDeleteTargets(deletableTargets);
+                  setDeleteTarget(null);
+                }}
                 renderRowActions={renderRowActions}
                 renderMobileCardHeaderExtra={
-                  resource === "users" ? renderMobileUserIncompleteIndicator : undefined
+                  resource === "users"
+                    ? renderMobileUserIncompleteIndicator
+                    : undefined
+                }
+                renderMobileRowActions={(row) =>
+                  getRowActions(row, false, true)
                 }
                 toolbarLabels={{
                   section: `Controles de ${domain.label.toLocaleLowerCase("pt-BR")}`,
@@ -1460,6 +1764,42 @@ export function UserManagementWorkspace({
           </article>
         )}
       </section>
+
+      <EntityDialog
+        open={Boolean(incompleteUserNotice)}
+        title="Cadastro incompleto"
+        description={`O cadastro de ${config.itemLabel(incompleteUserNotice ?? {})} está incompleto${canUpdate ? " e precisa ser atualizado." : " e precisa ser atualizado por alguém com permissão para editar."}`}
+        size="sm"
+        placement="center"
+        closeOnBackdropClick
+        onClose={() => setIncompleteUserNotice(null)}
+        onCloseComplete={handleIncompleteUserNoticeClosed}
+      >
+        <div className="p-4 sm:p-6">
+          <div className="mt-4 flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              className={`btn-ghost min-h-11 ${buttonMotion}`}
+              onClick={() => setIncompleteUserNotice(null)}
+            >
+              Agora não
+            </button>
+            {canUpdate ? (
+              <button
+                type="button"
+                className={`btn-primary min-h-11 ${buttonMotion}`}
+                onClick={() => {
+                  if (!incompleteUserNotice) return;
+                  incompleteUserEditTarget.current = incompleteUserNotice;
+                  setIncompleteUserNotice(null);
+                }}
+              >
+                Atualizar cadastro
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </EntityDialog>
 
       {dialogMode && (
         <EntityDialog
@@ -1473,7 +1813,7 @@ export function UserManagementWorkspace({
           }
           size="xl"
           placement="bottom"
-          closeOnBackdropClick={false}
+          closeOnBackdropClick
           onClose={closeDialog}
         >
           {guardianError ? (
@@ -1549,11 +1889,6 @@ export function UserManagementWorkspace({
                 isAccountWorkflow) &&
               activeWizardStage?.id === "guardian"
             }
-            profilesStage={
-              ((combinedUser && dialogMode === "create") ||
-                isAccountWorkflow) &&
-              activeWizardStage?.id === "profiles"
-            }
             accessStage={
               ((combinedUser && dialogMode === "create") ||
                 isAccountWorkflow) &&
@@ -1580,9 +1915,11 @@ export function UserManagementWorkspace({
                 ? registerGuardianStageHandlers
                 : undefined
             }
-            onRegisterProfilesStageHandlers={
+            profileFields={
               (combinedUser && dialogMode === "create") || isAccountWorkflow
-                ? registerProfilesStageHandlers
+                ? combinedFields.filter((field) =>
+                    ["Aluno", "Músico"].includes(field.section ?? ""),
+                  )
                 : undefined
             }
             onRegisterAccessStageHandlers={
@@ -1672,7 +2009,6 @@ export function UserManagementWorkspace({
                   active={activeStage}
                   total={wizardStages.length}
                   busy={saving}
-                  submitDisabled={!allWizardStagesComplete}
                   onBack={returnToPreviousStage}
                   onNext={goToNextStage}
                   onSubmit={() => void handleSave()}
@@ -1690,60 +2026,40 @@ export function UserManagementWorkspace({
         </EntityDialog>
       )}
 
-      {deleteTarget && (
-        <div
-          className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50 p-4 sm:items-center"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-title"
-        >
-          <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl">
-            <h2 id="delete-title" className="text-xl font-semibold">
-              Excluir {config.singular}
-            </h2>
-            <p className="mt-2 text-sm text-[var(--muted)]">
-              Confirma a exclusão de{" "}
-              <strong>{config.itemLabel(deleteTarget)}</strong>? Esta ação não
-              pode ser desfeita.
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                className={`btn-ghost min-h-11 ${buttonMotion}`}
-                disabled={saving}
-                onClick={() => setDeleteTarget(null)}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className={`btn-danger min-h-11 ${buttonMotion}`}
-                disabled={saving}
-                onClick={() => void handleDelete()}
-              >
-                {saving ? "Excluindo…" : "Excluir"}
-              </button>
-            </div>
-          </div>
-        </div>
+      {(deleteTarget || bulkDeleteTargets) && (
+        <ConfirmationDialog
+          open
+          title={
+            bulkDeleteTargets
+              ? `Excluir ${bulkDeleteTargets.length} registro(s)`
+              : `Excluir ${config.singular}`
+          }
+          description={
+            bulkDeleteTargets
+              ? "Confirma a exclusão dos registros selecionados? Esta ação não pode ser desfeita."
+              : `Confirma a exclusão de ${config.itemLabel(deleteTarget ?? {})}? Esta ação não pode ser desfeita.`
+          }
+          confirmLabel={saving ? "Excluindo…" : "Excluir"}
+          danger
+          busy={saving}
+          closeOnBackdropClick={!saving}
+          onClose={() => {
+            setDeleteTarget(null);
+            setBulkDeleteTargets(null);
+          }}
+          onConfirm={() => void handleDelete()}
+        />
       )}
 
       {issuedPassword && (
-        <div
-          className="fixed inset-0 z-[210] flex items-end justify-center bg-black/50 p-4 sm:items-center"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="issued-password-title"
+        <EntityDialog
+          open
+          title="Acesso criado"
+          description={`Envie o usuário e a senha inicial para ${issuedPassword.name}. A senha não será mostrada de novo e precisa ser trocada no primeiro acesso.`}
+          size="sm"
+          onClose={() => setIssuedPasswords((current) => current.slice(1))}
         >
-          <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl">
-            <h2 id="issued-password-title" className="text-xl font-semibold">
-              Acesso criado
-            </h2>
-            <p className="mt-2 text-sm text-[var(--muted)]">
-              Envie o usuário e a senha inicial para{" "}
-              <strong>{issuedPassword.name}</strong>. A senha não será mostrada
-              de novo e precisa ser trocada no primeiro acesso.
-            </p>
+          <div className="max-h-[70dvh] overflow-y-auto p-6">
             <label className="mt-4 flex flex-col gap-1.5 text-sm">
               Usuário
               <input
@@ -1787,7 +2103,7 @@ export function UserManagementWorkspace({
               </button>
             </div>
           </div>
-        </div>
+        </EntityDialog>
       )}
     </UserWorkspaceGuard>
   );
@@ -1801,42 +2117,6 @@ function songHasScore(row: Record<string, unknown>): boolean {
       const url = (score as { url?: unknown }).url;
       return typeof url === "string" && url.length > 0;
     })
-  );
-}
-
-function ActionButton({
-  icon,
-  label,
-  onClick,
-  danger = false,
-  disabled = false,
-}: {
-  icon: string;
-  label: string;
-  onClick: () => void;
-  danger?: boolean;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      title={disabled ? "Não é possível excluir o usuário da sessão." : label}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className={`group inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full disabled:cursor-not-allowed disabled:opacity-30 ${buttonMotion} ${
-        danger
-          ? "text-red-600 hover:bg-red-50"
-          : "text-[var(--color-brand-strong)] hover:bg-[var(--color-brand-soft)]"
-      }`}
-    >
-      <span
-        className={`material-icons text-lg ${iconMotion}`}
-        aria-hidden="true"
-      >
-        {icon}
-      </span>
-    </button>
   );
 }
 
@@ -1963,7 +2243,7 @@ function formatCell(
 ): string {
   const value = getValue(row, column.path);
   if (column.path === "hasScore") return songHasScore(row) ? "Sim" : "Não";
-  if (column.path === "updatedBy")
+  if (column.path === "createdBy")
     return value == null || value === "" ? "system" : String(value);
   if (column.path === "visibility") {
     if (value === "public") return "Pública";

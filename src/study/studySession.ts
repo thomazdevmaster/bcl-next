@@ -27,12 +27,8 @@ import { OsmdPlaybackRenderer } from './osmdPlaybackRenderer';
 import { StudyPlayerController } from './studyPlayerController';
 import {
   findTimemapIndexAtPosition,
-  applyWrittenMeasureNumbersToTimemap,
-  getPlaybackPositionForWrittenScore,
   getPlaybackPositionFromTimemap,
   getPlaybackPositionFromUniformTempo,
-  resolveSourceMeasureIndex,
-  timemapUsesWrittenMeasureNumbers,
   visualCursorOffsetInMeasure,
   getStudyPlaybackPositionMs,
   measureDurationMsFromTempo,
@@ -257,9 +253,6 @@ export class StudySession {
   private cursorSyncRaf: number | null = null;
   private lastCursorMeasure = -1;
   private lastCursorBeat = -1;
-  private lastPlaybackTimemapIndex = -1;
-  private lastCursorFractionBucket = -1;
-  private lastOsmdMeasureIndex = -1;
 
   private isPlaying = false;
   private tempo = 1.0;
@@ -289,8 +282,6 @@ export class StudySession {
   private lastPlaybackMidiSource: 'server' | 'client-compose' | 'fallback' = 'fallback';
   /** Montagem já aplicou fit por camada — não reescalar no sequenciador. */
   private playbackMidiTimemapPreAligned = false;
-  /** Compassos na pauta escrita (com voltas); timemap/MIDI usam linha desdobrada. */
-  private writtenScoreMeasureCount: number | null = null;
 
   /** UI fields mirrored in snapshot */
   private scoreLoading = false;
@@ -325,9 +316,6 @@ export class StudySession {
   private loopEnabled = false;
   private loopStartMeasure: number | null = null;
   private loopEndMeasure: number | null = null;
-  /** Amostragem throttled de áudio/cursor no console (dev + automação). */
-  private lastDevAuditWallMs = 0;
-  private devAuditTimeouts: ReturnType<typeof setTimeout>[] = [];
 
   constructor(options: StudySessionOptions) {
     this.options = options;
@@ -823,18 +811,7 @@ export class StudySession {
     this.emit();
   }
 
-  /** Pauta com repetições/coda (sem desdobrar) — só visualização OSMD. */
-  private async resolveWrittenStudyXmlForDisplay(
-    songId: string,
-    partIds: string[],
-  ): Promise<string | null> {
-    if (partIds.length === 0) return null;
-    const filtered = await this.resolveXmlForPartIds(songId, partIds);
-    if (!filtered.includes('<')) return null;
-    return prepareMusicXmlForStudyPlayback(filtered);
-  }
-
-  /** XML desdobrado — MIDI, timemap e player oculto (linha do tempo de execução). */
+  /** Partitura desdobrada (voltas) — preferência API; fallback unroll no cliente. */
   private async resolveUnrolledStudyXml(
     songId: string,
     partIds: string[],
@@ -872,7 +849,7 @@ export class StudySession {
       this.applyServerStudyTimemapToPlayer(true);
       return;
     }
-    let measures = await fetchStudyTimemap(songId, partIds);
+    const measures = await fetchStudyTimemap(songId, partIds);
     if (token !== this.loadToken) return;
     if (!measures?.length) {
       this.serverStudyTimemap = null;
@@ -888,26 +865,6 @@ export class StudySession {
       }
       return;
     }
-    if (!timemapUsesWrittenMeasureNumbers(measures, this.writtenScoreMeasureCount)) {
-      const unrolled = await this.resolvePreparedMidiXml(songId, partIds);
-      if (token !== this.loadToken) return;
-      if (unrolled?.includes('<score')) {
-        measures = applyWrittenMeasureNumbersToTimemap(measures, unrolled);
-      }
-    }
-    if (
-      process.env.NODE_ENV === 'development' &&
-      measures.length > 0 &&
-      this.writtenScoreMeasureCount &&
-      measures.length > this.writtenScoreMeasureCount &&
-      !timemapUsesWrittenMeasureNumbers(measures, this.writtenScoreMeasureCount)
-    ) {
-      console.warn('[study] timemap sem números de compasso escrito repetidos', {
-        entries: measures.length,
-        writtenMeasures: this.writtenScoreMeasureCount,
-        sample: measures.slice(0, 5).map((m) => m.measure),
-      });
-    }
     this.serverStudyTimemap = normalizeStudyTimemapEntries(
       measures,
       this.beatsPerMeasure,
@@ -921,36 +878,6 @@ export class StudySession {
         totalMs: sumTimemapDurationMs(measures),
       });
     }
-  }
-
-  /** Reaplica números de compasso escrito quando o timemap veio antes da pauta ou do XML desdobrado. */
-  private async reconcileTimemapWrittenMeasures(token: number): Promise<void> {
-    if (token !== this.loadToken || !this.serverStudyTimemap?.length) return;
-    if (
-      timemapUsesWrittenMeasureNumbers(
-        this.serverStudyTimemap,
-        this.writtenScoreMeasureCount,
-      )
-    ) {
-      return;
-    }
-    const songId = this.currentScoreId;
-    const partIds = this.selectedMidiInstrumentIds;
-    if (!/^\d+$/.test(songId) || partIds.length === 0) return;
-    const unrolled = await this.resolvePreparedMidiXml(songId, partIds);
-    if (token !== this.loadToken || !unrolled?.includes('<score')) return;
-    const enriched = applyWrittenMeasureNumbersToTimemap(
-      this.serverStudyTimemap,
-      unrolled,
-    );
-    if (enriched === this.serverStudyTimemap) return;
-    this.serverStudyTimemap = normalizeStudyTimemapEntries(
-      enriched,
-      this.beatsPerMeasure,
-      this.baseBpm,
-    );
-    this.applyServerStudyTimemapToPlayer(false);
-    clearStudyTimemapPlaybackCalibration(this.player);
   }
 
   private applyServerStudyTimemapToPlayer(invalidateMidi: boolean): void {
@@ -1049,8 +976,8 @@ export class StudySession {
 
       if (!scoreUnchanged) {
         const scoreXmlRaw = shouldFilter
-          ? await this.resolveWrittenStudyXmlForDisplay(id, selectedIds)
-          : await this.resolveWrittenStudyXmlForDisplay(id, available.map((i) => i.id));
+          ? await this.resolveUnrolledStudyXml(id, selectedIds)
+          : await this.resolveUnrolledStudyXml(id, available.map((i) => i.id));
         const scoreXml = prepareMusicXmlForStudyPlayback(
           sanitizeMusicXmlPartList(scoreXmlRaw ?? this.sourceXml ?? ''),
         );
@@ -1133,9 +1060,6 @@ export class StudySession {
         cursorsOptions: [{ type: 1, color: '#dc2626', alpha: 0.95, follow: false }],
       });
       await this.osmd.load(xml);
-      const measureCount = this.osmd.Sheet?.SourceMeasures?.length ?? 0;
-      this.writtenScoreMeasureCount = measureCount > 0 ? measureCount : null;
-      await this.reconcileTimemapWrittenMeasures(token);
       if (mobile) this.applyMobileLayout();
       else this.fitScoreToViewport();
       await this.osmd.render();
@@ -1857,12 +1781,7 @@ export class StudySession {
   private applyCursorAtTimemapMs(clampedMs: number): void {
     const timemap = readPlayerTimemap(this.player);
     const pos = timemap?.length
-      ? getPlaybackPositionForWrittenScore(
-          timemap,
-          clampedMs,
-          this.beatsPerMeasure,
-          this.writtenScoreMeasureCount,
-        )
+      ? getPlaybackPositionFromTimemap(timemap, clampedMs, this.beatsPerMeasure)
       : getPlaybackPositionFromUniformTempo(
           clampedMs,
           this.beatsPerMeasure,
@@ -1870,17 +1789,10 @@ export class StudySession {
         );
     if (!pos) return;
 
-    const playbackIndex = timemap?.length
-      ? findTimemapIndexAtPosition(
-          timemap,
-          clampedMs,
-          this.lastPlaybackTimemapIndex >= 0 ? this.lastPlaybackTimemapIndex : undefined,
-        )
+    const index = timemap?.length
+      ? findTimemapIndexAtPosition(timemap, clampedMs)
       : pos.measureIndex;
-    if (timemap?.length) {
-      this.lastPlaybackTimemapIndex = playbackIndex;
-    }
-    const entry = timemap?.[playbackIndex];
+    const entry = timemap?.[index];
     const measureMs =
       entry && (entry.duration ?? 0) > 0
         ? entry.duration
@@ -1888,42 +1800,21 @@ export class StudySession {
     const measureStartMs = entry?.timestamp ?? pos.measureIndex * measureMs;
     const offsetMs = visualCursorOffsetInMeasure(clampedMs, measureStartMs);
 
-    const osmdMeasureIndex = resolveSourceMeasureIndex(
-      this.osmd?.Sheet?.SourceMeasures,
-      pos.measure,
+    this.osmdPlaybackRenderer?.moveTo(
+      pos.measureIndex,
+      measureStartMs,
+      offsetMs,
+      measureMs,
     );
 
-    const fractionBucket =
-      measureMs > 0 ? Math.min(999, Math.floor((offsetMs / measureMs) * 200)) : 0;
-    const cursorVisualChanged =
-      osmdMeasureIndex !== this.lastOsmdMeasureIndex ||
-      pos.beatInMeasure !== this.lastCursorBeat ||
-      fractionBucket !== this.lastCursorFractionBucket;
-
-    if (cursorVisualChanged) {
-      this.osmdPlaybackRenderer?.moveTo(
-        osmdMeasureIndex,
-        measureStartMs,
-        offsetMs,
-        measureMs,
-      );
-      this.lastOsmdMeasureIndex = osmdMeasureIndex;
-      this.lastCursorFractionBucket = fractionBucket;
-    }
-
-    const labelChanged =
-      pos.measure !== this.lastCursorMeasure || pos.beatInMeasure !== this.lastCursorBeat;
     this.lastCursorMeasure = pos.measure;
     this.lastCursorBeat = pos.beatInMeasure;
-    if (labelChanged) {
-      this.playbackPosition = {
-        measure: pos.measure,
-        beat: pos.beat,
-        timeSignature: this.timeSignature,
-      };
-      this.playbackCursorX = null;
-      this.emit();
-    }
+    this.playbackPosition = {
+      measure: pos.measure,
+      beat: pos.beat,
+      timeSignature: this.timeSignature,
+    };
+    this.playbackCursorX = null;
   }
 
   /** O Player original move o cursor com `position` bruto; no estudo usamos timemap + rAF próprio. */
@@ -2038,51 +1929,6 @@ export class StudySession {
     }
   }
 
-  private clearDevAuditTimeouts() {
-    for (const id of this.devAuditTimeouts) clearTimeout(id);
-    this.devAuditTimeouts = [];
-  }
-
-  /** Logs `[study-audit]` — visível no Browser MCP (`browser_get_console_logs`). */
-  private emitDevStudyAudit(label: string) {
-    if (process.env.NODE_ENV !== 'development' || typeof window === 'undefined') return;
-    const internals = this.getStudyPlayerInternals();
-    const seq = internals?._sequencer as
-      | { currentTime?: number; duration?: number; paused?: boolean }
-      | undefined;
-    const ctx = internals?._context as AudioContext | undefined;
-    const win = window as unknown as {
-      __studyPlaybackMidiStats?: Record<string, unknown>;
-      __studySync?: Record<string, unknown>;
-    };
-    const payload = {
-      midi: win.__studyPlaybackMidiStats ?? null,
-      sync: win.__studySync ?? null,
-      playbackPosition: this.playbackPosition,
-      isPlaying: this.isPlaying,
-      audioContextState: ctx?.state ?? null,
-      seqCurrentSec: seq?.currentTime ?? null,
-      seqDurationSec: seq?.duration ?? null,
-      seqPaused: seq?.paused ?? null,
-      writtenMeasures: this.writtenScoreMeasureCount,
-    };
-    console.warn(`[study-audit] ${label}`, JSON.stringify(payload));
-  }
-
-  private scheduleDevStudyAuditsWhilePlaying(token: number) {
-    this.clearDevAuditTimeouts();
-    if (process.env.NODE_ENV !== 'development') return;
-    const delaysSec = [0, 2, 5, 10, 20, 30];
-    for (const sec of delaysSec) {
-      const id = setTimeout(() => {
-        if (token !== this.loadToken || !this.isPlaying) return;
-        this.syncPlaybackCursor();
-        this.emitDevStudyAudit(`playing+${sec}s`);
-      }, sec * 1000);
-      this.devAuditTimeouts.push(id);
-    }
-  }
-
   /** Cursor e rótulo seguem o áudio mapeado para o timemap da partitura. */
   private syncPlaybackCursor() {
     const posMs = this.getPlayerPositionMs();
@@ -2101,14 +1947,8 @@ export class StudySession {
         tempo: this.tempo,
         aligned: (this.player as { __bclTimemapAligned?: boolean })?.__bclTimemapAligned,
       };
-      if (this.isPlaying) {
-        const now = Date.now();
-        if (now - this.lastDevAuditWallMs >= 4000) {
-          this.lastDevAuditWallMs = now;
-          this.emitDevStudyAudit('cursor-sync');
-        }
-      }
     }
+    this.emit();
   }
 
   private startCursorSync() {
@@ -2144,8 +1984,6 @@ export class StudySession {
     const p = this.player as { pause?: () => void } | null;
     p?.pause?.();
     this.isPlaying = false;
-    this.clearDevAuditTimeouts();
-    this.emitDevStudyAudit('pause');
     this.stopLoopMonitor();
     this.stopCursorSyncTimer();
     this.playerController.stopMetronome();
@@ -2160,14 +1998,10 @@ export class StudySession {
       else p.moveTo?.(0, 0, 0);
     }
     this.isPlaying = false;
-    this.clearDevAuditTimeouts();
     this.stopLoopMonitor();
     this.stopCursorSync();
     this.lastCursorMeasure = -1;
     this.lastCursorBeat = -1;
-    this.lastPlaybackTimemapIndex = -1;
-    this.lastCursorFractionBucket = -1;
-    this.lastOsmdMeasureIndex = -1;
     this.playerController.stopMetronome();
     this.emit();
   }
@@ -2209,8 +2043,6 @@ export class StudySession {
       this.startLoopMonitor();
       this.startCursorSync();
       this.syncPlaybackCursor();
-      this.emitDevStudyAudit('play-start');
-      this.scheduleDevStudyAuditsWhilePlaying(token);
       if (this.metronomeEnabled) this.playerController.startMetronomeSync(this.bpm, this.beatsPerMeasure);
       this.emit();
       return;
@@ -2354,7 +2186,6 @@ export class StudySession {
         seqMs: lastSeqMs,
         aligned,
       });
-      this.emitDevStudyAudit('midi-ready');
     }
 
     this.applyStudyTempoFromCatalog(tempoBpm);

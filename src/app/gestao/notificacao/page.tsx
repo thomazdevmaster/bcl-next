@@ -1,0 +1,399 @@
+"use client";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Controller, FormProvider, useForm, useWatch } from "react-hook-form";
+
+import { FormStageActions } from "@/components/forms/FormStageActions";
+import { FormStageBlock } from "@/components/forms/FormStageBlock";
+import { FormStageField } from "@/components/forms/FormStageField";
+import { FormView } from "@/components/forms/core/FormView";
+import { FormFieldValidationShell } from "@/components/forms/validations/FormFieldValidationShell";
+import { NotificationCenter } from "@/components/notifications/NotificationCenter";
+import {
+  type ResponsiveTabOption,
+  ResponsiveTabs,
+} from "@/components/shared/ResponsiveTabs";
+import { useAuth } from "@/contexts/AuthContext";
+import { can } from "@/core/auth/permissions";
+import {
+  findNotificationRecipients,
+  sendNotification,
+} from "@/domains/notifications/api";
+import {
+  type SendNotificationValues,
+  sendNotificationSchema,
+} from "@/domains/notifications/schemas/send-notification.schema";
+import type { NotificationRecipient } from "@/domains/notifications/types";
+import { failureMessage } from "@/lib/userMessages";
+
+const defaults: SendNotificationValues = {
+  allApproved: false,
+  recipientIds: [],
+  title: "",
+  body: "",
+  targetUrl: "",
+};
+
+type NotificationManagementTab = "send" | "center";
+
+const notificationManagementTabs: ResponsiveTabOption<NotificationManagementTab>[] =
+  [
+    {
+      value: "send",
+      label: "Nova notificação",
+      icon: "campaign",
+      tabId: "notification-send-tab",
+      panelId: "notification-send-panel",
+    },
+    {
+      value: "center",
+      label: "Central",
+      icon: "notifications",
+      tabId: "notification-center-tab",
+      panelId: "notification-center-panel",
+    },
+  ];
+
+export default function NotificationManagementPage() {
+  const auth = useAuth();
+  const router = useRouter();
+  const allowed = can(auth.roles, "notifications", "create", auth.permissions);
+  const rolesResolved = auth.isLoggedIn && !auth.roles.includes("public");
+
+  useEffect(() => {
+    if (auth.isHydrated && rolesResolved && !allowed)
+      router.replace(auth.isLoggedIn ? "/" : "/login");
+  }, [allowed, auth.isHydrated, auth.isLoggedIn, rolesResolved, router]);
+
+  if (!auth.isHydrated || !rolesResolved || !allowed) return null;
+  return <NotificationManagement />;
+}
+
+function NotificationManagement() {
+  const [activePanel, setActivePanel] =
+    useState<NotificationManagementTab>("send");
+
+  return (
+    <ResponsiveTabs
+      label="Notificações da gestão"
+      options={notificationManagementTabs}
+      value={activePanel}
+      onChange={setActivePanel}
+      className="mx-auto w-full "
+    >
+      <div
+        id="notification-send-panel"
+        role="tabpanel"
+        aria-labelledby="notification-send-tab"
+        hidden={activePanel !== "send"}
+        className="p-4 sm:p-6"
+      >
+        <NotificationComposer />
+      </div>
+      <div
+        id="notification-center-panel"
+        role="tabpanel"
+        aria-labelledby="notification-center-tab"
+        hidden={activePanel !== "center"}
+        className="p-4 sm:p-6"
+      >
+        {activePanel === "center" ? <NotificationCenter /> : null}
+      </div>
+    </ResponsiveTabs>
+  );
+}
+
+function NotificationComposer() {
+  const form = useForm<SendNotificationValues>({
+    defaultValues: defaults,
+    resolver: zodResolver(sendNotificationSchema),
+    mode: "onChange",
+  });
+  const allApproved = useWatch({ control: form.control, name: "allApproved" });
+  const selectedIds = useWatch({ control: form.control, name: "recipientIds" });
+  const [recipients, setRecipients] = useState<NotificationRecipient[]>([]);
+  const [recipientSearch, setRecipientSearch] = useState("");
+  const [recipientError, setRecipientError] = useState<string | null>(null);
+  const [loadingRecipients, setLoadingRecipients] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+
+  const loadRecipients = useCallback(async (search: string) => {
+    setLoadingRecipients(true);
+    setRecipientError(null);
+    try {
+      setRecipients(await findNotificationRecipients(search));
+    } catch (caught) {
+      setRecipientError(
+        failureMessage(caught, "Não foi possível carregar as contas."),
+      );
+    } finally {
+      setLoadingRecipients(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (allApproved) return;
+    const timeout = window.setTimeout(
+      () => {
+        void loadRecipients(recipientSearch);
+      },
+      recipientSearch ? 250 : 0,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [allApproved, loadRecipients, recipientSearch]);
+
+  const submit = async (values: SendNotificationValues) => {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await sendNotification({
+        ...values,
+        title: values.title.trim(),
+        body: values.body.trim(),
+        targetUrl: values.targetUrl.trim() || null,
+      });
+      setSuccess(
+        `Alerta enviado para ${response.recipientCount} ${response.recipientCount === 1 ? "conta" : "contas"}.`,
+      );
+      form.reset(defaults);
+    } catch (caught) {
+      setError(failureMessage(caught, "Não foi possível enviar o alerta."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mx-auto w-full max-w-3xl">
+      <FormProvider {...form}>
+        <FormView
+          eyebrow="Gestão"
+          title="Enviar notificação"
+          description="Envie um alerta pelo portal para uma ou mais contas ativas e aprovadas. O envio por e-mail está temporariamente desabilitado."
+          onSubmit={form.handleSubmit(submit)}
+          noValidate
+          className="!rounded-none !border-0 !bg-transparent !p-0 !shadow-none"
+          formClassName="space-y-5"
+        >
+          {error ? (
+            <p
+              className="rounded-lg bg-[var(--destructive)]/10 p-3 text-sm text-[var(--destructive)]"
+              role="alert"
+            >
+              {error}
+            </p>
+          ) : null}
+          {success ? (
+            <p
+              className="rounded-lg bg-[var(--accent)] p-3 text-sm"
+              role="status"
+            >
+              {success}
+            </p>
+          ) : null}
+
+          <FormStageBlock
+            title="Destinatários"
+            description="O remetente consegue consultar o alerta enviado na Central de notificações."
+            surface="plain"
+          >
+            <Controller
+              control={form.control}
+              name="recipientIds"
+              render={({ field, fieldState }) => (
+                <FormFieldValidationShell
+                  label="Contas que receberão o alerta"
+                  name={field.name}
+                  description="Somente contas ativas e aprovadas aparecem nesta seleção."
+                  state={fieldState.invalid ? "invalid" : "info"}
+                  message={fieldState.error?.message}
+                  labelForControl={false}
+                  renderControl={({ id, labelId, describedBy }) => (
+                    <div
+                      id={id}
+                      role="group"
+                      aria-labelledby={labelId}
+                      aria-describedby={describedBy}
+                      className="min-h-14 rounded-xl border border-[var(--border)] bg-[var(--input)] p-3"
+                    >
+                      <Controller
+                        control={form.control}
+                        name="allApproved"
+                        render={({ field: allField }) => (
+                          <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2 text-sm font-medium">
+                            <input
+                              type="checkbox"
+                              checked={allField.value}
+                              className="h-5 w-5 accent-[var(--primary)]"
+                              onChange={(event) => {
+                                allField.onChange(event.target.checked);
+                                field.onChange([]);
+                              }}
+                            />
+                            Enviar para todos os ativos e aprovados
+                          </label>
+                        )}
+                      />
+                      {!allApproved ? (
+                        <div className="mt-3 space-y-2">
+                          <label
+                            htmlFor="notification-recipient-search"
+                            className="text-sm font-medium"
+                          >
+                            Buscar contas
+                          </label>
+                          <input
+                            id="notification-recipient-search"
+                            type="search"
+                            value={recipientSearch}
+                            onChange={(event) =>
+                              setRecipientSearch(event.target.value)
+                            }
+                            placeholder="Nome ou usuário"
+                            className="min-h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 text-sm"
+                          />
+                          {recipientError ? (
+                            <p
+                              className="text-sm text-[var(--destructive)]"
+                              role="alert"
+                            >
+                              {recipientError}
+                            </p>
+                          ) : null}
+                          <div
+                            className="max-h-56 overflow-y-auto rounded-lg border border-[var(--border)]"
+                            aria-busy={loadingRecipients}
+                          >
+                            {loadingRecipients ? (
+                              <p
+                                className="p-3 text-sm text-[var(--muted)]"
+                                role="status"
+                              >
+                                Buscando contas…
+                              </p>
+                            ) : null}
+                            {!loadingRecipients && recipients.length === 0 ? (
+                              <p className="p-3 text-sm text-[var(--muted)]">
+                                Nenhuma conta encontrada.
+                              </p>
+                            ) : null}
+                            {recipients.map((recipient) => (
+                              <label
+                                key={recipient.id}
+                                className="flex min-h-11 cursor-pointer items-center gap-3 border-b border-[var(--border)] px-3 last:border-b-0 hover:bg-[var(--accent)]"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedSet.has(recipient.id)}
+                                  className="h-5 w-5 accent-[var(--primary)]"
+                                  onChange={(event) => {
+                                    const next = event.target.checked
+                                      ? [...field.value, recipient.id]
+                                      : field.value.filter(
+                                          (id) => id !== recipient.id,
+                                        );
+                                    field.onChange(next);
+                                  }}
+                                />
+                                <span className="min-w-0 truncate text-sm">
+                                  {recipient.name}{" "}
+                                  <span className="text-[var(--muted)]">
+                                    @{recipient.username}
+                                  </span>
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                          <p
+                            className="text-sm text-[var(--muted)]"
+                            aria-live="polite"
+                          >
+                            {selectedIds.length} selecionadas
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                />
+              )}
+            />
+          </FormStageBlock>
+
+          <FormStageBlock
+            title="Mensagem"
+            description="O alerta é enviado imediatamente como texto simples. Anexos e agendamento não estão disponíveis."
+            surface="plain"
+          >
+            <div className="space-y-5">
+              <FormStageField<SendNotificationValues>
+                name="title"
+                label="Título"
+                maxLength={120}
+              />
+              <Controller
+                control={form.control}
+                name="body"
+                render={({ field, fieldState }) => (
+                  <FormFieldValidationShell
+                    label="Mensagem"
+                    name={field.name}
+                    description="Até 5.000 caracteres."
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    onBlur={field.onBlur}
+                    state={fieldState.invalid ? "invalid" : "info"}
+                    message={fieldState.error?.message}
+                    renderControl={({
+                      id,
+                      name,
+                      describedBy,
+                      invalid,
+                      className,
+                    }) => (
+                      <textarea
+                        id={id}
+                        name={name}
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        maxLength={5000}
+                        aria-describedby={describedBy}
+                        aria-invalid={invalid || undefined}
+                        className={`${className} min-h-36 resize-y py-3`}
+                      />
+                    )}
+                  />
+                )}
+              />
+              <FormStageField<SendNotificationValues>
+                name="targetUrl"
+                label="Link (opcional)"
+                required={false}
+                optionalMessage="Aceita caminhos do portal e URLs externas http(s)."
+                maxLength={2048}
+              />
+            </div>
+          </FormStageBlock>
+
+          <FormStageActions
+            active={0}
+            total={1}
+            busy={saving}
+            onBack={() => undefined}
+            onNext={() => undefined}
+            submitLabel="Enviar alerta"
+            pendingLabel="Enviando…"
+            submitDisabled={!form.formState.isValid}
+            desktop
+          />
+        </FormView>
+      </FormProvider>
+    </div>
+  );
+}

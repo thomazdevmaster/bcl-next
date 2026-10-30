@@ -7,3 +7,8 @@ export function formatPhoneNumber(value: string): string {
   }
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
+
+export function hasValidPhoneNumber(value: string): boolean {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 10 && digits.length <= 11;
+}

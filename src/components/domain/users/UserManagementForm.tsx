@@ -7,32 +7,32 @@ import {
   type ReactNode,
   useState,
 } from "react";
+
 import { MusicLoader } from "@/components/MusicLoader";
+import { IconCheckbox } from "@/components/shared/IconCheckbox";
+import { IconSelect } from "@/components/shared/IconSelect";
 import type { CrudField, CrudOption } from "@/domains/crudConfig";
+import { formatPhoneNumber } from "@/domains/people/formatting";
 import {
   isMusicXmlUploadFile,
   looksLikeMusicXml,
   metadataFromMusicXml,
 } from "@/domains/songs/musicXmlMetadata";
 import { youtubeEmbedUrl, youtubeWatchUrl } from "@/domains/songs/youtube";
-import { formatPhoneNumber } from "@/domains/people/formatting";
+
+import { type AccessStageHandlers, UserAccessStage } from "./UserAccessStage";
 import {
-  UserPersonalContactStage,
-  type PersonalContactFormHandlers,
-} from "./UserPersonalContactStage";
-import {
-  UserGuardianStage,
   type GuardianStageHandlers,
+  UserGuardianStage,
 } from "./UserGuardianStage";
 import {
-  UserProfilesStage,
-  type ProfilesStageHandlers,
-} from "./UserProfilesStage";
-import { UserAccessStage, type AccessStageHandlers } from "./UserAccessStage";
-import {
-  UserPermissionsStage,
   type PermissionsStageHandlers,
+  UserPermissionsStage,
 } from "./UserPermissionsStage";
+import {
+  type PersonalContactFormHandlers,
+  UserPersonalContactStage,
+} from "./UserPersonalContactStage";
 
 export interface EntityFormDynamicChoices {
   people: Array<CrudOption & { hasUser: boolean }> | null;
@@ -66,10 +66,7 @@ export interface EntityFormProps {
   onRegisterGuardianStageHandlers?: (
     handlers: GuardianStageHandlers | null,
   ) => void;
-  profilesStage?: boolean;
-  onRegisterProfilesStageHandlers?: (
-    handlers: ProfilesStageHandlers | null,
-  ) => void;
+  profileFields?: CrudField[];
   accessStage?: boolean;
   onRegisterAccessStageHandlers?: (
     handlers: AccessStageHandlers | null,
@@ -108,8 +105,7 @@ export function EntityForm({
   guardianPeople = [],
   guardianRelationshipOptions = [],
   onRegisterGuardianStageHandlers,
-  profilesStage = false,
-  onRegisterProfilesStageHandlers,
+  profileFields,
   accessStage = false,
   onRegisterAccessStageHandlers,
   permissionsStage = false,
@@ -188,11 +184,8 @@ export function EntityForm({
       }}
       className="flex min-h-0 flex-1 flex-col"
     >
-      {onRegisterPersonalContactHandlers ? (
-        <div
-          hidden={!personalContactStage}
-          className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
-        >
+      {onRegisterPersonalContactHandlers && personalContactStage ? (
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
           <UserPersonalContactStage
             values={values}
             onChange={onChange}
@@ -201,11 +194,8 @@ export function EntityForm({
           />
         </div>
       ) : null}
-      {onRegisterGuardianStageHandlers ? (
-        <div
-          hidden={!guardianStage}
-          className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
-        >
+      {onRegisterGuardianStageHandlers && guardianStage ? (
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
           <UserGuardianStage
             values={values}
             people={guardianPeople}
@@ -216,26 +206,8 @@ export function EntityForm({
           />
         </div>
       ) : null}
-      {onRegisterProfilesStageHandlers ? (
-        <div
-          hidden={!profilesStage}
-          className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
-        >
-          <UserProfilesStage
-            values={values}
-            fields={fields}
-            instruments={dynamicChoices.instruments ?? []}
-            onChange={onChange}
-            onRegisterHandlers={onRegisterProfilesStageHandlers}
-            readOnly={readOnly}
-          />
-        </div>
-      ) : null}
-      {onRegisterAccessStageHandlers ? (
-        <div
-          hidden={!accessStage}
-          className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
-        >
+      {onRegisterAccessStageHandlers && accessStage ? (
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
           <UserAccessStage
             values={values}
             onChange={onChange}
@@ -245,11 +217,8 @@ export function EntityForm({
           />
         </div>
       ) : null}
-      {onRegisterPermissionsStageHandlers ? (
-        <div
-          hidden={!permissionsStage}
-          className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
-        >
+      {onRegisterPermissionsStageHandlers && permissionsStage ? (
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
           <UserPermissionsStage
             values={values}
             options={
@@ -257,6 +226,8 @@ export function EntityForm({
               fields.find((field) => field.name === "roles")?.options ??
               []
             }
+            profileFields={profileFields}
+            instruments={dynamicChoices.instruments ?? undefined}
             locked={rolesLocked}
             onChange={onChange}
             onRegisterHandlers={onRegisterPermissionsStageHandlers}
@@ -264,18 +235,14 @@ export function EntityForm({
           />
         </div>
       ) : null}
-      <div
-        hidden={
-          personalContactStage ||
-          guardianStage ||
-          profilesStage ||
-          accessStage ||
-          permissionsStage
-        }
-        className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4 sm:p-6 md:grid-cols-2"
-      >
-        {!personalContactStage &&
-          visibleFields.map((field, index) => {
+      {!(
+        personalContactStage ||
+        guardianStage ||
+        accessStage ||
+        permissionsStage
+      ) ? (
+        <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4 sm:p-6 md:grid-cols-2">
+          {visibleFields.map((field, index) => {
             const value = values[field.name];
             const options = optionsForField(
               field,
@@ -309,18 +276,22 @@ export function EntityForm({
             return (
               <FieldSlot key={field.name} heading={heading} wide={wide}>
                 {field.type === "checkbox" ? (
-                  <label className="flex min-h-11 items-center gap-3 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(value)}
-                      disabled={fieldLocked}
-                      className="h-5 w-5 transition-transform duration-150 ease-out active:scale-90 motion-reduce:transition-none motion-reduce:active:scale-100"
-                      onChange={(event) =>
-                        onChange(field.name, event.target.checked)
-                      }
-                    />
-                    <span className="font-medium">{field.label}</span>
-                  </label>
+                  <IconCheckbox
+                    id={`user-field-${field.name}`}
+                    name={field.name}
+                    label={field.label}
+                    icon={
+                      field.icon ??
+                      (field.name === "isActive"
+                        ? value
+                          ? "toggle_on"
+                          : "toggle_off"
+                        : "check_box")
+                    }
+                    checked={Boolean(value)}
+                    disabled={fieldLocked}
+                    onChange={(checked) => onChange(field.name, checked)}
+                  />
                 ) : (
                   <span className="font-medium">
                     {field.label}
@@ -335,55 +306,45 @@ export function EntityForm({
                       Nenhuma opção disponível.
                     </p>
                   ) : (
-                    <div className="grid gap-1 rounded-md border border-[var(--border)] p-2 sm:grid-cols-2">
+                    <div className="grid gap-2 sm:grid-cols-2">
                       {options.map((option) => {
                         const selectedValues = Array.isArray(value)
                           ? value.map(String)
                           : [];
                         return (
-                          <label
+                          <IconCheckbox
                             key={option.value}
-                            className="flex min-h-11 items-center gap-2 px-1"
-                          >
-                            <input
-                              type="checkbox"
-                              className="h-5 w-5 transition-transform duration-150 ease-out active:scale-90 motion-reduce:transition-none motion-reduce:active:scale-100"
-                              checked={selectedValues.includes(option.value)}
-                              disabled={fieldLocked}
-                              onChange={(event) =>
-                                onChange(
-                                  field.name,
-                                  event.target.checked
-                                    ? [...selectedValues, option.value]
-                                    : selectedValues.filter(
-                                        (item) => item !== option.value,
-                                      ),
-                                )
-                              }
-                            />
-                            <span>{option.label}</span>
-                          </label>
+                            id={`user-field-${field.name}-${option.value}`}
+                            name={field.name}
+                            value={option.value}
+                            label={option.label}
+                            icon={option.icon ?? userOptionIcon(option.value)}
+                            checked={selectedValues.includes(option.value)}
+                            disabled={fieldLocked}
+                            onChange={(checked) =>
+                              onChange(
+                                field.name,
+                                checked
+                                  ? [...selectedValues, option.value]
+                                  : selectedValues.filter(
+                                      (item) => item !== option.value,
+                                    ),
+                              )
+                            }
+                          />
                         );
                       })}
                     </div>
                   )
                 ) : field.type === "select" ? (
-                  <div className="flex flex-col items-start gap-2">
-                    <select
-                      value={String(value ?? "")}
-                      disabled={fieldLocked}
-                      className={`min-h-11 ${controlMotion}`}
-                      onChange={(event) =>
-                        onChange(field.name, event.target.value)
-                      }
-                    >
-                      {options.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <IconSelect
+                    label={field.label}
+                    options={userSelectOptions(field, options)}
+                    value={String(value ?? "")}
+                    disabled={fieldLocked}
+                    required={field.required}
+                    onChange={(next) => onChange(field.name, next)}
+                  />
                 ) : field.type === "textarea" ? (
                   <textarea
                     rows={4}
@@ -459,7 +420,14 @@ export function EntityForm({
                     placeholder={field.placeholder}
                     className={`min-h-11 ${controlMotion}`}
                     autoComplete={
-                      field.type === "password" ? "new-password" : undefined
+                      field.name === "username" ||
+                      field.name === "guardian.username"
+                        ? "username"
+                        : field.type === "password"
+                          ? "new-password"
+                          : field.name === "email"
+                            ? "email"
+                            : undefined
                     }
                     inputMode={field.type === "tel" ? "tel" : undefined}
                     step={field.type === "number" ? "0.01" : undefined}
@@ -498,7 +466,8 @@ export function EntityForm({
               </FieldSlot>
             );
           })}
-      </div>
+        </div>
+      ) : null}
       <div className="flex shrink-0 justify-end gap-3 border-t border-[var(--border)] bg-[var(--card)] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
         {footerActions ?? (
           <>
@@ -614,4 +583,49 @@ function optionsForField(
   )
     options.push({ value: selectedValue, label: `Pessoa #${selectedValue}` });
   return options;
+}
+
+function userOptionIcon(value: string): string {
+  return (
+    {
+      amigos: "groups",
+      aluno: "school",
+      musico: "music_note",
+      maestro: "campaign",
+      admin: "admin_panel_settings",
+    }[value] ?? "badge"
+  );
+}
+
+function userSelectOptions(
+  field: CrudField,
+  options: CrudOption[],
+): CrudOption[] {
+  const optionsWithPlaceholder = options.some((option) => option.value === "")
+    ? options
+    : [
+        {
+          value: "",
+          label: field.required ? "Selecione…" : "Selecione (opcional)",
+          icon: "more_horiz",
+        },
+        ...options,
+      ];
+
+  return optionsWithPlaceholder.map((option) => ({
+    ...option,
+    icon:
+      option.icon ??
+      (option.value === ""
+        ? "more_horiz"
+        : (field.icon ??
+          (field.name === "status"
+            ? option.value === "active"
+              ? "check_circle"
+              : "cancel"
+            : field.name.toLowerCase().includes("person") ||
+                field.name.toLowerCase().includes("guardian")
+              ? "person"
+              : "tune"))),
+  }));
 }

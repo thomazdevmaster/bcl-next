@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormProvider, useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
+import { GoogleProfileAddressFields } from "@/components/auth/GoogleProfileAddressFields";
 import { FormStageActions } from "@/components/forms/FormStageActions";
 import { FormStageBlock } from "@/components/forms/FormStageBlock";
 import { FormStageField } from "@/components/forms/FormStageField";
@@ -13,6 +14,8 @@ import { UserAvatar } from "@/components/auth/UserAvatar";
 import { useAuth, type SessionUser } from "@/contexts/AuthContext";
 import { postLoginRoute } from "@/core/auth/postLoginRoute";
 import {
+  GOOGLE_COMPLETION_DEFAULTS,
+  googleCompletionPayload,
   googleCompletionSchema,
   type GoogleCompletionFormValues,
 } from "@/domains/users/schemas/google-completion.schema";
@@ -28,7 +31,7 @@ export default function CompletarCadastroPage() {
   const backTrapInstalled = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const form = useForm<GoogleCompletionFormValues>({
-    defaultValues: { username: "", phone: "" },
+    defaultValues: GOOGLE_COMPLETION_DEFAULTS,
     resolver: zodResolver(googleCompletionSchema),
     mode: "onChange",
   });
@@ -44,7 +47,15 @@ export default function CompletarCadastroPage() {
       router.replace(auth.user ? postLoginRoute(auth.user) : "/login");
       return;
     }
-    reset({ username: auth.user.username ?? "", phone: "" });
+    const phone =
+      auth.user.phone && auth.user.phone.replace(/\D/g, "").length >= 10
+        ? formatPhoneNumber(auth.user.phone)
+        : "";
+    reset({
+      ...GOOGLE_COMPLETION_DEFAULTS,
+      username: auth.user.username ?? "",
+      phone,
+    });
   }, [auth.isHydrated, auth.isLoggedIn, auth.user, reset, router]);
 
   const exitToLogin = useCallback(async () => {
@@ -78,10 +89,7 @@ export default function CompletarCadastroPage() {
     try {
       const updated = await apiFetch<SessionUser>("/auth/me", {
         method: "PATCH",
-        body: JSON.stringify({
-          phone: values.phone,
-          username: values.username.trim().toLowerCase(),
-        }),
+        body: JSON.stringify(googleCompletionPayload(values)),
       });
       auth.updateProfile(updated);
       router.replace(postLoginRoute(updated));
@@ -103,7 +111,7 @@ export default function CompletarCadastroPage() {
         <FormView
           eyebrow="Acesso interno"
           title="Complete seu cadastro"
-          description={`Você entrou com Google como ${auth.user.name} (${auth.user.email ?? "e-mail não informado"}). Informe telefone e nome de usuário para acessar o painel; não é preciso criar senha.`}
+          description={`Você entrou com Google como ${auth.user.name} (${auth.user.email ?? "e-mail não informado"}). Informe data de nascimento, confira telefone e endereço; documento é opcional. Não é preciso criar senha.`}
           onSubmit={form.handleSubmit(onSubmit)}
           noValidate
           className="p-5 sm:p-8"
@@ -116,18 +124,26 @@ export default function CompletarCadastroPage() {
               className="h-14 w-14 shrink-0"
             />
             <p className="text-sm text-[var(--muted)]">
-              Nome e foto do Google já foram associados ao seu cadastro. Depois
-              de continuar, a equipe da banda completa em Gestão os demais dados
-              e os perfis de aluno e/ou músico.
+              Nome e foto do Google já foram associados. Depois de enviar, a
+              equipe da banda analisa se você é Amigos ou perfil interno
+              (aluno/músico).
             </p>
           </div>
 
           <FormStageBlock
-            title="Dados de acesso"
+            title="Seus dados"
             surface="plain"
             className="!pb-0"
           >
             <div className="space-y-4">
+              <FormStageField<GoogleCompletionFormValues>
+                name="birthDate"
+                label="Data de nascimento"
+                type="date"
+                autoComplete="bday"
+                max={new Date().toISOString().slice(0, 10)}
+                infoMessage="Menores de 18 anos precisam ser cadastrados pela secretaria da banda."
+              />
               <FormStageField<GoogleCompletionFormValues>
                 name="username"
                 label="Nome de usuário"
@@ -148,9 +164,18 @@ export default function CompletarCadastroPage() {
                 autoComplete="tel"
                 placeholder="(35) 99999-9999"
                 formatValue={formatPhoneNumber}
-                infoMessage="Informe um telefone com DDD."
+                infoMessage="Confira se o número está correto — a banda usa para contato."
               />
             </div>
+          </FormStageBlock>
+
+          <FormStageBlock
+            title="Endereço"
+            description="Documento é opcional; endereço e telefone corretos ajudam a banda a falar com você."
+            surface="plain"
+            className="!pb-0"
+          >
+            <GoogleProfileAddressFields />
           </FormStageBlock>
 
           {error ? (

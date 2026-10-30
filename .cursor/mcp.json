@@ -1,13 +1,13 @@
 {
   "mcpServers": {
     "browsermcp": {
+      "type": "stdio",
       "command": "/home/thomaz/.nvm/versions/node/v22.17.1/bin/node",
       "args": [
-        "/home/thomaz/.nvm/versions/node/v22.17.1/lib/node_modules/npm/bin/npx-cli.js",
-        "-y",
-        "@browsermcp/mcp@latest"
+        "/home/thomaz/.npm/_npx/dae8541e751c19ee/node_modules/@browsermcp/mcp/dist/index.js"
       ],
       "env": {
+        "NODE_PATH": "/home/thomaz/.npm/_npx/dae8541e751c19ee/node_modules",
         "PATH": "/home/thomaz/.nvm/versions/node/v22.17.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       }
     }

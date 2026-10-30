@@ -13,12 +13,9 @@ import {
 import {
   setAccessToken,
   getAccessToken,
-  usesRemoteApi,
 } from "@/core/auth/accessToken";
-import { findDemoUser } from "@/core/auth/demoUsers";
 import { ApiError, apiFetch } from "@/lib/api";
 import { sealPassword } from "@/lib/passwordCipher";
-import { failureMessage } from "@/lib/userMessages";
 import {
   filterPermissionsForActiveRoles,
   loadStoredActiveRoles,
@@ -26,6 +23,7 @@ import {
   persistActiveRoles,
 } from "@/core/auth/activeRoles";
 import { PUBLIC_ROLES, type AccessRoles } from "@/core/auth/roles";
+import { GoogleSignInOverlay } from "@/components/auth/GoogleSignInOverlay";
 import type { AppUser } from "@/domains/users/types";
 
 const AUTH_USER_KEY = "app.auth.user";
@@ -55,11 +53,14 @@ type AuthContextValue = {
     password: string,
     keepLoggedIn: boolean,
   ) => Promise<SessionUser>;
-  /** `credential` é o ID token do Google Identity Services. Só com a API Spring. */
+  /** `credential` é o ID token do Google Identity Services, validado pelo bcl-api. */
   loginWithGoogle: (
     credential: string,
     keepLoggedIn: boolean,
   ) => Promise<SessionUser>;
+  /** Overlay de “Entrando com Google…” até sair de login/cadastro. */
+  googleSignInPending: boolean;
+  dismissGoogleSignInPending: () => void;
   logout: () => Promise<void>;
   updateProfile: (patch: Partial<SessionUser>) => void;
 };
@@ -101,9 +102,7 @@ function restoreUser(): SessionUser | null {
     localStorage.getItem(AUTH_USER_KEY) ??
     sessionStorage.getItem(AUTH_USER_KEY);
   if (!raw) return null;
-  if (usesRemoteApi() && !getAccessToken()) {
-    return null;
-  }
+  if (!getAccessToken()) return null;
   const user = parseStoredUser(raw);
   if (!user) {
     localStorage.removeItem(AUTH_USER_KEY);
@@ -128,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [activeRoles, setActiveRolesState] =
     useState<AccessRoles>(PUBLIC_ROLES);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [googleSignInPending, setGoogleSignInPending] = useState(false);
 
   useLayoutEffect(() => {
     getAccessToken();
@@ -137,50 +137,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (identifier: string, password: string, keepLoggedIn: boolean) => {
-      if (usesRemoteApi()) {
-        const sealed = await sealPassword(password);
-        const session = await apiFetch<LoginPayload>("/auth/login", {
-          method: "POST",
-          body: JSON.stringify({
-            username: identifier.trim(),
-            password: sealed,
-            keepLoggedIn,
-          }),
-        });
-        setAccessToken(session.token, keepLoggedIn);
-        setUser(session.user);
-        persist(session.user, keepLoggedIn);
-        return session.user;
-      }
-      const found = findDemoUser(identifier, password);
-      if (!found) {
-        throw new Error("Usuário ou senha inválidos.");
-      }
-      setUser(found);
-      persist(found, keepLoggedIn);
-      return found;
-    },
-    [],
-  );
-
-  const loginWithGoogle = useCallback(
-    async (credential: string, keepLoggedIn: boolean) => {
-      if (!usesRemoteApi()) {
-        throw new Error(
-          failureMessage(
-            undefined,
-            "Entrar com Google só funciona com a API conectada.",
-          ),
-        );
-      }
-      const session = await apiFetch<LoginPayload>("/auth/google", {
+      const sealed = await sealPassword(password);
+      const session = await apiFetch<LoginPayload>("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ credential, keepLoggedIn }),
+        body: JSON.stringify({
+          username: identifier.trim(),
+          password: sealed,
+          keepLoggedIn,
+        }),
       });
       setAccessToken(session.token, keepLoggedIn);
       setUser(session.user);
       persist(session.user, keepLoggedIn);
       return session.user;
+    },
+    [],
+  );
+
+  const dismissGoogleSignInPending = useCallback(() => {
+    setGoogleSignInPending(false);
+  }, []);
+
+  const loginWithGoogle = useCallback(
+    async (credential: string, keepLoggedIn: boolean) => {
+      setGoogleSignInPending(true);
+      try {
+        const session = await apiFetch<LoginPayload>("/auth/google", {
+          method: "POST",
+          body: JSON.stringify({ credential, keepLoggedIn }),
+        });
+        setAccessToken(session.token, keepLoggedIn);
+        setUser(session.user);
+        persist(session.user, keepLoggedIn);
+        return session.user;
+      } catch (caught) {
+        setGoogleSignInPending(false);
+        throw caught;
+      }
     },
     [],
   );
@@ -211,7 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (!isHydrated || !usesRemoteApi() || !getAccessToken()) return;
+    if (!isHydrated || !getAccessToken()) return;
     let active = true;
     apiFetch<SessionUser>("/auth/me")
       .then((me) => {
@@ -263,6 +256,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       displayName: hydratedUser ? hydratedUser.name.split(" ")[0] : null,
       login,
       loginWithGoogle,
+      googleSignInPending,
+      dismissGoogleSignInPending,
       logout,
       updateProfile,
       setActiveRoles,
@@ -273,12 +268,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     activeRoles,
     login,
     loginWithGoogle,
+    googleSignInPending,
+    dismissGoogleSignInPending,
     logout,
     updateProfile,
     setActiveRoles,
   ]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      <GoogleSignInOverlay />
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

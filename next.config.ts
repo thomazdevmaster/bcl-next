@@ -34,17 +34,12 @@ const nextConfig: NextConfig = {
   // Sem isso o Next bloqueia /_next/* quando o celular acessa o dev server
   // pelo IP da rede local, o React não hidrata e os onClick não respondem.
   allowedDevOrigins: ["192.168.0.*", "192.168.*.*", "10.*.*.*"],
-  // Arquivos lidos em runtime pelas rotas de mock e do PDF do livro.
+  // Arquivo lido em runtime pela página do PDF do livro.
   outputFileTracingIncludes: {
-    '/bcl-api': ['./src/domains/seed/mock-api.json'],
-    '/bcl-api/[[...path]]': ['./src/domains/seed/mock-api.json'],
-    '/historia/livro': ['./src/assets/**/*.pdf'],
+    "/historia/livro": ["./src/assets/**/*.pdf"],
   },
   // Pacotes CommonJS / browser-only usados só no cliente (modo estudo).
-  serverExternalPackages: [
-    "@music-i18n/musicxml-player",
-    "opensheetmusicdisplay",
-  ],
+  serverExternalPackages: ["@music-i18n/musicxml-player", "opensheetmusicdisplay"],
   async rewrites() {
     if (process.env.NODE_ENV === "production" || process.env.VERCEL) return [];
     const raw = process.env.NEXT_PUBLIC_API_URL?.trim() || "http://127.0.0.1:8080";

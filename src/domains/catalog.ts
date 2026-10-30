@@ -103,6 +103,15 @@ export const DOMAINS: DomainDefinition[] = [
     apiResource: 'presentations',
     navGroup: 'management',
   },
+  {
+    id: 'games',
+    label: 'Jogos',
+    description: 'Categorias e jogos educativos; visibilidade por perfil.',
+    path: '/gestao/jogos',
+    icon: 'sports_esports',
+    apiResource: 'games',
+    navGroup: 'management',
+  },
 ];
 
 export function getDomain(id: Resource): DomainDefinition {
@@ -114,6 +123,17 @@ export function getDomain(id: Resource): DomainDefinition {
       path: '/study',
       icon: 'school',
       apiResource: 'songs',
+      navGroup: 'management',
+    };
+  }
+  if (id === 'games') {
+    return {
+      id: 'games',
+      label: 'Jogos',
+      description: 'Jogos leves para reforçar leitura, ritmo e teoria musical.',
+      path: '/jogos',
+      icon: 'sports_esports',
+      apiResource: 'games',
       navGroup: 'management',
     };
   }

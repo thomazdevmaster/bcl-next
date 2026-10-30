@@ -16,7 +16,7 @@ function absoluteUnrollSefUrl(): string {
 
 /**
  * Expande repetições e saltos do MusicXML para a linha do tempo de execução.
- * A pauta OSMD usa o XML escrito (com repetições); timemap/MIDI usam esta linha desdobrada.
+ * O timemap do player (sem unroll na visualização) já segue essa linha; o MIDI precisa coincidir.
  *
  * Importante: passar URL absoluta ao Saxon — o processor do player usa `stylesheetLocation`;
  * se passarmos o texto do SEF, o browser tenta GET `/study/{json…}` e estoura 431.

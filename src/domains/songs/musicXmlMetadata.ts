@@ -1,9 +1,13 @@
+import { estimateDurationSecondsFromMusicXml } from '@/study/studyUtils';
+
 export interface MusicXmlMetadata {
   title?: string;
   composer?: string;
   arranger?: string;
   genre?: string;
   key?: string;
+  /** Estimativa a partir dos compassos e andamentos (voltas não expandidas). */
+  durationSeconds?: number;
 }
 
 const MAJOR_BY_FIFTHS: Record<number, string> = {
@@ -24,16 +28,48 @@ const MAJOR_BY_FIFTHS: Record<number, string> = {
   7: 'C#',
 };
 
+const PLACEHOLDER_TITLE = /^partitura sem t[ií]tulo$/i;
+const PLACEHOLDER_COMPOSER = /^Compositor\s*\/\s*arranjador$/i;
+
+function isPlaceholderTitle(value: string): boolean {
+  return PLACEHOLDER_TITLE.test(value.trim());
+}
+
+function isPlaceholderComposer(value: string): boolean {
+  return PLACEHOLDER_COMPOSER.test(value.trim());
+}
+
+/** Primeiro título útil entre work, movement e credit (ignora placeholder do MuseScore). */
+function resolveTitle(head: string): string {
+  const candidates = [
+    tagText(head, 'work-title'),
+    tagText(head, 'movement-title'),
+    credit(head, 'title'),
+  ].filter(Boolean);
+  const meaningful = candidates.filter((value) => !isPlaceholderTitle(value));
+  return meaningful[0] ?? candidates[0] ?? '';
+}
+
+function resolveComposer(head: string): string {
+  const candidates = [
+    cleanLabel(creator(head, 'composer')),
+    cleanLabel(credit(head, 'composer')),
+  ].filter(Boolean);
+  const meaningful = candidates.filter((value) => !isPlaceholderComposer(value));
+  return meaningful[0] ?? candidates[0] ?? '';
+}
+
 /** Lê título, créditos e tonalidade. MuseScore grava isso em credit, não em work/creator. */
 export function metadataFromMusicXml(xml: string): MusicXmlMetadata {
   const fifthsAt = xml.search(/<fifths\b/i);
   const head = xml.slice(0, fifthsAt > 0 ? Math.min(xml.length, fifthsAt + 400) : Math.min(xml.length, 512 * 1024));
 
-  const title = tagText(head, 'work-title') || tagText(head, 'movement-title') || credit(head, 'title');
-  const composer = cleanLabel(creator(head, 'composer') || credit(head, 'composer'));
+  const title = resolveTitle(head);
+  const composer = resolveComposer(head);
   const arranger = creator(head, 'arranger') || credit(head, 'arranger');
   const genre = miscellaneous(head, 'genre');
   const key = keySignature(head);
+  const durationSeconds = estimateDurationSecondsFromMusicXml(xml) ?? undefined;
 
   return {
     ...(title ? { title } : {}),
@@ -41,6 +77,7 @@ export function metadataFromMusicXml(xml: string): MusicXmlMetadata {
     ...(arranger ? { arranger } : {}),
     ...(genre ? { genre } : {}),
     ...(key ? { key } : {}),
+    ...(durationSeconds != null ? { durationSeconds } : {}),
   };
 }
 

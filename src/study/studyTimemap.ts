@@ -297,62 +297,27 @@ export function setSequencerFromTimemapMs(
   }
 }
 
-function timemapEntryEndMs(
-  timemap: MeasureTimemapEntry[],
-  index: number,
-): number {
-  const entry = timemap[index];
-  if (!entry) return 0;
-  const start = entry.timestamp ?? 0;
-  let duration = entry.duration ?? 0;
-  if (duration <= 0 && timemap[index + 1]) {
-    duration = (timemap[index + 1].timestamp ?? 0) - start;
-  }
-  return start + Math.max(0, duration);
-}
-
-function posMsInTimemapEntry(
-  timemap: MeasureTimemapEntry[],
-  index: number,
-  posMs: number,
-): boolean {
-  const entry = timemap[index];
-  if (!entry) return false;
-  const start = entry.timestamp ?? 0;
-  const end = timemapEntryEndMs(timemap, index);
-  if (index === timemap.length - 1) {
-    return posMs >= start && posMs <= end + 1;
-  }
-  return posMs >= start && posMs < end;
-}
-
 export function findTimemapIndexAtPosition(
   timemap: MeasureTimemapEntry[],
   posMs: number,
-  preferIndex?: number,
 ): number {
   if (timemap.length === 0) return 0;
-  if (
-    preferIndex != null &&
-    preferIndex >= 0 &&
-    preferIndex < timemap.length &&
-    posMsInTimemapEntry(timemap, preferIndex, posMs)
-  ) {
-    return preferIndex;
-  }
-
   let index = 0;
-  for (let i = 0; i < timemap.length; i++) {
-    if (posMsInTimemapEntry(timemap, i, posMs)) {
-      return i;
-    }
+  for (let i = 0; i < timemap.length - 1; i++) {
     const start = timemap[i]?.timestamp ?? 0;
+    const nextStart = timemap[i + 1]?.timestamp ?? Infinity;
+    if (posMs >= start && posMs < nextStart) {
+      index = i;
+      break;
+    }
     if (posMs < start) {
-      return Math.max(0, i - 1);
+      index = Math.max(0, i - 1);
+      break;
     }
     index = i;
   }
-  return Math.min(index, timemap.length - 1);
+  if (index >= timemap.length) index = timemap.length - 1;
+  return index;
 }
 
 export function getPlaybackPositionFromTimemap(
@@ -400,163 +365,6 @@ export function getPlaybackPositionFromTimemap(
   return {
     measureIndex,
     measure: index + 1,
-    beatInMeasure,
-    beat: beatInMeasure + 1,
-    fractionInMeasure,
-  };
-}
-
-function extractMeasureNumbersFromPartBlock(partXml: string): number[] {
-  const numbers: number[] = [];
-  const re = /<measure\b[^>]*\bnumber="([^"]+)"/g;
-  let match = re.exec(partXml);
-  while (match) {
-    const n = Number.parseInt(match[1], 10);
-    if (!Number.isNaN(n)) numbers.push(n);
-    match = re.exec(partXml);
-  }
-  return numbers;
-}
-
-/** Números `@number` na ordem de execução (XML desdobrado). */
-export function extractWrittenMeasureNumbersFromPartwiseXml(
-  xml: string,
-  expectedEntryCount?: number,
-): number[] {
-  if (!xml.includes('<score')) return [];
-  const partBlocks = xml.match(/<part\b[\s\S]*?<\/part>/g);
-  if (!partBlocks?.length) {
-    return extractMeasureNumbersFromPartBlock(xml);
-  }
-  if (expectedEntryCount != null && expectedEntryCount > 0) {
-    const exact = partBlocks
-      .map((part) => extractMeasureNumbersFromPartBlock(part))
-      .find((nums) => nums.length === expectedEntryCount);
-    if (exact?.length) return exact;
-  }
-  return extractMeasureNumbersFromPartBlock(partBlocks[0] ?? xml);
-}
-
-/** Timemap antigo usa índice 0…n; com repetições, `measure` repete o número escrito. */
-export function timemapUsesWrittenMeasureNumbers(
-  timemap: MeasureTimemapEntry[],
-  writtenMeasureCount: number | null,
-): boolean {
-  if (!writtenMeasureCount || timemap.length <= writtenMeasureCount) return false;
-  const nums = timemap.map((e) => e.measure);
-  if (new Set(nums).size < nums.length) return true;
-  const looksLikePlaybackIndex = nums.every((n, i) => n === i || n === i + 1);
-  if (looksLikePlaybackIndex) return false;
-  return nums.every((n) => n >= 1 && n <= writtenMeasureCount);
-}
-
-export function applyWrittenMeasureNumbersToTimemap(
-  entries: MeasureTimemapEntry[],
-  unrolledXml: string,
-): MeasureTimemapEntry[] {
-  const numbers = extractWrittenMeasureNumbersFromPartwiseXml(
-    unrolledXml,
-    entries.length,
-  );
-  if (numbers.length !== entries.length) return entries;
-  return entries.map((entry, index) => ({
-    ...entry,
-    measure: numbers[index] ?? entry.measure,
-  }));
-}
-
-function readSourceMeasureNumber(measure: unknown): number | undefined {
-  if (!measure || typeof measure !== 'object') return undefined;
-  const m = measure as { MeasureNumber?: number; MeasureNumberXML?: number };
-  if (typeof m.MeasureNumber === 'number') return m.MeasureNumber;
-  if (typeof m.MeasureNumberXML === 'number') return m.MeasureNumberXML;
-  return undefined;
-}
-
-export function resolveSourceMeasureIndex(
-  sourceMeasures: ReadonlyArray<unknown> | undefined,
-  writtenMeasureNumber: number,
-): number {
-  if (!sourceMeasures?.length) {
-    return Math.max(0, writtenMeasureNumber - 1);
-  }
-  const idx = sourceMeasures.findIndex(
-    (m) => readSourceMeasureNumber(m) === writtenMeasureNumber,
-  );
-  if (idx >= 0) return idx;
-  return Math.max(0, Math.min(sourceMeasures.length - 1, writtenMeasureNumber - 1));
-}
-
-/**
- * Mapeia posição do timemap desdobrado (áudio) para compasso na pauta escrita (OSMD).
- */
-export function getPlaybackPositionForWrittenScore(
-  timemap: MeasureTimemapEntry[],
-  posMs: number,
-  beatsPerMeasure: number,
-  writtenMeasureCount: number | null,
-): ReturnType<typeof getPlaybackPositionFromTimemap> {
-  const playback = getPlaybackPositionFromTimemap(timemap, posMs, beatsPerMeasure);
-  if (!playback || !writtenMeasureCount || writtenMeasureCount <= 0) {
-    return playback;
-  }
-  if (timemap.length <= writtenMeasureCount) {
-    return playback;
-  }
-
-  const playbackIndex = findTimemapIndexAtPosition(timemap, posMs);
-  const entry = timemap[playbackIndex];
-  if (!entry) return playback;
-
-  const measureStart = entry.timestamp ?? 0;
-  let duration = entry.duration ?? 0;
-  if (duration <= 0 && timemap[playbackIndex + 1]) {
-    duration = (timemap[playbackIndex + 1].timestamp ?? 0) - measureStart;
-  }
-
-  const beats = Math.max(1, beatsPerMeasure);
-  const usesWritten = timemapUsesWrittenMeasureNumbers(timemap, writtenMeasureCount);
-
-  let beatInMeasure = playback.beatInMeasure;
-  let fractionInMeasure = playback.fractionInMeasure;
-  if (duration > 0) {
-    const beatDuration = duration / beats;
-    beatInMeasure = Math.min(
-      beats - 1,
-      Math.max(0, Math.floor((posMs - measureStart) / beatDuration)),
-    );
-    fractionInMeasure = Math.max(0, Math.min(1, (posMs - measureStart) / duration));
-  }
-
-  if (usesWritten) {
-    const writtenMeasureNumber = entry.measure;
-    const writtenIndex = Math.max(
-      0,
-      Math.min(writtenMeasureCount - 1, writtenMeasureNumber - 1),
-    );
-    return {
-      measureIndex: writtenIndex,
-      measure: writtenMeasureNumber,
-      beatInMeasure,
-      beat: beatInMeasure + 1,
-      fractionInMeasure,
-    };
-  }
-
-  const totalMs = sumTimemapDurationMs(timemap);
-  let writtenIndex = playbackIndex;
-  if (timemap.length % writtenMeasureCount === 0) {
-    writtenIndex = playbackIndex % writtenMeasureCount;
-  } else if (totalMs > 0) {
-    writtenIndex = Math.min(
-      writtenMeasureCount - 1,
-      Math.floor((posMs / totalMs) * writtenMeasureCount),
-    );
-  }
-
-  return {
-    measureIndex: writtenIndex,
-    measure: writtenIndex + 1,
     beatInMeasure,
     beat: beatInMeasure + 1,
     fractionInMeasure,

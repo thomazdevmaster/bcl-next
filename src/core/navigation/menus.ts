@@ -1,8 +1,12 @@
-import type { Action, Resource } from '@/core/auth/permissions';
-import { can } from '@/core/auth/permissions';
-import type { AccessRoles } from '@/core/auth/roles';
-import { DOMAINS } from '@/domains/catalog';
-import { canAccessSongsModule, canAccessStudyModule } from '@/domains/songs/songAccess';
+import type { Action, Resource } from "@/core/auth/permissions";
+import { can } from "@/core/auth/permissions";
+import type { AccessRoles } from "@/core/auth/roles";
+import { DOMAINS } from "@/domains/catalog";
+import { canAccessGamesNav } from "@/domains/games/gameAccess";
+import {
+  canAccessSongsModule,
+  canAccessStudyModule,
+} from "@/domains/songs/songAccess";
 
 export interface NavItem {
   href: string;
@@ -10,7 +14,7 @@ export interface NavItem {
   icon: string;
 }
 
-export type AuthenticatedNavGroupId = 'public' | 'logged' | 'management';
+export type AuthenticatedNavGroupId = "public" | "logged" | "management";
 
 export interface AuthenticatedNavGroup {
   id: AuthenticatedNavGroupId;
@@ -19,50 +23,89 @@ export interface AuthenticatedNavGroup {
 }
 
 export const PUBLIC_NAV: NavItem[] = [
-  { href: '/', label: 'Início', icon: 'home' },
-  { href: '/agenda', label: 'Agenda', icon: 'event' },
-  { href: '/blog', label: 'Blog', icon: 'article' },
-  { href: '/sobre', label: 'Sobre', icon: 'info' },
-  { href: '/historia', label: 'História', icon: 'auto_stories' },
+  { href: "/", label: "Início", icon: "home" },
+  { href: "/agenda", label: "Agenda", icon: "event" },
+  { href: "/blog", label: "Blog", icon: "article" },
+  { href: "/sobre", label: "Sobre", icon: "info" },
+  { href: "/historia", label: "História", icon: "auto_stories" },
 ];
 
-const STUDY_NAV: NavItem = { href: '/study', label: 'Estudo', icon: 'school' };
+const STUDY_NAV: NavItem = { href: "/study", label: "Estudo", icon: "school" };
 const SCORE_PLAYGROUND_NAV: NavItem = {
-  href: '/score_playground',
-  label: 'Score playground',
-  icon: 'piano',
+  href: "/score_playground",
+  label: "Score playground",
+  icon: "piano",
 };
-const SONGS_NAV: NavItem = { href: '/gestao/musicas', label: 'Músicas', icon: 'library_music' };
-const ROLES_NAV: NavItem = { href: '/gestao/papeis', label: 'Papéis', icon: 'admin_panel_settings' };
+const GAMES_NAV: NavItem = {
+  href: "/jogos",
+  label: "Jogos",
+  icon: "sports_esports",
+};
+const SONGS_NAV: NavItem = {
+  href: "/gestao/musicas",
+  label: "Músicas",
+  icon: "library_music",
+};
+const ROLES_NAV: NavItem = {
+  href: "/gestao/papeis",
+  label: "Papéis",
+  icon: "admin_panel_settings",
+};
 
-const MANAGEMENT_NAV_SOURCE: Array<NavItem & { resource: Resource; action?: Action }> = [
-  { href: '/gestao', label: 'Painel', icon: 'dashboard', resource: 'portal', action: 'read' },
-  ...DOMAINS.filter((domain) => domain.navGroup === 'management' && domain.id !== 'songs').map((domain) => ({
+const MANAGEMENT_NAV_SOURCE: Array<
+  NavItem & { resource: Resource; action?: Action }
+> = [
+  {
+    href: "/gestao",
+    label: "Painel",
+    icon: "dashboard",
+    resource: "portal",
+    action: "read",
+  },
+  ...DOMAINS.filter(
+    (domain) => domain.navGroup === "management" && domain.id !== "songs",
+  ).map((domain) => ({
     href: domain.path,
     label: domain.label,
     icon: domain.icon,
     resource: domain.id,
-    action: 'read' as const,
+    action: "read" as const,
   })),
 ];
 
-function getManagementModuleItems(roles: AccessRoles, permissions?: readonly string[] | null): NavItem[] {
-  const items = MANAGEMENT_NAV_SOURCE.filter((item) => can(roles, item.resource, item.action ?? 'read', permissions)).map(
-    ({ href, label, icon }) => ({ href, label, icon }),
-  );
-  if (roles.includes('admin')) {
-    const painel = items.findIndex((item) => item.href === '/gestao');
+function getManagementModuleItems(
+  roles: AccessRoles,
+  permissions?: readonly string[] | null,
+): NavItem[] {
+  const items = MANAGEMENT_NAV_SOURCE.filter((item) =>
+    can(roles, item.resource, item.action ?? "read", permissions),
+  ).map(({ href, label, icon }) => ({ href, label, icon }));
+  if (can(roles, "notifications", "create", permissions)) {
+    items.push({
+      href: "/gestao/notificacao",
+      label: "Notificação",
+      icon: "campaign",
+    });
+  }
+  if (roles.includes("admin")) {
+    const painel = items.findIndex((item) => item.href === "/gestao");
     items.splice(painel + 1, 0, ROLES_NAV);
   }
   return items;
 }
 
 /** Lista plana para o painel `/gestao` (inclui Estudo junto aos módulos). */
-function getMyAreaItems(roles: AccessRoles, permissions?: readonly string[] | null): NavItem[] {
+function getMyAreaItems(
+  roles: AccessRoles,
+  permissions?: readonly string[] | null,
+): NavItem[] {
   const items: NavItem[] = [];
   if (canAccessStudyModule(roles, permissions)) {
     items.push(STUDY_NAV);
     items.push(SCORE_PLAYGROUND_NAV);
+  }
+  if (canAccessGamesNav(roles)) {
+    items.push(GAMES_NAV);
   }
   if (canAccessSongsModule(roles, permissions)) {
     items.push(SONGS_NAV);
@@ -70,11 +113,14 @@ function getMyAreaItems(roles: AccessRoles, permissions?: readonly string[] | nu
   return items;
 }
 
-export function getManagementNav(roles: AccessRoles, permissions?: readonly string[] | null): NavItem[] {
+export function getManagementNav(
+  roles: AccessRoles,
+  permissions?: readonly string[] | null,
+): NavItem[] {
   const items = getManagementModuleItems(roles, permissions);
   const myArea = getMyAreaItems(roles, permissions);
   if (myArea.length > 0) {
-    const painel = items.findIndex((item) => item.href === '/gestao');
+    const painel = items.findIndex((item) => item.href === "/gestao");
     items.splice(painel + 1, 0, ...myArea);
   }
   return items;
@@ -85,35 +131,80 @@ export function getAuthenticatedNavGroups(
   roles: AccessRoles,
   permissions?: readonly string[] | null,
 ): AuthenticatedNavGroup[] {
-  const groups: AuthenticatedNavGroup[] = [{ id: 'public', label: '', items: [...PUBLIC_NAV] }];
+  const groups: AuthenticatedNavGroup[] = [
+    { id: "public", label: "", items: [...PUBLIC_NAV] },
+  ];
 
   const myArea = getMyAreaItems(roles, permissions);
   if (myArea.length > 0) {
-    groups.push({ id: 'logged', label: 'Minha Área', items: myArea });
+    groups.push({ id: "logged", label: "Minha Área", items: myArea });
   }
 
   const managementItems = getManagementModuleItems(roles, permissions);
   if (managementItems.length > 0) {
-    groups.push({ id: 'management', label: 'Gestão', items: managementItems });
+    groups.push({ id: "management", label: "Gestão", items: managementItems });
   }
 
   return groups;
 }
 
 export function titleForPath(pathname: string): string {
-  const path = pathname.split('?')[0];
+  const path = pathname.split("?")[0];
   const match = [...PUBLIC_NAV, ...MANAGEMENT_NAV_SOURCE].find(
-    (item) => item.href === path || (item.href !== '/' && path.startsWith(item.href)),
+    (item) =>
+      item.href === path || (item.href !== "/" && path.startsWith(item.href)),
   );
   if (match) return match.label;
-  if (path.startsWith('/gestao/papeis')) return 'Papéis';
-  if (path === '/alterar-senha') return 'Alterar senha';
-  if (path === '/cadastro') return 'Cadastro';
-  if (path === '/esqueci-senha') return 'Esqueci a senha';
-  if (path === '/login') return 'Entrar';
-  if (path === '/profile') return 'Meu perfil';
-  if (path === '/settings') return 'Configurações';
-  if (path.startsWith('/study')) return 'Estudo';
-  if (path.startsWith('/score_playground')) return 'Score playground';
-  return 'Banda Carmelitana';
+  if (path.startsWith("/gestao/papeis")) return "Papéis";
+  if (path.startsWith("/gestao/notificacao")) return "Notificação";
+  if (path === "/alterar-senha") return "Alterar senha";
+  if (path === "/cadastro") return "Cadastro";
+  if (path === "/esqueci-senha") return "Esqueci a senha";
+  if (path === "/login") return "Entrar";
+  if (path === "/profile") return "Meu perfil";
+  if (path === "/configuracoes" || path === "/settings") return "Configurações";
+  if (path.startsWith("/study")) return "Estudo";
+  if (path.startsWith("/score_playground")) return "Score playground";
+  if (path === "/jogos") return "Jogos";
+  if (path.startsWith("/jogos/")) {
+    const parts = path.split("/").filter(Boolean);
+    const categorySlug = parts[1];
+    const gameSlug = parts[2];
+    if (gameSlug === "clave-sol-naturais-1") {
+      return "Naturais 1";
+    }
+    if (gameSlug === "clave-sol-naturais-2") {
+      return "Naturais 2";
+    }
+    if (gameSlug === "clave-sol-mais-aguda") {
+      return "Mais aguda";
+    }
+    if (gameSlug === "clave-sol-ouca-escreva") {
+      return "Ouça e escreva";
+    }
+    if (gameSlug === "gire-a-pauta") return "Gire a pauta";
+    if (gameSlug === "figuras") return "Figuras";
+    if (gameSlug === "qual-dura-mais") return "Qual dura mais";
+    if (gameSlug === "complete-o-compasso") return "Complete o compasso";
+    if (gameSlug === "ouca-o-ritmo") return "Ouça o ritmo";
+    if (gameSlug === "segure-o-tempo") return "Segure o tempo";
+    if (gameSlug === "nomeie") return "Nomeie";
+    if (gameSlug === "qual-e-maior") return "Qual é maior";
+    if (gameSlug === "ouca") return "Ouça";
+    if (gameSlug === "escreva") return "Escreva";
+    if (gameSlug === "familia") return "Família";
+    if (gameSlug === "como-se-toca") return "Como se toca";
+    if (gameSlug === "mais-agudo") return "Mais agudo";
+    if (gameSlug === "quem-e") return "Quem é";
+    const labels: Record<string, string> = {
+      notas: "Notas",
+      ritmos: "Ritmos",
+      intervalos: "Intervalos",
+      escalas: "Escalas",
+      instrumentos: "Instrumentos",
+    };
+    return labels[categorySlug ?? ""] ?? "Jogos";
+  }
+  if (path.startsWith("/gestao/jogos")) return "Jogos";
+  return "Banda Carmelitana";
 }

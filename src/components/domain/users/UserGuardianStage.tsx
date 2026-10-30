@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect } from "react";
 import {
   Controller,
   FormProvider,
@@ -9,20 +9,17 @@ import {
   useFormContext,
   useWatch,
 } from "react-hook-form";
+
 import { FormStageBlock } from "@/components/forms/FormStageBlock";
 import { FormStageField } from "@/components/forms/FormStageField";
-import {
-  controlBase,
-  controlHeight,
-  FIELD_STATUS,
-  type ValidationState,
-} from "@/components/forms/core";
+import { FIELD_STATUS, type ValidationState } from "@/components/forms/core";
 import { FormFieldValidationShell } from "@/components/forms/validations/FormFieldValidationShell";
-import { formatPhoneNumber } from "@/domains/people/formatting";
+import { IconSelect } from "@/components/shared/IconSelect";
 import type { CrudOption } from "@/domains/crudConfig";
+import { formatPhoneNumber } from "@/domains/people/formatting";
 import {
-  guardianSchema,
   type GuardianFormValues,
+  guardianSchema,
 } from "@/domains/users/schemas/guardian.schema";
 
 export const NEW_GUARDIAN_VALUE = "__new_guardian__";
@@ -116,8 +113,7 @@ export function UserGuardianStage({
               options={[
                 { value: "", label: "Selecione um usuário…" },
                 ...people.filter(
-                  (person) =>
-                    person.hasUser || person.value === guardianId,
+                  (person) => person.hasUser || person.value === guardianId,
                 ),
                 { value: NEW_GUARDIAN_VALUE, label: "Novo responsável" },
               ]}
@@ -254,10 +250,10 @@ function GuardianSelectField({
       control={control}
       render={({ field, fieldState }) => {
         const empty = field.value === "";
-        const state: ValidationState = empty
-          ? "warning"
-          : fieldState.error
-            ? "invalid"
+        const state: ValidationState = fieldState.error
+          ? "invalid"
+          : empty
+            ? "warning"
             : "valid";
         const status = FIELD_STATUS[state];
         return (
@@ -270,33 +266,35 @@ function GuardianSelectField({
             onBlur={field.onBlur}
             state={state}
             message={empty ? emptyMessage : fieldState.error?.message}
-            renderControl={({
-              id,
-              name: controlName,
-              describedBy,
-              invalid,
-            }) => (
-              <select
-                ref={field.ref}
+            renderControl={({ id, describedBy, invalid }) => (
+              <IconSelect
                 id={id}
-                name={controlName}
-                disabled={disabled}
+                label={label}
+                options={options.map((option) => ({
+                  ...option,
+                  icon:
+                    option.icon ??
+                    (option.value === ""
+                      ? "more_horiz"
+                      : option.value === NEW_GUARDIAN_VALUE
+                        ? "person_add"
+                        : name === "guardianId"
+                          ? "person"
+                          : "family_restroom"),
+                }))}
                 value={field.value}
-                onChange={(event) => {
-                  field.onChange(event);
-                  onValueChange(event.target.value);
+                disabled={disabled}
+                required={required}
+                invalid={invalid}
+                describedBy={describedBy}
+                onTriggerRef={field.ref}
+                onBlur={field.onBlur}
+                triggerClassName={`${status.border} pr-3`}
+                onChange={(value) => {
+                  field.onChange(value);
+                  onValueChange(value);
                 }}
-                aria-required={required || undefined}
-                aria-describedby={describedBy}
-                aria-invalid={invalid || undefined}
-                className={`${controlBase} ${controlHeight.md} ${status.border} pr-3`}
-              >
-                {options.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              />
             )}
           />
         );

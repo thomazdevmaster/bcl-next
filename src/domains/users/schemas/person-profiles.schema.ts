@@ -1,5 +1,28 @@
 import { z } from "zod";
 
+import {
+  type ProfileFieldKey,
+  getMissingProfileFields,
+} from "@/domains/people/profileValidation";
+
+const profileFieldPaths: Record<ProfileFieldKey, (string | number)[]> = {
+  studentEnrollmentDate: ["student", "enrollmentDate"],
+  studentLevel: ["student", "level"],
+  musicianSection: ["musician", "section"],
+  musicianExperience: ["musician", "experience"],
+  musicianDefaultVoice: ["musician", "defaultVoice"],
+  musicianPlayedInstrumentId: ["musician", "playedInstrumentId"],
+};
+
+const profileFieldMessages: Record<ProfileFieldKey, string> = {
+  studentEnrollmentDate: "Informe a data de matrícula.",
+  studentLevel: "Selecione o nível do aluno.",
+  musicianSection: "Selecione o naipe.",
+  musicianExperience: "Selecione o tempo de experiência.",
+  musicianDefaultVoice: "Selecione a voz padrão.",
+  musicianPlayedInstrumentId: "Selecione o instrumento que toca.",
+};
+
 const validDateOrEmpty = (value: string) => {
   if (!value) return true;
   const parsed = z.iso.date().safeParse(value);
@@ -25,16 +48,36 @@ export const personProfilesSchema = z
     }),
   })
   .superRefine(({ isStudent, isMusician, student, musician }, context) => {
-    if (isStudent && !student.enrollmentDate) {
-      context.addIssue({ code: "custom", path: ["student", "enrollmentDate"], message: "Campo obrigatório para este perfil." });
-    } else if (isStudent && !validDateOrEmpty(student.enrollmentDate)) {
-      context.addIssue({ code: "custom", path: ["student", "enrollmentDate"], message: "Informe uma data válida e não futura." });
+    const missingProfileFields = getMissingProfileFields({
+      isStudent,
+      isMusician,
+      student,
+      musician,
+    });
+    for (const field of missingProfileFields) {
+      context.addIssue({
+        code: "custom",
+        path: profileFieldPaths[field],
+        message: profileFieldMessages[field],
+      });
     }
-    if (isMusician && !musician.section) {
-      context.addIssue({ code: "custom", path: ["musician", "section"], message: "Campo obrigatório para este perfil." });
+    if (
+      isStudent &&
+      student.enrollmentDate &&
+      !validDateOrEmpty(student.enrollmentDate)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["student", "enrollmentDate"],
+        message: "Informe uma data válida e não futura.",
+      });
     }
     if (musician.joinedAt && !validDateOrEmpty(musician.joinedAt)) {
-      context.addIssue({ code: "custom", path: ["musician", "joinedAt"], message: "Informe uma data válida e não futura." });
+      context.addIssue({
+        code: "custom",
+        path: ["musician", "joinedAt"],
+        message: "Informe uma data válida e não futura.",
+      });
     }
   });
 

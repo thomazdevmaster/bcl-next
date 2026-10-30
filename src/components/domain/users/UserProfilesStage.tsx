@@ -1,30 +1,31 @@
 "use client";
 
-import { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useMemo, useRef } from "react";
 import {
   Controller,
   FormProvider,
   useForm,
   useFormContext,
-  useWatch,
 } from "react-hook-form";
+
 import { FormStageBlock } from "@/components/forms/FormStageBlock";
 import { FormStageField } from "@/components/forms/FormStageField";
-import {
-  controlBase,
-  controlHeight,
-  FIELD_STATUS,
-  type ValidationState,
-} from "@/components/forms/core";
+import { FIELD_STATUS, type ValidationState } from "@/components/forms/core";
 import { FormFieldValidationShell } from "@/components/forms/validations/FormFieldValidationShell";
+import { IconCheckbox } from "@/components/shared/IconCheckbox";
+import { IconSelect } from "@/components/shared/IconSelect";
 import type { CrudField, CrudOption } from "@/domains/crudConfig";
 import {
-  personProfilesSchema,
   type PersonProfilesFormValues,
+  personProfilesSchema,
 } from "@/domains/users/schemas/person-profiles.schema";
 
-export type ProfilesStageHandlers = { validate: () => Promise<boolean> };
+export type ProfilesStageHandlers = {
+  validate: () => Promise<boolean>;
+  /** Copia aluno/músico do formulário interno para o payload de salvamento. */
+  syncToParent: () => Record<string, unknown>;
+};
 
 type Props = {
   values: Record<string, unknown>;
@@ -39,27 +40,29 @@ function valueAt(values: Record<string, unknown>, name: string): string {
   return String(values[name] ?? "");
 }
 
-export function UserProfilesStage({
+export function UserRoleProfileFields({
   values,
   fields,
   instruments,
+  showStudent,
+  showMusician,
   onChange,
   onRegisterHandlers,
   readOnly = false,
-}: Props) {
+}: Props & { showStudent: boolean; showMusician: boolean }) {
   const form = useForm<PersonProfilesFormValues>({
     defaultValues: {
-      isStudent: Boolean(values.isStudent),
-      isMusician: Boolean(values.isMusician),
+      isStudent: showStudent,
+      isMusician: showMusician,
       student: {
         enrollmentDate: valueAt(values, "student.enrollmentDate"),
         classGroup: valueAt(values, "student.classGroup"),
-        level: valueAt(values, "student.level") || "1",
+        level: valueAt(values, "student.level"),
       },
       musician: {
         section: valueAt(values, "musician.section"),
-        experience: valueAt(values, "musician.experience") || "less_than_1",
-        defaultVoice: valueAt(values, "musician.defaultVoice") || "1",
+        experience: valueAt(values, "musician.experience"),
+        defaultVoice: valueAt(values, "musician.defaultVoice"),
         ownInstrument: Boolean(values["musician.ownInstrument"]),
         joinedAt: valueAt(values, "musician.joinedAt"),
         playedInstrumentId: valueAt(values, "musician.playedInstrumentId"),
@@ -69,14 +72,101 @@ export function UserProfilesStage({
     mode: "onBlur",
     reValidateMode: "onChange",
   });
-  const { control, trigger } = form;
-  const isStudent = useWatch({ control, name: "isStudent" });
-  const isMusician = useWatch({ control, name: "isMusician" });
+  const { trigger, getValues } = form;
+
+  const syncToParent = () => {
+    const current = getValues();
+    return {
+      isStudent: current.isStudent,
+      isMusician: current.isMusician,
+      "student.enrollmentDate": current.student.enrollmentDate,
+      "student.classGroup": current.student.classGroup,
+      "student.level": current.student.level,
+      "musician.section": current.musician.section,
+      "musician.experience": current.musician.experience,
+      "musician.defaultVoice": current.musician.defaultVoice,
+      "musician.ownInstrument": current.musician.ownInstrument,
+      "musician.joinedAt": current.musician.joinedAt,
+      "musician.playedInstrumentId": current.musician.playedInstrumentId,
+    };
+  };
+
+  const syncToParentRef = useRef(syncToParent);
 
   useEffect(() => {
-    onRegisterHandlers({ validate: () => trigger() });
+    syncToParentRef.current = syncToParent;
+  });
+
+  useEffect(() => {
+    onRegisterHandlers({
+      validate: () => trigger(),
+      syncToParent: () => syncToParentRef.current(),
+    });
     return () => onRegisterHandlers(null);
   }, [onRegisterHandlers, trigger]);
+
+  const recordKey = String(values.id ?? values.personId ?? "");
+  const studentEnrollmentDate = valueAt(values, "student.enrollmentDate");
+  const studentClassGroup = valueAt(values, "student.classGroup");
+  const studentLevel = valueAt(values, "student.level");
+  const musicianSection = valueAt(values, "musician.section");
+  const musicianExperience = valueAt(values, "musician.experience");
+  const musicianDefaultVoice = valueAt(values, "musician.defaultVoice");
+  const musicianOwnInstrument = Boolean(values["musician.ownInstrument"]);
+  const musicianJoinedAt = valueAt(values, "musician.joinedAt");
+  const musicianPlayedInstrumentId = valueAt(
+    values,
+    "musician.playedInstrumentId",
+  );
+  const profileSeed = useMemo(
+    () => ({
+      isStudent: showStudent,
+      isMusician: showMusician,
+      student: {
+        enrollmentDate: studentEnrollmentDate,
+        classGroup: studentClassGroup,
+        level: studentLevel,
+      },
+      musician: {
+        section: musicianSection,
+        experience: musicianExperience,
+        defaultVoice: musicianDefaultVoice,
+        ownInstrument: musicianOwnInstrument,
+        joinedAt: musicianJoinedAt,
+        playedInstrumentId: musicianPlayedInstrumentId,
+      },
+    }),
+    [
+      showMusician,
+      showStudent,
+      studentEnrollmentDate,
+      studentClassGroup,
+      studentLevel,
+      musicianSection,
+      musicianExperience,
+      musicianDefaultVoice,
+      musicianOwnInstrument,
+      musicianJoinedAt,
+      musicianPlayedInstrumentId,
+    ],
+  );
+  const profileSeedKey = JSON.stringify(profileSeed);
+  const lastProfileSeedKey = useRef<string | null>(null);
+  const lastRecordKey = useRef(recordKey);
+
+  useEffect(() => {
+    const recordChanged = lastRecordKey.current !== recordKey;
+    lastRecordKey.current = recordKey;
+
+    if (recordChanged || lastProfileSeedKey.current !== profileSeedKey) {
+      lastProfileSeedKey.current = profileSeedKey;
+      form.reset(profileSeed);
+      return;
+    }
+
+    form.setValue("isStudent", showStudent, { shouldDirty: false });
+    form.setValue("isMusician", showMusician, { shouldDirty: false });
+  }, [form, profileSeed, profileSeedKey, recordKey, showMusician, showStudent]);
 
   const sync = (name: string) => () =>
     onChange(name, form.getValues(name as never));
@@ -86,33 +176,7 @@ export function UserProfilesStage({
   return (
     <FormProvider {...form}>
       <div className="grid gap-4">
-        <FormStageBlock
-          title="Perfis"
-          description={
-            readOnly
-              ? "Perfis e dados vinculados a esta pessoa."
-              : "Escolha os perfis que se aplicam. Os dados correspondentes aparecem abaixo."
-          }
-          surface="plain"
-          className="!pb-0"
-        >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <ProfileCheckbox
-              name="isStudent"
-              label="É aluno"
-              disabled={readOnly}
-              onChange={(checked) => onChange("isStudent", checked)}
-            />
-            <ProfileCheckbox
-              name="isMusician"
-              label="É músico"
-              disabled={readOnly}
-              onChange={(checked) => onChange("isMusician", checked)}
-            />
-          </div>
-        </FormStageBlock>
-
-        {isStudent ? (
+        {showStudent ? (
           <FormStageBlock title="Aluno" surface="plain">
             <div className="grid gap-4 sm:grid-cols-2">
               {studentFields.map((field) =>
@@ -122,9 +186,9 @@ export function UserProfilesStage({
                     name={field.name as "student.level"}
                     label={field.label}
                     options={field.options ?? []}
-                    required={false}
+                    required={Boolean(field.required)}
                     disabled={readOnly}
-                    optionalMessage="Opcional."
+                    optionalMessage={field.required ? undefined : "Opcional."}
                     onChange={sync(field.name)}
                   />
                 ) : (
@@ -132,8 +196,7 @@ export function UserProfilesStage({
                     key={field.name}
                     name={
                       field.name as
-                        | "student.enrollmentDate"
-                        | "student.classGroup"
+                        "student.enrollmentDate" | "student.classGroup"
                     }
                     label={field.label}
                     type={field.type === "date" ? "date" : "text"}
@@ -153,7 +216,7 @@ export function UserProfilesStage({
           </FormStageBlock>
         ) : null}
 
-        {isMusician ? (
+        {showMusician ? (
           <FormStageBlock title="Músico" surface="plain">
             <div className="grid gap-4 sm:grid-cols-2">
               {musicianFields.map((field) => {
@@ -185,15 +248,9 @@ export function UserProfilesStage({
                     }
                     label={field.label}
                     options={options}
-                    required={field.name === "musician.section"}
+                    required={Boolean(field.required)}
                     disabled={readOnly}
-                    optionalMessage={
-                      field.name === "musician.playedInstrumentId"
-                        ? "Opcional durante esta etapa de desenvolvimento."
-                        : field.name === "musician.section"
-                          ? undefined
-                          : "Opcional."
-                    }
+                    optionalMessage={field.required ? undefined : "Opcional."}
                     onChange={sync(field.name)}
                   />
                 );
@@ -226,7 +283,7 @@ function ProfileCheckbox({
   disabled = false,
   onChange,
 }: {
-  name: "isStudent" | "isMusician" | "musician.ownInstrument";
+  name: "musician.ownInstrument";
   label: string;
   disabled?: boolean;
   onChange: (checked: boolean) => void;
@@ -243,24 +300,29 @@ function ProfileCheckbox({
           value={String(field.value)}
           onBlur={field.onBlur}
           state={field.value ? "valid" : "info"}
-          renderControl={({ id }) => (
-            <div className="flex min-h-11 items-center gap-3 text-sm text-[var(--foreground)]">
-              <input
-                ref={field.ref}
-                id={id}
-                name={field.name}
-                type="checkbox"
-                disabled={disabled}
-                checked={Boolean(field.value)}
-                onBlur={field.onBlur}
-                onChange={(event) => {
-                  field.onChange(event);
-                  onChange(event.target.checked);
-                }}
-                className="size-5 accent-[var(--ring)]"
-              />
-              <span>{field.value ? "Ativado" : "Selecionar perfil"}</span>
-            </div>
+          description="Marque se o músico usa instrumento próprio, fora do patrimônio da banda."
+          labelForControl={false}
+          renderControl={({ id, describedBy, invalid }) => (
+            <IconCheckbox
+              id={id}
+              name={field.name}
+              inputRef={field.ref}
+              label={
+                field.value
+                  ? "Sim, possui instrumento próprio"
+                  : "Não possui instrumento próprio"
+              }
+              icon="music_note"
+              checked={Boolean(field.value)}
+              disabled={disabled}
+              aria-describedby={describedBy}
+              aria-invalid={invalid || undefined}
+              onBlur={field.onBlur}
+              onChange={(checked) => {
+                field.onChange(checked);
+                onChange(checked);
+              }}
+            />
           )}
         />
       )}
@@ -297,16 +359,46 @@ function ProfileSelect({
       control={control}
       render={({ field, fieldState }) => {
         const empty = field.value === "";
-        const state: ValidationState = empty
-          ? required
-            ? "warning"
-            : optionalMessage
+        const state: ValidationState = fieldState.error
+          ? "invalid"
+          : empty
+            ? required
               ? "warning"
-              : "info"
-          : fieldState.error
-            ? "invalid"
+              : optionalMessage
+                ? "warning"
+                : "info"
             : "valid";
         const status = FIELD_STATUS[state];
+        const icon = {
+          "student.level": "school",
+          "musician.section": "groups",
+          "musician.experience": "history",
+          "musician.defaultVoice": "graphic_eq",
+          "musician.playedInstrumentId": "music_note",
+        }[name];
+        const selectOptions: CrudOption[] = [
+          {
+            value: "",
+            label: required ? "Selecione…" : "Selecione (opcional)",
+            icon: "more_horiz",
+          },
+          ...options
+            .filter((option) => option.value !== "")
+            .map((option) => ({ ...option, icon: option.icon ?? icon })),
+        ];
+        if (
+          field.value &&
+          !selectOptions.some((option) => option.value === field.value)
+        ) {
+          selectOptions.push({
+            value: field.value,
+            label:
+              name === "musician.playedInstrumentId"
+                ? `Instrumento #${field.value}`
+                : `Opção #${field.value}`,
+            icon,
+          });
+        }
         return (
           <FormFieldValidationShell
             label={label}
@@ -321,41 +413,28 @@ function ProfileSelect({
               (empty
                 ? (optionalMessage ??
                   (required
-                    ? "Campo obrigatório para este perfil."
+                    ? `${label} é obrigatório.`
                     : undefined))
                 : undefined)
             }
-            renderControl={({
-              id,
-              name: controlName,
-              describedBy,
-              invalid,
-            }) => (
-              <select
-                ref={field.ref}
+            renderControl={({ id, describedBy, invalid }) => (
+              <IconSelect
                 id={id}
-                name={controlName}
-                disabled={disabled}
+                label={label}
+                options={selectOptions}
                 value={field.value}
+                disabled={disabled}
+                required={required}
+                invalid={invalid}
+                describedBy={describedBy}
+                onTriggerRef={field.ref}
                 onBlur={field.onBlur}
-                onChange={(event) => {
-                  field.onChange(event);
+                triggerClassName={`${status.border} pr-3`}
+                onChange={(value) => {
+                  field.onChange(value);
                   onChange();
                 }}
-                aria-required={required || undefined}
-                aria-describedby={describedBy}
-                aria-invalid={invalid || undefined}
-                className={`${controlBase} ${controlHeight.md} ${status.border} pr-3`}
-              >
-                <option value="">
-                  {required ? "Selecione uma opção" : "Selecione (opcional)"}
-                </option>
-                {options.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              />
             )}
           />
         );

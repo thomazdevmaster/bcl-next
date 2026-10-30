@@ -71,22 +71,14 @@ export const personDetailsSchema = z
       }
     }
     const number = documentNumber.trim();
-    if (documentType === "none") {
+    const type =
+      documentType === "none" || documentType === "" ? "none" : documentType;
+    if (type === "none") {
       if (number) {
         context.addIssue({
           code: "custom",
           path: ["documentNumber"],
           message: "Remova o número ou selecione CPF/RG.",
-        });
-      }
-      return;
-    }
-    if (!documentType) {
-      if (number) {
-        context.addIssue({
-          code: "custom",
-          path: ["documentType"],
-          message: "Selecione o tipo do documento.",
         });
       }
       return;
@@ -99,17 +91,18 @@ export const personDetailsSchema = z
       });
       return;
     }
-    const valid = documentType === "cpf"
-      ? isValidCpf(number)
-      : (() => {
-          const rg = number.replace(/[^A-Za-z0-9]/g, "");
-          return rg.length >= 5 && rg.length <= 14;
-        })();
+    const valid =
+      type === "cpf"
+        ? isValidCpf(number)
+        : (() => {
+            const rg = number.replace(/[^A-Za-z0-9]/g, "");
+            return rg.length >= 5 && rg.length <= 14;
+          })();
     if (!valid) {
       context.addIssue({
         code: "custom",
         path: ["documentNumber"],
-        message: documentType === "cpf" ? "Informe um CPF válido." : "Informe um RG válido.",
+        message: type === "cpf" ? "Informe um CPF válido." : "Informe um RG válido.",
       });
     }
   });

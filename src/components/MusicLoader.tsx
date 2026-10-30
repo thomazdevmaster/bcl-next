@@ -10,30 +10,33 @@ export function MusicLoader({
   label = 'Carregando…',
   compact = false,
   className = '',
+  tone = 'default',
 }: {
   label?: string;
   compact?: boolean;
   className?: string;
+  tone?: 'default' | 'current';
 }) {
+  const colorClass = tone === 'current' ? 'text-current' : 'text-[var(--primary)]';
   return (
     <div
       role="status"
-      className={`flex items-center justify-center ${compact ? 'inline-flex gap-2' : 'flex-col gap-3 py-8'} ${className}`}
+      className={`flex items-center justify-center ${compact ? 'inline-flex gap-2' : 'flex-col gap-3 py-8'} ${tone === 'current' ? 'text-current' : ''} ${className}`}
     >
       <span className={`inline-flex items-end gap-1 ${compact ? 'h-5' : 'h-12'}`} aria-hidden>
         {!compact ? (
-          <span className="music-loader__note material-icons text-3xl leading-none text-[var(--primary)]">music_note</span>
+          <span className={`music-loader__note material-icons text-3xl leading-none ${colorClass}`}>music_note</span>
         ) : null}
         {BARS.map((bar, index) => (
           <span
             key={index}
-            className={`music-loader__bar block rounded-full bg-[var(--primary)] ${compact ? 'w-1' : 'w-1.5'}`}
+            className={`music-loader__bar block rounded-full ${tone === 'current' ? 'bg-current' : 'bg-[var(--primary)]'} ${compact ? 'w-1' : 'w-1.5'}`}
             style={{ animationDelay: bar.delay, animationDuration: bar.duration }}
           />
         ))}
       </span>
       {label ? (
-        <span className={`text-[var(--muted)] ${compact ? 'text-sm' : 'text-sm font-medium'}`}>{label}</span>
+        <span className={`${tone === 'current' ? 'text-current' : 'text-[var(--muted)]'} ${compact ? 'text-sm' : 'text-sm font-medium'}`}>{label}</span>
       ) : (
         <span className="sr-only">Carregando…</span>
       )}

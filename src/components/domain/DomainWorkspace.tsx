@@ -1,35 +1,33 @@
 "use client";
 
-import {
-  type FormEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import Link from "next/link";
-
+import { ConfirmationDialog } from "@/components/shared/ConfirmationDialog";
 import { EntityDialog } from "@/components/shared/EntityDialog";
+import { TableRowActions } from "@/components/tables/core/TableRowActions";
 import { TableView } from "@/components/tables/core/TableView";
+import { createCrudTableRowActions } from "@/components/tables/core/table-actions";
 import { useAuth } from "@/contexts/AuthContext";
-import { usesRemoteApi } from "@/core/auth/accessToken";
 import { can } from "@/core/auth/permissions";
 import type { CrudResource } from "@/core/auth/permissions";
 import { hasRole, roleLabels } from "@/core/auth/roles";
 import { getDomain } from "@/domains/catalog";
 import {
   type CrudColumn,
-  type CrudField,
   type CrudOption,
   type CrudOptionSource,
   getCrudConfig,
+  getCrudFormStages,
   getValue,
+  isDomainCrudFormResource,
 } from "@/domains/crudConfig";
-import { filterSongRecordsForCatalog } from "@/domains/songs/catalogAccess";
 import type { Person } from "@/domains/people/types";
 import { filterPeopleForRole } from "@/domains/people/visibility";
+import { shouldNotifyOnPresentationSave } from "@/domains/presentations/notificationPayload";
+import { filterSongRecordsForCatalog } from "@/domains/songs/catalogAccess";
 import { apiFetch } from "@/lib/api";
+import { gestaoDeepLinkParam } from "@/lib/deepLink/gestaoDeepLinkParams";
+import { useGestaoDeepLink } from "@/lib/deepLink/useGestaoDeepLink";
 import { sealPassword } from "@/lib/passwordCipher";
 import { failureMessage, userFacingError } from "@/lib/userMessages";
 
@@ -48,8 +46,6 @@ type DialogMode = "create" | "view" | "edit" | null;
 
 const buttonMotion =
   "transition-[transform,background-color,color,border-color,box-shadow] duration-150 ease-out active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100";
-const iconMotion =
-  "transition-transform duration-200 ease-out group-hover:scale-110 group-active:scale-75 motion-reduce:transition-none motion-reduce:group-hover:scale-100 motion-reduce:group-active:scale-100";
 const controlMotion =
   "transition-[border-color,background-color,box-shadow] duration-150 ease-out motion-reduce:transition-none";
 
@@ -81,14 +77,16 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
   const [selected, setSelected] = useState<Record<string, unknown> | null>(
     null,
   );
-  const [values, setValues] = useState<Record<string, unknown>>(
+  const [initialValues, setInitialValues] = useState<Record<string, unknown>>(
     config.defaults,
   );
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [deleteTarget, setDeleteTarget] = useState<Record<
     string,
     unknown
   > | null>(null);
+  const [bulkDeleteTargets, setBulkDeleteTargets] = useState<
+    Record<string, unknown>[] | null
+  >(null);
   const [issuedPassword, setIssuedPassword] = useState<IssuedPassword | null>(
     null,
   );
@@ -117,7 +115,9 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
     setLoading(true);
     setError(null);
     try {
-      let rows = await apiFetch<Record<string, unknown>[]>(`/${domain.apiResource}`);
+      let rows = await apiFetch<Record<string, unknown>[]>(
+        `/${domain.apiResource}`,
+      );
       if (resource === "songs") {
         rows = filterSongRecordsForCatalog(rows, roles, permissions);
       }
@@ -136,7 +136,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
 
   useEffect(() => {
     // A listagem precisa iniciar quando o workspace monta.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     void fetchItems();
   }, [fetchItems]);
 
@@ -270,88 +270,77 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
 
   const openCreate = () => {
     setSelected(null);
-    setValues({ ...config.defaults });
-    setFormErrors({});
+    setInitialValues({ ...config.defaults });
+    setError(null);
     setDialogMode("create");
   };
 
   const openItem = useCallback(
     (item: Record<string, unknown>, mode: "view" | "edit") => {
       setSelected(item);
-      setValues({
+      setInitialValues({
         ...config.defaults,
         ...(config.toForm ? config.toForm(item) : item),
       });
-      setFormErrors({});
+      setError(null);
       setDialogMode(mode);
     },
     [config],
   );
 
+  useGestaoDeepLink({
+    param: gestaoDeepLinkParam(resource),
+    items,
+    loading,
+    onOpen: openItem,
+  });
+
+  const getRowActions = useCallback(
+    (row: Record<string, unknown>, includeView: boolean, mobile = false) => {
+      const hasScore = resource === "songs" && songHasScore(row);
+      return createCrudTableRowActions({
+        extras:
+          resource === "songs" && (hasScore || !mobile)
+            ? [
+                {
+                  id: "study",
+                  label: "Estudar",
+                  icon: "school",
+                  href: hasScore ? `/study/${row.id}` : undefined,
+                  onSelect: () => window.location.assign(`/study/${row.id}`),
+                  disabled: !hasScore,
+                  disabledTitle: "Sem partitura",
+                },
+              ]
+            : [],
+        view: includeView
+          ? { onSelect: () => openItem(row, "view") }
+          : undefined,
+        edit: canUpdate ? { onSelect: () => openItem(row, "edit") } : undefined,
+        remove: canDelete
+          ? {
+              onSelect: () => setDeleteTarget(row),
+              disabled:
+                resource === "users" && String(row.id) === String(user?.id),
+              disabledTitle: "Não é possível excluir o usuário da sessão.",
+            }
+          : undefined,
+      });
+    },
+    [canDelete, canUpdate, openItem, resource, user?.id],
+  );
+
   const renderRowActions = useCallback(
     (row: Record<string, unknown>) => (
-      <div className="flex justify-end gap-1">
-        {resource === "songs" ? (
-          songHasScore(row) ? (
-            <Link
-              href={`/study/${row.id}`}
-              title="Estudar"
-              aria-label="Estudar"
-              className={`group inline-flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-brand-strong)] hover:bg-[var(--color-brand-soft)] ${buttonMotion}`}
-            >
-              <span
-                className={`material-icons text-lg ${iconMotion}`}
-                aria-hidden="true"
-              >
-                school
-              </span>
-            </Link>
-          ) : (
-            <button
-              type="button"
-              disabled
-              title="Sem partitura"
-              aria-label="Estudar"
-              className="inline-flex h-11 w-11 cursor-not-allowed items-center justify-center rounded-full text-[var(--muted)] opacity-40"
-            >
-              <span className="material-icons text-lg" aria-hidden="true">
-                school
-              </span>
-            </button>
-          )
-        ) : null}
-        <ActionButton
-          icon="visibility"
-          label="Visualizar"
-          onClick={() => openItem(row, "view")}
-        />
-        {canUpdate && (
-          <ActionButton
-            icon="edit"
-            label="Editar"
-            onClick={() => openItem(row, "edit")}
-          />
-        )}
-        {canDelete && (
-          <ActionButton
-            icon="delete"
-            label="Excluir"
-            danger
-            disabled={
-              resource === "users" && String(row.id) === String(user?.id)
-            }
-            onClick={() => setDeleteTarget(row)}
-          />
-        )}
-      </div>
+      <TableRowActions actions={getRowActions(row, false)} />
     ),
-    [canDelete, canUpdate, openItem, resource, user?.id],
+    [getRowActions],
   );
 
   const dismissEntityDialog = useCallback(() => {
     setDialogMode(null);
     setSelected(null);
-    setFormErrors({});
+    setError(null);
   }, []);
 
   const closeDialog = () => {
@@ -359,23 +348,9 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
     dismissEntityDialog();
   };
 
-  const handleSave = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const errors = validateValues(config.fields, values);
-
-    if (resource === "users" && !managesRoles) {
-      const previous = Array.isArray(selected?.roles)
-        ? selected.roles.map(String).sort()
-        : [];
-      const next = Array.isArray(values.roles)
-        ? values.roles.map(String).sort()
-        : [];
-      if (previous.join("|") !== next.join("|")) {
-        errors.roles =
-          "Somente um administrador pode vincular ou desvincular papéis.";
-      }
-    }
-
+  const handleSave = async (values: Record<string, unknown>) => {
+    setError(null);
+    const errors: Record<string, string> = {};
     for (const uniqueField of uniqueFieldsForResource(resource)) {
       const candidate = normalizeUniqueValue(values[uniqueField]);
       if (
@@ -390,8 +365,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
       }
     }
 
-    setFormErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.keys(errors).length > 0) return errors;
 
     setSaving(true);
     setError(null);
@@ -402,9 +376,16 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
         : withAudit(values, selected ?? undefined);
       const payload: Record<string, unknown> =
         dialogMode === "create" ? mapped : { ...selected, ...mapped };
-      // Senha de usuário nunca sai em claro: cifrada para a API; no mock, nem é enviada.
+      if (resource === "presentations") {
+        payload.notifyAll = shouldNotifyOnPresentationSave(
+          Boolean(values.notifyAll),
+          selected,
+          dialogMode === "create",
+        );
+      }
+      // Senhas de usuário são cifradas antes de serem enviadas à API.
       if (typeof payload.password === "string") {
-        if (!usesRemoteApi() || !payload.password) {
+        if (!payload.password) {
           delete payload.password;
         } else {
           payload.password = await sealPassword(payload.password);
@@ -460,26 +441,46 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    const targets = bulkDeleteTargets ?? (deleteTarget ? [deleteTarget] : []);
+    if (targets.length === 0) return;
     setSaving(true);
     setError(null);
-    let didDelete = false;
     try {
-      await apiFetch<void>(
-        `/${domain.apiResource}/${String(deleteTarget.id)}`,
-        {
-          method: "DELETE",
-        },
+      const results = await Promise.allSettled(
+        targets.map((target) =>
+          apiFetch<void>(`/${domain.apiResource}/${String(target.id)}`, {
+            method: "DELETE",
+          }),
+        ),
       );
-      setItems((current) =>
-        current.filter((item) => item.id !== deleteTarget.id),
+      const deletedIds = targets
+        .filter((_, index) => results[index].status === "fulfilled")
+        .map((target) => target.id);
+      const failedTargets = targets.filter(
+        (_, index) => results[index].status === "rejected",
       );
-      didDelete = true;
+      if (deletedIds.length > 0) {
+        setItems((current) =>
+          current.filter((item) => !deletedIds.includes(item.id)),
+        );
+      }
+      if (failedTargets.length > 0) {
+        const failure = results.find((result) => result.status === "rejected");
+        setError(
+          userFacingError(
+            failure?.status === "rejected" ? failure.reason : undefined,
+            `Não foi possível excluir ${failedTargets.length} registro(s).`,
+          ),
+        );
+        if (bulkDeleteTargets) setBulkDeleteTargets(failedTargets);
+      } else {
+        setBulkDeleteTargets(null);
+        setDeleteTarget(null);
+      }
     } catch (caught) {
       setError(userFacingError(caught));
     } finally {
       setSaving(false);
-      if (didDelete) setDeleteTarget(null);
     }
   };
 
@@ -499,13 +500,15 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
             </p>
           </div>
           {canCreate && (
-            <button
-              type="button"
-              className={`btn-primary min-h-11 ${buttonMotion}`}
-              onClick={openCreate}
-            >
-              Novo cadastro
-            </button>
+            <div className="hidden min-[960px]:block">
+              <button
+                type="button"
+                className={`btn-primary min-h-11 ${buttonMotion}`}
+                onClick={openCreate}
+              >
+                Novo cadastro
+              </button>
+            </div>
           )}
         </header>
 
@@ -542,7 +545,53 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
               emptyMessage={`Nenhum registro de ${domain.label.toLocaleLowerCase("pt-BR")} encontrado.`}
               noResultsMessage="Nenhum registro corresponde à busca ou aos filtros."
               getRowLabel={(row) => config.itemLabel(row)}
+              mobilePrimaryLabel={
+                resource === "people" ? "Informações de" : undefined
+              }
+              getMobilePrimary={
+                resource === "users"
+                  ? (row) =>
+                      String(
+                        row.personName ?? row.name ?? row.username ?? "Usuário",
+                      )
+                  : resource === "people"
+                    ? (row) =>
+                        `${String(row.firstName ?? "")} ${String(row.lastName ?? "")}`.trim()
+                    : resource === "patrimony"
+                      ? (row) => String(row.name ?? "—")
+                      : resource === "songs"
+                        ? (row) => String(row.title ?? "—")
+                        : undefined
+              }
+              getMobilePrimaryLabel={
+                resource === "users"
+                  ? (row) => String(row.username ?? "Usuário")
+                  : resource === "patrimony"
+                    ? (row) => String(row.code ?? "Código")
+                    : resource === "songs"
+                      ? (row) => String(row.composer ?? "Compositor")
+                      : undefined
+              }
+              mobilePrimaryAction={
+                canCreate ? (
+                  <button
+                    type="button"
+                    className={"btn-primary min-h-11 w-full " + buttonMotion}
+                    onClick={openCreate}
+                  >
+                    Novo cadastro
+                  </button>
+                ) : undefined
+              }
+              mobileSelectionEnabled={canDelete}
+              onDeleteSelected={(targets, clearSelection) => {
+                if (!canDelete || targets.length === 0) return;
+                clearSelection();
+                setBulkDeleteTargets(targets);
+                setDeleteTarget(null);
+              }}
               renderRowActions={renderRowActions}
+              renderMobileRowActions={(row) => getRowActions(row, false, true)}
               toolbarLabels={{
                 section: `Controles de ${domain.label.toLocaleLowerCase("pt-BR")}`,
               }}
@@ -563,31 +612,32 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
                 : config.singular
         }
         size="xl"
-        placement="bottom"
-        closeOnBackdropClick={false}
+        placement="mobile-full"
+        closeOnBackdropClick
         onClose={closeDialog}
       >
-        {dialogMode ? (
+        {dialogMode && isDomainCrudFormResource(resource) ? (
           <EntityForm
+            key={`${resource}:${dialogMode}:${String(selected?.id ?? "novo")}`}
+            resource={resource}
             fields={config.fields.filter(
               (field) =>
-                (field.name !== "createUser" && field.name !== "username") ||
-                resource === "users" ||
-                can(roles, "users", "create", permissions),
+                ((field.name !== "createUser" && field.name !== "username") ||
+                  resource === "users" ||
+                  can(roles, "users", "create", permissions)) &&
+                (field.name !== "notifyAll" ||
+                  (dialogMode !== "view" &&
+                    (dialogMode === "create" ||
+                      selected?.status !== "scheduled" ||
+                      selected?.isPublic !== true))),
             )}
-            values={values}
-            errors={formErrors}
+            values={initialValues}
             readOnly={dialogMode === "view"}
             editing={dialogMode === "edit"}
             saving={saving}
-            roleChoices={roleChoices}
+            error={error}
             dynamicChoices={choices}
-            rolesLocked={resource === "users" && !managesRoles}
-            onChange={(name, value) => {
-              setValues((current) => ({ ...current, [name]: value }));
-              setFormErrors((current) => ({ ...current, [name]: "" }));
-            }}
-            onClose={closeDialog}
+            stages={getCrudFormStages(resource)}
             onSubmit={handleSave}
             onEdit={
               dialogMode === "view" && canUpdate && selected
@@ -598,68 +648,40 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
         ) : null}
       </EntityDialog>
 
-      {deleteTarget && (
-        <div
-          className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50 p-4 sm:items-center"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-title"
-          onClick={() => setDeleteTarget(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2 id="delete-title" className="text-xl font-semibold">
-              Excluir {config.singular}
-            </h2>
-            <p className="mt-2 text-sm text-[var(--muted)]">
-              Confirma a exclusão de{" "}
-              <strong>{config.itemLabel(deleteTarget)}</strong>? Esta ação não
-              pode ser desfeita.
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                className={`btn-ghost min-h-11 ${buttonMotion}`}
-                disabled={saving}
-                onClick={() => setDeleteTarget(null)}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className={`btn-danger min-h-11 ${buttonMotion}`}
-                disabled={saving}
-                onClick={() => void handleDelete()}
-              >
-                {saving ? "Excluindo…" : "Excluir"}
-              </button>
-            </div>
-          </div>
-        </div>
+      {(deleteTarget || bulkDeleteTargets) && (
+        <ConfirmationDialog
+          open
+          title={
+            bulkDeleteTargets
+              ? `Excluir ${bulkDeleteTargets.length} registro(s)`
+              : `Excluir ${config.singular}`
+          }
+          description={
+            bulkDeleteTargets
+              ? "Confirma a exclusão dos registros selecionados? Esta ação não pode ser desfeita."
+              : `Confirma a exclusão de ${config.itemLabel(deleteTarget ?? {})}? Esta ação não pode ser desfeita.`
+          }
+          confirmLabel={saving ? "Excluindo…" : "Excluir"}
+          danger
+          busy={saving}
+          closeOnBackdropClick={!saving}
+          onClose={() => {
+            setDeleteTarget(null);
+            setBulkDeleteTargets(null);
+          }}
+          onConfirm={() => void handleDelete()}
+        />
       )}
 
       {issuedPassword && (
-        <div
-          className="fixed inset-0 z-[210] flex items-end justify-center bg-black/50 p-4 sm:items-center"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="issued-password-title"
-          onClick={() => setIssuedPassword(null)}
+        <EntityDialog
+          open
+          title="Acesso criado"
+          description={`Envie o usuário e a senha inicial para ${issuedPassword.name}. A senha não será mostrada de novo e precisa ser trocada no primeiro acesso.`}
+          size="sm"
+          onClose={() => setIssuedPassword(null)}
         >
-          <div
-            className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2 id="issued-password-title" className="text-xl font-semibold">
-              Acesso criado
-            </h2>
-            <p className="mt-2 text-sm text-[var(--muted)]">
-              Envie o usuário e a senha inicial para{" "}
-              <strong>{issuedPassword.name}</strong>. A senha não será mostrada
-              de novo e precisa ser trocada no primeiro acesso.
-            </p>
+          <div className="max-h-[70dvh] overflow-y-auto p-6">
             <label className="mt-4 flex flex-col gap-1.5 text-sm">
               Usuário
               <input
@@ -701,7 +723,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
               </button>
             </div>
           </div>
-        </div>
+        </EntityDialog>
       )}
     </DomainGuard>
   );
@@ -716,64 +738,6 @@ function songHasScore(row: Record<string, unknown>): boolean {
       return typeof url === "string" && url.length > 0;
     })
   );
-}
-
-function ActionButton({
-  icon,
-  label,
-  onClick,
-  danger = false,
-  disabled = false,
-}: {
-  icon: string;
-  label: string;
-  onClick: () => void;
-  danger?: boolean;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      title={disabled ? "Não é possível excluir o usuário da sessão." : label}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className={`group inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full disabled:cursor-not-allowed disabled:opacity-30 ${buttonMotion} ${
-        danger
-          ? "text-red-600 hover:bg-red-50"
-          : "text-[var(--color-brand-strong)] hover:bg-[var(--color-brand-soft)]"
-      }`}
-    >
-      <span
-        className={`material-icons text-lg ${iconMotion}`}
-        aria-hidden="true"
-      >
-        {icon}
-      </span>
-    </button>
-  );
-}
-
-function validateValues(
-  fields: CrudField[],
-  values: Record<string, unknown>,
-): Record<string, string> {
-  const errors: Record<string, string> = {};
-  for (const field of fields) {
-    if (field.showWhen && !field.showWhen(values)) continue;
-    const value = values[field.name];
-    const empty =
-      value === undefined ||
-      value === null ||
-      (Array.isArray(value) ? value.length === 0 : String(value).trim() === "");
-    if (field.required && empty) {
-      errors[field.name] = `${field.label} é obrigatório.`;
-      continue;
-    }
-    const customError = field.validate?.(value, values);
-    if (customError) errors[field.name] = customError;
-  }
-  return errors;
 }
 
 function uniqueFieldsForResource(resource: CrudResource): string[] {
@@ -808,7 +772,7 @@ function formatCell(
 ): string {
   const value = getValue(row, column.path);
   if (column.path === "hasScore") return songHasScore(row) ? "Sim" : "Não";
-  if (column.path === "updatedBy")
+  if (column.path === "createdBy")
     return value == null || value === "" ? "system" : String(value);
   if (column.path === "visibility") {
     if (value === "public") return "Pública";

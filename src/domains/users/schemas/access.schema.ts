@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const USERNAME_PATTERN = /^[a-z0-9][a-z0-9._-]{2,59}$/;
+import { isValidUsername } from "@/domains/users/username";
 
 export const accessSchema = z
   .object({
@@ -10,11 +10,12 @@ export const accessSchema = z
     isActive: z.boolean(),
   })
   .superRefine(({ username, password, confirmPassword }, context) => {
-    if (username && !USERNAME_PATTERN.test(username)) {
+    if (username && !isValidUsername(username)) {
       context.addIssue({
         code: "custom",
         path: ["username"],
-        message: "Use de 3 a 60 caracteres: letras minúsculas, números, ponto, hífen ou _.",
+        message:
+          "Use de 3 a 60 caracteres: letras minúsculas, números, ponto, hífen ou _.",
       });
     }
     if (password && password.length < 8) {

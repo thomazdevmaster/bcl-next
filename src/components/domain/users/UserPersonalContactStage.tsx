@@ -1,40 +1,43 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { zodResolver } from "@hookform/resolvers/zod";
+import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
 import {
   Controller,
   FormProvider,
+  type UseFormSetValue,
   useForm,
   useFormContext,
   useFormState,
   useWatch,
-  type UseFormSetValue,
 } from "react-hook-form";
+
+import { MusicLoader } from "@/components/MusicLoader";
 import { FormStageBlock } from "@/components/forms/FormStageBlock";
 import { FormStageField } from "@/components/forms/FormStageField";
-import { MusicLoader } from "@/components/MusicLoader";
-import {
-  controlBase,
-  controlHeight,
-  FIELD_STATUS,
-  type ValidationState,
-} from "@/components/forms/core";
+import { FIELD_STATUS, type ValidationState } from "@/components/forms/core";
 import { FormFieldValidationShell } from "@/components/forms/validations/FormFieldValidationShell";
-import { formatPhoneNumber } from "@/domains/people/formatting";
-import { formatCpf } from "@/domains/people/types";
+import { IconSelect } from "@/components/shared/IconSelect";
 import {
+  type CepAddress,
   formatPostalCode,
   lookupCep,
-  type CepAddress,
 } from "@/domains/people/cep";
+import {
+  composeAddress,
+  hasStructuredAddress,
+  mergeParsedAddressIntoValues,
+} from "@/domains/people/composeAddress";
+import { formatPhoneNumber } from "@/domains/people/formatting";
+import { formatCpf } from "@/domains/people/types";
+import { getUfFlagSrc } from "@/domains/people/ufFlags";
+import {
+  type PersonDetailsFormValues,
+  personDetailsSchema,
+} from "@/domains/users/schemas/person-details.schema";
 import { uploadMediaFile } from "@/lib/uploadMedia";
 import { userFacingError } from "@/lib/userMessages";
-import {
-  personDetailsSchema,
-  type PersonDetailsFormValues,
-} from "@/domains/users/schemas/person-details.schema";
 
 type Props = {
   values: Record<string, unknown>;
@@ -44,12 +47,7 @@ type Props = {
 };
 
 type AddressInputName =
-  | "street"
-  | "unit"
-  | "complement"
-  | "neighborhood"
-  | "city"
-  | "state";
+  "street" | "unit" | "complement" | "neighborhood" | "city" | "state";
 
 const BRAZILIAN_STATES = [
   "AC",
@@ -119,31 +117,41 @@ export function UserPersonalContactStage({
   onRegisterHandlers,
   readOnly = false,
 }: Props) {
+  const mergedValues = mergeParsedAddressIntoValues(values);
   const form = useForm<PersonDetailsFormValues>({
     defaultValues: {
-      firstName: valueFrom(values, "firstName"),
-      lastName: valueFrom(values, "lastName"),
-      birthDate: valueFrom(values, "birthDate"),
-      registeredAt: valueFrom(values, "registeredAt"),
+      firstName: valueFrom(mergedValues, "firstName"),
+      lastName: valueFrom(mergedValues, "lastName"),
+      birthDate: valueFrom(mergedValues, "birthDate"),
+      registeredAt: valueFrom(mergedValues, "registeredAt"),
       documentType: valueFrom(
-        values,
+        mergedValues,
         "document.type",
       ) as PersonDetailsFormValues["documentType"],
-      documentNumber: valueFrom(values, "document.number"),
-      photoSource: valueFrom(values, "photoSource") as PersonDetailsFormValues["photoSource"],
-      photoUrl: valueFrom(values, "photoUrl"),
-      status: valueFrom(values, "status") as PersonDetailsFormValues["status"],
-      postalCode: valueFrom(values, "postalCode"),
-      street: valueFrom(values, "street"),
-      addressNumber: valueFrom(values, "addressNumber"),
-      complement: valueFrom(values, "complement"),
-      unit: valueFrom(values, "unit"),
-      neighborhood: valueFrom(values, "neighborhood"),
-      city: valueFrom(values, "city"),
-      state: valueFrom(values, "state") as PersonDetailsFormValues["state"],
-      phone: valueFrom(values, "phone"),
-      email: valueFrom(values, "email"),
-      address: valueFrom(values, "address"),
+      documentNumber: valueFrom(mergedValues, "document.number"),
+      photoSource: valueFrom(
+        mergedValues,
+        "photoSource",
+      ) as PersonDetailsFormValues["photoSource"],
+      photoUrl: valueFrom(mergedValues, "photoUrl"),
+      status: valueFrom(
+        mergedValues,
+        "status",
+      ) as PersonDetailsFormValues["status"],
+      postalCode: valueFrom(mergedValues, "postalCode"),
+      street: valueFrom(mergedValues, "street"),
+      addressNumber: valueFrom(mergedValues, "addressNumber"),
+      complement: valueFrom(mergedValues, "complement"),
+      unit: valueFrom(mergedValues, "unit"),
+      neighborhood: valueFrom(mergedValues, "neighborhood"),
+      city: valueFrom(mergedValues, "city"),
+      state: valueFrom(
+        mergedValues,
+        "state",
+      ) as PersonDetailsFormValues["state"],
+      phone: valueFrom(mergedValues, "phone"),
+      email: valueFrom(mergedValues, "email"),
+      address: valueFrom(mergedValues, "address"),
     },
     resolver: zodResolver(personDetailsSchema),
     mode: "onBlur",
@@ -156,17 +164,40 @@ export function UserPersonalContactStage({
   });
   const photoSource = useWatch({ control: form.control, name: "photoSource" });
   const photoUrl = useWatch({ control: form.control, name: "photoUrl" });
-  const hasStructuredAddress = [
-    "postalCode",
-    "street",
-    "addressNumber",
-    "complement",
-    "unit",
-    "neighborhood",
-    "city",
-    "state",
-  ].some((name) => valueFrom(values, name).trim());
-  const legacyAddress = valueFrom(values, "address");
+  const structuredAddressReady = hasStructuredAddress(mergedValues);
+  const legacyAddress = valueFrom(mergedValues, "address");
+
+  useEffect(() => {
+    const next = mergeParsedAddressIntoValues(values);
+    form.reset({
+      firstName: valueFrom(next, "firstName"),
+      lastName: valueFrom(next, "lastName"),
+      birthDate: valueFrom(next, "birthDate"),
+      registeredAt: valueFrom(next, "registeredAt"),
+      documentType: valueFrom(
+        next,
+        "document.type",
+      ) as PersonDetailsFormValues["documentType"],
+      documentNumber: valueFrom(next, "document.number"),
+      photoSource: valueFrom(
+        next,
+        "photoSource",
+      ) as PersonDetailsFormValues["photoSource"],
+      photoUrl: valueFrom(next, "photoUrl"),
+      status: valueFrom(next, "status") as PersonDetailsFormValues["status"],
+      postalCode: valueFrom(next, "postalCode"),
+      street: valueFrom(next, "street"),
+      addressNumber: valueFrom(next, "addressNumber"),
+      complement: valueFrom(next, "complement"),
+      unit: valueFrom(next, "unit"),
+      neighborhood: valueFrom(next, "neighborhood"),
+      city: valueFrom(next, "city"),
+      state: valueFrom(next, "state") as PersonDetailsFormValues["state"],
+      phone: valueFrom(next, "phone"),
+      email: valueFrom(next, "email"),
+      address: valueFrom(next, "address"),
+    });
+  }, [form, values.id, values.address, values.street, values.postalCode]);
   const [cepLookupState, setCepLookupState] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
@@ -345,10 +376,19 @@ export function UserPersonalContactStage({
                   { value: "cpf", label: "CPF" },
                   { value: "rg", label: "RG" },
                 ]}
-                required
+                required={false}
                 disabled={readOnly}
-                warningMessage="Selecione CPF, RG ou Não informado."
-                onValueChange={(value) => onChange("document.type", value)}
+                warningMessage="Opcional. Escolha CPF, RG ou Não informado."
+                onValueChange={(value) => {
+                  onChange("document.type", value);
+                  if (value === "" || value === "none") {
+                    form.setValue("documentNumber", "", {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    });
+                    onChange("document.number", "");
+                  }
+                }}
               />
               {documentType === "cpf" || documentType === "rg" ? (
                 <FormStageField<PersonDetailsFormValues>
@@ -357,7 +397,9 @@ export function UserPersonalContactStage({
                   placeholder={
                     documentType === "cpf" ? "000.000.000-00" : "Número do RG"
                   }
-                  formatValue={documentType === "cpf" ? formatCpf : formatRgValue}
+                  formatValue={
+                    documentType === "cpf" ? formatCpf : formatRgValue
+                  }
                   disabled={readOnly}
                   required
                   onEdit={syncField("documentNumber")}
@@ -454,7 +496,7 @@ export function UserPersonalContactStage({
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
-              {legacyAddress && !hasStructuredAddress ? (
+              {legacyAddress && !structuredAddressReady ? (
                 <FormStageField<PersonDetailsFormValues>
                   name="address"
                   label="Endereço"
@@ -679,31 +721,36 @@ function PhotoSourceSelect({
                 ? "Opcional."
                 : (errors.photoUrl?.message ?? fieldState.error?.message)
             }
-            renderControl={({ id, name, describedBy, invalid }) => (
-              <select
-                ref={field.ref}
+            renderControl={({ id, describedBy, invalid }) => (
+              <IconSelect
                 id={id}
-                name={name}
-                disabled={disabled}
+                label="Foto de perfil"
+                options={[
+                  { value: "", label: "Selecione", icon: "more_horiz" },
+                  { value: "upload", label: "Enviar arquivo", icon: "upload" },
+                  {
+                    value: "external",
+                    label: "Informar URL externa",
+                    icon: "link",
+                  },
+                ]}
                 value={field.value}
-                onChange={(event) => {
-                  field.onChange(event);
-                  onValueChange(event.target.value);
+                disabled={disabled}
+                invalid={invalid}
+                describedBy={describedBy}
+                onTriggerRef={field.ref}
+                onBlur={field.onBlur}
+                triggerClassName={`${status.border} pr-3`}
+                onChange={(value) => {
+                  field.onChange(value);
+                  onValueChange(value);
                   setValue("photoUrl", "", {
                     shouldDirty: true,
                     shouldValidate: true,
                   });
                   void trigger("photoUrl");
                 }}
-                aria-required={undefined}
-                aria-describedby={describedBy}
-                aria-invalid={invalid || undefined}
-                className={`${controlBase} ${controlHeight.md} ${status.border} pr-3`}
-              >
-                <option value="">Selecione</option>
-                <option value="upload">Enviar arquivo</option>
-                <option value="external">Informar URL externa</option>
-              </select>
+              />
             )}
           />
         );
@@ -716,30 +763,23 @@ function formatRgValue(value: string): string {
   return value.toLocaleUpperCase("pt-BR").slice(0, 14);
 }
 
-function composeAddress(values: PersonDetailsFormValues): string {
-  const streetAndNumber = [values.street.trim(), values.addressNumber.trim()]
-    .filter(Boolean)
-    .join(", ");
-  const cityAndState = [values.city.trim(), values.state]
-    .filter(Boolean)
-    .join(" - ");
-  return [
-    streetAndNumber,
-    values.complement.trim(),
-    values.unit.trim(),
-    values.neighborhood.trim(),
-    cityAndState,
-    values.postalCode.trim() ? `CEP ${values.postalCode.trim()}` : "",
-  ]
-    .filter(Boolean)
-    .join(", ");
-}
-
 function syncAddressToParent(
   values: PersonDetailsFormValues,
   onChange: (name: string, value: unknown) => void,
 ) {
-  onChange("address", composeAddress(values));
+  onChange(
+    "address",
+    composeAddress({
+      street: values.street,
+      addressNumber: values.addressNumber,
+      complement: values.complement,
+      unit: values.unit,
+      neighborhood: values.neighborhood,
+      city: values.city,
+      state: values.state,
+      postalCode: values.postalCode,
+    }),
+  );
   onChange("postalCode", values.postalCode);
   onChange("street", values.street);
   onChange("addressNumber", values.addressNumber);
@@ -802,15 +842,15 @@ function PersonalSelectField({
       render={({ field, fieldState }) => {
         const empty = field.value === "";
         const statusMissing = name === "status" && empty;
-        const state: ValidationState = statusMissing
-          ? "invalid"
-          : fieldState.error
-            ? empty
-              ? "warning"
-              : "invalid"
-            : empty
-              ? "warning"
-              : "valid";
+        const optionalEmpty = !required && empty && name === "documentType";
+        const state: ValidationState =
+          statusMissing || fieldState.error
+            ? "invalid"
+            : optionalEmpty
+              ? "info"
+              : empty
+                ? "warning"
+                : "valid";
         const status = FIELD_STATUS[state];
         return (
           <FormFieldValidationShell
@@ -824,40 +864,51 @@ function PersonalSelectField({
             message={
               statusMissing
                 ? warningMessage
-                : empty
+                : optionalEmpty
                   ? warningMessage
-                  : fieldState.error?.message
+                  : empty
+                    ? warningMessage
+                    : fieldState.error?.message
             }
-            renderControl={({
-              id,
-              name: controlName,
-              describedBy,
-              invalid,
-            }) => (
-              <select
-                ref={field.ref}
+            renderControl={({ id, describedBy, invalid }) => (
+              <IconSelect
                 id={id}
-                name={controlName}
-                disabled={disabled}
+                label={label}
+                options={options.map((option) => ({
+                  ...option,
+                  imageSrc:
+                    name === "state" && option.value
+                      ? getUfFlagSrc(option.value)
+                      : undefined,
+                  icon:
+                    option.value === ""
+                      ? "more_horiz"
+                      : name === "status"
+                        ? option.value === "active"
+                          ? "check_circle"
+                          : "cancel"
+                        : name === "state"
+                          ? "location_on"
+                          : option.value === "none"
+                            ? "block"
+                            : "badge",
+                }))}
                 value={field.value}
-                onChange={(event) => {
-                  field.onChange(event);
-                  onValueChange(event.target.value);
+                disabled={disabled}
+                required={required}
+                invalid={invalid}
+                describedBy={describedBy}
+                onTriggerRef={field.ref}
+                onBlur={field.onBlur}
+                triggerClassName={`${status.border} pr-3`}
+                onChange={(value) => {
+                  field.onChange(value);
+                  onValueChange(value);
                   if (name === "documentType") {
                     void trigger(["documentType", "documentNumber"]);
                   }
                 }}
-                aria-required={required || undefined}
-                aria-describedby={describedBy}
-                aria-invalid={invalid || undefined}
-                className={`${controlBase} ${controlHeight.md} ${status.border} pr-3`}
-              >
-                {options.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              />
             )}
           />
         );

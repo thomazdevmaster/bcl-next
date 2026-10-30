@@ -27,6 +27,8 @@ export interface FieldProps {
   autoComplete?: string;
   required?: boolean;
   disabled?: boolean;
+  readOnly?: boolean;
+  step?: InputHTMLAttributes<HTMLInputElement>["step"];
   value?: string;
   onValueChange?: (value: string) => void;
   onBlur?: FocusEventHandler<HTMLInputElement>;
@@ -46,6 +48,9 @@ export interface FieldProps {
     describedBy?: string;
     invalid: boolean;
     className: string;
+    readOnly?: boolean;
+    step?: InputHTMLAttributes<HTMLInputElement>["step"];
   }) => ReactNode;
   labelForControl?: boolean;
+  labelClassName?: string;
 }

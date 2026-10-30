@@ -19,7 +19,7 @@ type RoleRecord = {
   description: string | null;
   systemRole: boolean;
   locked: boolean;
-  updatedBy?: string;
+  createdBy?: string;
   permissions: string[];
   users: RoleMember[];
 };
@@ -217,7 +217,7 @@ export default function PapeisPage() {
                 >
                   <span className="block font-semibold">{role.name}</span>
                   <span className="text-xs text-[var(--muted)]">
-                    {role.code} · {role.users.length} usuário{role.users.length === 1 ? '' : 's'} · alterado por {role.updatedBy || 'system'}
+                    {role.code} · {role.users.length} usuário{role.users.length === 1 ? '' : 's'} · criado por {role.createdBy || 'system'}
                   </span>
                 </button>
               </li>
