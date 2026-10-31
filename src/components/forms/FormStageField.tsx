@@ -15,12 +15,17 @@ import {
 } from "react-hook-form";
 
 import { IconCalendar } from "../shared/IconCalendar";
+import {
+  resolveFieldMessage,
+  resolveFieldValidationState,
+} from "./formStageFieldState";
 import { FormFieldValidationShell } from "./validations/FormFieldValidationShell";
 
 export type FormStageFieldProps<TFieldValues extends FieldValues> = {
   name: FieldPathByValue<TFieldValues, string>;
   label: ReactNode;
   type?: InputHTMLAttributes<HTMLInputElement>["type"];
+  calendarVariant?: "date" | "date-time";
   placeholder?: string;
   autoComplete?: string;
   required?: boolean;
@@ -30,6 +35,7 @@ export type FormStageFieldProps<TFieldValues extends FieldValues> = {
   className?: string;
   infoMessage?: ReactNode;
   optionalMessage?: ReactNode;
+  validatedOnOpen?: boolean;
   initialValueWarning?: ReactNode;
   visibilityLabel?: string;
   inputMode?: InputHTMLAttributes<HTMLInputElement>["inputMode"];
@@ -50,6 +56,7 @@ export function FormStageField<TFieldValues extends FieldValues>({
   name,
   label,
   type = "text",
+  calendarVariant = "date",
   placeholder,
   autoComplete,
   required = true,
@@ -59,6 +66,7 @@ export function FormStageField<TFieldValues extends FieldValues>({
   className,
   infoMessage,
   optionalMessage,
+  validatedOnOpen = false,
   initialValueWarning,
   visibilityLabel,
   inputMode,
@@ -92,28 +100,27 @@ export function FormStageField<TFieldValues extends FieldValues>({
     if (!validateOnMount || !hasValue) return;
     void trigger(name).then(() => setValidatedOnMount(true));
   }, [hasValue, name, trigger, validateOnMount]);
-  const state = fieldState.error
-    ? "invalid"
-    : untouchedGeneratedValue
-      ? "warning"
-      : emptyOptionalField && optionalMessage != null
-        ? "warning"
-        : (fieldState.isDirty ||
-              fieldState.isTouched ||
-              isSubmitted ||
-              validatedOnMount) &&
-            hasValue
-          ? "valid"
-          : "info";
-  const message =
-    fieldState.error?.message ??
-    (state === "warning"
-      ? untouchedGeneratedValue
-        ? initialValueWarning
-        : optionalMessage
-      : state === "info"
-        ? infoMessage
-        : undefined);
+  const state = resolveFieldValidationState({
+    hasError: Boolean(fieldState.error),
+    untouchedGeneratedValue,
+    emptyOptionalField,
+    hasOptionalMessage: optionalMessage != null,
+    hasBeenValidated:
+      fieldState.isDirty ||
+      fieldState.isTouched ||
+      isSubmitted ||
+      validatedOnOpen ||
+      validatedOnMount,
+    hasValue,
+  });
+  const message = resolveFieldMessage({
+    errorMessage: fieldState.error?.message,
+    state,
+    initialValueWarning,
+    optionalMessage,
+    infoMessage,
+    untouchedGeneratedValue,
+  });
 
   const handleChange = (rawValue: string) => {
     field.onChange(formatValue ? formatValue(rawValue) : rawValue);
@@ -153,22 +160,28 @@ export function FormStageField<TFieldValues extends FieldValues>({
       onBlur={handleBlur}
       inputRef={field.ref}
       renderControl={
-        type === "date"
-          ? (control) => (
-              <IconCalendar
-                {...control}
-                value={value}
-                onValueChange={handleChange}
-                onBlur={handleBlur}
-                inputRef={field.ref}
-                label={typeof label === "string" ? label : "data"}
-                placeholder={placeholder}
-                max={max}
-                disabled={disabled}
-                readOnly={readOnly}
-                required={required}
-              />
-            )
+        type === "date" ||
+        (type === "datetime-local" && calendarVariant === "date-time")
+          ? (control) => {
+              const { statusIconTone, ...calendarControl } = control;
+              return (
+                <IconCalendar
+                  {...calendarControl}
+                  iconToneClassName={statusIconTone}
+                  value={value}
+                  onValueChange={handleChange}
+                  onBlur={handleBlur}
+                  inputRef={field.ref}
+                  label={typeof label === "string" ? label : "data"}
+                  placeholder={placeholder}
+                  max={max}
+                  disabled={disabled}
+                  readOnly={readOnly}
+                  required={required}
+                  variant={calendarVariant}
+                />
+              );
+            }
           : undefined
       }
       state={state}

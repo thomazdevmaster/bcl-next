@@ -47,6 +47,7 @@ export interface FieldProps {
     name?: string;
     describedBy?: string;
     invalid: boolean;
+    statusIconTone: string;
     className: string;
     readOnly?: boolean;
     step?: InputHTMLAttributes<HTMLInputElement>["step"];
