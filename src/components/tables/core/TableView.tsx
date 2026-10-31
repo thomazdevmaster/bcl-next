@@ -34,6 +34,7 @@ import { TableSelectionToolbar } from "../toolbar/TableSelectionToolbar";
 import { TableToolbar } from "../toolbar/TableToolbar";
 import type { TableToolbarLabels } from "../toolbar/TableToolbar";
 import { TableMobileCards } from "./TableMobileCards";
+import { TableOverflowFullscreen } from "./TableOverflowFullscreen";
 import type { MobileTableAction } from "./table-actions";
 import { tableFeatures } from "./table-features";
 import type { TableColumnDef, TableState } from "./table-features";
@@ -64,66 +65,93 @@ function isColumnPresentation(
 ): value is TableColumnPresentation {
   if (!isRecord(value)) return false;
   return (
-    (value.alignment === "left" ||
-      value.alignment === "center" ||
-      value.alignment === "right") &&
-    (value.verticalAlignment === "top" ||
-      value.verticalAlignment === "middle" ||
-      value.verticalAlignment === "bottom") &&
-    (value.textTransform === "none" ||
-      value.textTransform === "uppercase" ||
-      value.textTransform === "lowercase") &&
-    typeof value.bold === "boolean" &&
-    typeof value.italic === "boolean" &&
-    typeof value.underline === "boolean" &&
-    typeof value.strikethrough === "boolean" &&
-    (typeof value.textColor === "string" || value.textColor === null) &&
-    (typeof value.cellColor === "string" || value.cellColor === null)
+    isHorizontalAlignment(value.alignment) &&
+    isVerticalAlignment(value.verticalAlignment) &&
+    isTextTransform(value.textTransform) &&
+    hasTextStyleFlags(value) &&
+    hasValidColors(value)
   );
 }
 
-function parseTablePreferences(
+function isHorizontalAlignment(value: unknown): boolean {
+  return value === "left" || value === "center" || value === "right";
+}
+
+function isVerticalAlignment(value: unknown): boolean {
+  return value === "top" || value === "middle" || value === "bottom";
+}
+
+function isTextTransform(value: unknown): boolean {
+  return value === "none" || value === "uppercase" || value === "lowercase";
+}
+
+function hasTextStyleFlags(value: Record<string, unknown>): boolean {
+  return (
+    typeof value.bold === "boolean" &&
+    typeof value.italic === "boolean" &&
+    typeof value.underline === "boolean" &&
+    typeof value.strikethrough === "boolean"
+  );
+}
+
+function hasValidColors(value: Record<string, unknown>): boolean {
+  return isNullableString(value.textColor) && isNullableString(value.cellColor);
+}
+
+function isNullableString(value: unknown): boolean {
+  return typeof value === "string" || value === null;
+}
+
+export function parseTablePreferences(
   value: unknown,
 ): PersistedTablePreferences | null {
   if (!isRecord(value) || value.version !== TABLE_PREFERENCES_VERSION)
     return null;
-  if (
-    !Array.isArray(value.columnOrder) ||
-    !value.columnOrder.every((id) => typeof id === "string")
-  )
-    return null;
-  if (
-    !isRecord(value.columnPresentations) ||
-    !Object.values(value.columnPresentations).every(isColumnPresentation)
-  )
-    return null;
-  if (
-    !isRecord(value.columnPinning) ||
-    !Array.isArray(value.columnPinning.start) ||
-    !value.columnPinning.start.every((id) => typeof id === "string")
-  )
-    return null;
-  if (
-    !Array.isArray(value.columnPinning.end) ||
-    !value.columnPinning.end.every((id) => typeof id === "string")
-  )
-    return null;
-  if (
-    !isRecord(value.columnSizing) ||
-    !Object.values(value.columnSizing).every(
-      (size) => typeof size === "number" && Number.isFinite(size),
-    )
-  )
-    return null;
-  if (
-    !isRecord(value.columnVisibility) ||
-    !Object.values(value.columnVisibility).every(
-      (visible) => typeof visible === "boolean",
-    )
-  )
-    return null;
+  if (!isStringArray(value.columnOrder)) return null;
+  if (!isColumnPresentationMap(value.columnPresentations)) return null;
+  if (!isColumnPinning(value.columnPinning)) return null;
+  if (!isColumnSizing(value.columnSizing)) return null;
+  if (!isColumnVisibility(value.columnVisibility)) return null;
 
   return value as unknown as PersistedTablePreferences;
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isColumnPresentationMap(
+  value: unknown,
+): value is Record<string, TableColumnPresentation> {
+  return isRecord(value) && Object.values(value).every(isColumnPresentation);
+}
+
+function isColumnPinning(
+  value: unknown,
+): value is TableState["columnPinning"] {
+  return (
+    isRecord(value) &&
+    isStringArray(value.start) &&
+    isStringArray(value.end)
+  );
+}
+
+function isColumnSizing(value: unknown): value is TableState["columnSizing"] {
+  return (
+    isRecord(value) &&
+    Object.values(value).every(
+      (size) => typeof size === "number" && Number.isFinite(size),
+    )
+  );
+}
+
+function isColumnVisibility(
+  value: unknown,
+): value is TableState["columnVisibility"] {
+  return (
+    isRecord(value) &&
+    Object.values(value).every((visible) => typeof visible === "boolean")
+  );
 }
 
 function serializeTablePreferences(
@@ -444,6 +472,7 @@ export function TableView<TData extends RowData>({
   );
 
   const tableRef = useRef<HTMLDivElement>(null);
+  const fullscreenContainerRef = useRef<HTMLElement>(null);
   const theadRef = useRef<HTMLTableSectionElement>(null);
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
   const [mobileSelectionMode, setMobileSelectionMode] = useState(false);
@@ -719,7 +748,10 @@ export function TableView<TData extends RowData>({
   const noData = data.length === 0;
 
   return (
-    <section className="flex min-w-0 flex-col gap-4 text-[var(--foreground)]">
+    <section
+      ref={fullscreenContainerRef}
+      className="flex min-w-0 flex-col gap-4 text-[var(--foreground)] [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:z-[100] [&:fullscreen]:gap-3 [&:fullscreen]:overflow-auto [&:fullscreen]:bg-[var(--background)] [&:fullscreen]:p-3 [&:fullscreen]:sm:p-6"
+    >
       {cellSelectionEnabled && (
         <CellSelectionHotkeys table={table} target={tableRef} />
       )}
@@ -772,6 +804,10 @@ export function TableView<TData extends RowData>({
         cellSelectionEnabled={cellSelectionEnabled}
         columnVisibilityEnabled={columnVisibilityEnabled}
         mobilePrimaryAction={mobilePrimaryAction}
+      />
+      <TableOverflowFullscreen
+        containerRef={fullscreenContainerRef}
+        tableRef={tableRef}
       />
       <TableResetConfirmationDialog
         open={resetConfirmationOpen}

@@ -35,6 +35,53 @@ describe("IconSelect keyboard navigation", () => {
     expect(list.id).not.toBe("");
   });
 
+  it("renders its menu inside the active fullscreen element", async () => {
+    const user = userEvent.setup();
+    const originalFullscreenDescriptor = Object.getOwnPropertyDescriptor(
+      document,
+      "fullscreenElement",
+    );
+    const fullscreenElement = document.createElement("section");
+    const onChange = vi.fn();
+    document.body.append(fullscreenElement);
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      value: fullscreenElement,
+    });
+    try {
+      render(
+        <div>
+          <IconSelect
+            label="Tipo"
+            options={[{ value: "evento", label: "Evento" }]}
+            value="evento"
+            onChange={onChange}
+          />
+        </div>,
+        { container: fullscreenElement },
+      );
+
+      await user.click(screen.getByRole("combobox", { name: "Tipo: Evento" }));
+
+      const menu = await screen.findByRole("listbox", { name: "Tipo" });
+      expect(fullscreenElement.contains(menu)).toBe(true);
+      await user.click(screen.getByRole("option", { name: "Evento" }));
+      expect(onChange).toHaveBeenCalledWith("evento");
+    } finally {
+      cleanup();
+      if (originalFullscreenDescriptor) {
+        Object.defineProperty(
+          document,
+          "fullscreenElement",
+          originalFullscreenDescriptor,
+        );
+      } else {
+        Reflect.deleteProperty(document, "fullscreenElement");
+      }
+      fullscreenElement.remove();
+    }
+  });
+
   it("uses Tab to leave the popup at the next form control in a dialog", async () => {
     const user = userEvent.setup();
     render(
