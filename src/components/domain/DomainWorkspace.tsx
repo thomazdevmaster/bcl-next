@@ -13,7 +13,6 @@ import type { CrudResource } from "@/core/auth/permissions";
 import { hasRole, roleLabels } from "@/core/auth/roles";
 import { getDomain } from "@/domains/catalog";
 import {
-  type CrudColumn,
   type CrudOption,
   type CrudOptionSource,
   getCrudConfig,
@@ -33,11 +32,28 @@ import { failureMessage, userFacingError } from "@/lib/userMessages";
 
 import { DomainGuard } from "./DomainGuard";
 import { EntityForm, type EntityFormDynamicChoices } from "./EntityForm";
+import { uniqueFieldsForResource, withAudit } from "./crudWorkspaceHelpers";
+import { formatCell, songHasScore } from "./formatCell";
 import { createDomainTableColumns } from "./table-columns";
+import {
+  useInstrumentChoices,
+  usePeopleChoices,
+  usePresentationSongChoices,
+  usePresentationTypeChoices,
+} from "./domainWorkspaceChoiceHooks";
 import { UsersWorkspace } from "./users/UsersWorkspace";
+
+export {
+  loadPresentationSongChoices,
+  loadPresentationTypeChoices,
+} from "./domainWorkspaceChoiceHooks";
 
 interface DomainWorkspaceProps {
   resource: CrudResource;
+  /** Render inside a caller-owned titled workspace. */
+  hideHeader?: boolean;
+  /** Noun used by the create action and dialog when embedded in a workspace. */
+  createNoun?: string;
   /** @deprecated Columns and fields now come from the domain CRUD configuration. */
   entityFields?: string[];
 }
@@ -65,9 +81,14 @@ export function DomainWorkspace(props: DomainWorkspaceProps) {
   return <GenericDomainWorkspace {...props} />;
 }
 
-function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
+function GenericDomainWorkspace({
+  resource,
+  hideHeader = false,
+  createNoun = "cadastro",
+}: DomainWorkspaceProps) {
   const domain = getDomain(resource);
   const config = getCrudConfig(resource);
+  const createLabel = `Novo ${createNoun}`;
   const { roles, permissions, user } = useAuth();
   const [items, setItems] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,7 +115,15 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
   const [choices, setChoices] = useState<EntityFormDynamicChoices>({
     people: null,
     instruments: null,
+    presentationTypes: null,
+    presentationTypesLoading: false,
+    presentationTypesError: null,
+    songs: null,
+    songsLoading: resource === "presentations",
+    songsError: null,
   });
+  const [presentationTypesRequest, setPresentationTypesRequest] = useState(0);
+  const [songsRequest, setSongsRequest] = useState(0);
   const canCreate = can(roles, resource, "create", permissions);
   const canUpdate = can(roles, resource, "update", permissions);
   const canDelete = can(roles, resource, "delete", permissions);
@@ -110,6 +139,8 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
   const needsPeople =
     sources.has("people") || sources.has("people-without-user");
   const needsInstruments = sources.has("instruments");
+  const needsPresentationTypes = sources.has("presentation-types");
+  const needsSongs = sources.has("songs");
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -158,68 +189,21 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
     };
   }, [managesRoles, resource]);
 
-  // Pessoas: usadas como responsável, dono de instrumento e pessoa do usuário.
-  useEffect(() => {
-    if (!needsPeople) return;
-    let active = true;
-    apiFetch<Array<Pick<Person, "id" | "firstName" | "lastName" | "userId">>>(
-      "/people",
-    )
-      .then((data) => {
-        if (!active) return;
-        setChoices((current) => ({
-          ...current,
-          people: data.map((person) => ({
-            value: String(person.id),
-            label:
-              `${person.firstName ?? ""} ${person.lastName ?? ""}`.trim() ||
-              String(person.id),
-            hasUser: person.userId != null && person.userId !== "",
-          })),
-        }));
-      })
-      .catch(() => {
-        if (active) setChoices((current) => ({ ...current, people: null }));
-      });
-    return () => {
-      active = false;
-    };
-  }, [needsPeople]);
+  usePeopleChoices(needsPeople, setChoices);
+  useInstrumentChoices(needsInstruments, setChoices);
+  usePresentationTypeChoices(needsPresentationTypes, presentationTypesRequest, setChoices);
+  usePresentationSongChoices(needsSongs, songsRequest, setChoices);
 
-  // Catálogo de instrumentos (trompete, sax alto) para músico e patrimônio.
-  useEffect(() => {
-    if (!needsInstruments) return;
-    let active = true;
-    apiFetch<
-      Array<{
-        id: string | number;
-        name?: string;
-        tuning?: string;
-        status?: string;
-      }>
-    >("/instruments")
-      .then((data) => {
-        if (!active) return;
-        setChoices((current) => ({
-          ...current,
-          instruments: data
-            .filter((item) => item.status !== "inactive")
-            .map((item) => ({
-              value: String(item.id),
-              label:
-                [item.name, item.tuning].filter(Boolean).join(" · ") ||
-                String(item.id),
-            })),
-        }));
-      })
-      .catch(() => {
-        if (active)
-          setChoices((current) => ({ ...current, instruments: null }));
-      });
-    return () => {
-      active = false;
-    };
-  }, [needsInstruments]);
+  const retryPresentationTypes = () =>
+    setPresentationTypesRequest((current) => current + 1);
+  const retrySongs = () => {
+    setChoices((current) => ({
+      ...current,
+      songsLoading: true,
+      songsError: null,
+    }));
+    setSongsRequest((current) => current + 1);
+  };
 
   // Depois de salvar uma pessoa, a lista de pessoas usada nos selects precisa refletir a conta nova.
   const refreshPeopleChoices = (saved: Record<string, unknown>) => {
@@ -407,7 +391,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
       delete stored.temporaryPassword;
       setItems((current) =>
         dialogMode === "create"
-          ? [...current, stored]
+          ? [stored, ...current]
           : current.map((item) => (item.id === stored.id ? stored : item)),
       );
       if (resource === "people") refreshPeopleChoices(stored);
@@ -487,51 +471,67 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
   return (
     <DomainGuard resource={resource}>
       <section className="mx-auto space-y-6">
-        <header className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              Domínio
-            </p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-              {domain.label}
-            </h1>
-            <p className="mt-2 max-w-2xl text-[var(--muted)]">
-              {domain.description}
-            </p>
-          </div>
-          {canCreate && (
-            <div className="hidden min-[960px]:block">
-              <button
-                type="button"
-                className={`btn-primary min-h-11 ${buttonMotion}`}
-                onClick={openCreate}
-              >
-                Novo cadastro
-              </button>
+        {!hideHeader ? (
+          <header className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                Domínio
+              </p>
+              <h1 className="mt-1 text-3xl font-semibold tracking-tight">
+                {domain.label}
+              </h1>
+              <p className="mt-2 max-w-2xl text-[var(--muted)]">
+                {domain.description}
+              </p>
             </div>
-          )}
-        </header>
+            {canCreate && (
+              <div className="hidden min-[960px]:block">
+                <button
+                  type="button"
+                  className={`btn-primary min-h-11 ${buttonMotion}`}
+                  onClick={openCreate}
+                >
+                  {createLabel}
+                </button>
+              </div>
+            )}
+          </header>
+        ) : null}
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <article className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-[var(--shadow-soft)]">
-            <p className="text-sm text-[var(--muted)]">Seu perfil</p>
-            <p className="text-lg font-semibold">{roleLabels(roles)}</p>
-          </article>
-          <article className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-[var(--shadow-soft)]">
-            <p className="text-sm text-[var(--muted)]">Registros visíveis</p>
-            <p className="text-lg font-semibold">
-              {loading ? "…" : rows.length}
-            </p>
-          </article>
-          <article className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-[var(--shadow-soft)]">
-            <p className="text-sm text-[var(--muted)]">Escrita</p>
-            <p className="text-lg font-semibold">
-              {canCreate ? "Permitida" : "Somente leitura"}
-            </p>
-          </article>
-        </div>
+        {hideHeader && canCreate ? (
+          <div className="mb-3 hidden justify-end min-[960px]:flex">
+            <button
+              type="button"
+              className={`btn-primary min-h-11 ${buttonMotion}`}
+              onClick={openCreate}
+            >
+              {createLabel}
+            </button>
+          </div>
+        ) : null}
 
-        <article className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
+        {!hideHeader ? (
+          <div className="grid gap-4 md:grid-cols-3">
+            <article className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-[var(--shadow-soft)]">
+              <p className="text-sm text-[var(--muted)]">Seu perfil</p>
+              <p className="text-lg font-semibold">{roleLabels(roles)}</p>
+            </article>
+            <article className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-[var(--shadow-soft)]">
+              <p className="text-sm text-[var(--muted)]">Registros visíveis</p>
+              <p className="text-lg font-semibold">
+                {loading ? "…" : rows.length}
+              </p>
+            </article>
+            <article className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 shadow-[var(--shadow-soft)]">
+              <p className="text-sm text-[var(--muted)]">Escrita</p>
+              <p className="text-lg font-semibold">
+                {canCreate ? "Permitida" : "Somente leitura"}
+              </p>
+            </article>
+          </div>
+        ) : null}
+
+        <article className="rounded-xl bg-[var(--card)]">
           <div className="p-4">
             <TableView
               tableId={resource}
@@ -549,7 +549,9 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
                 resource === "people" ? "Informações de" : undefined
               }
               getMobilePrimary={
-                resource === "users"
+                resource === "presentations"
+                  ? (row) => String(row.title ?? "—")
+                  : resource === "users"
                   ? (row) =>
                       String(
                         row.personName ?? row.name ?? row.username ?? "Usuário",
@@ -564,7 +566,19 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
                         : undefined
               }
               getMobilePrimaryLabel={
-                resource === "users"
+                resource === "presentations"
+                  ? (row) =>
+                      formatCell(
+                        row,
+                        {
+                          path: "startsAt",
+                          label: "Data completa",
+                          format: "datetime",
+                        },
+                        null,
+                        null,
+                      )
+                  : resource === "users"
                   ? (row) => String(row.username ?? "Usuário")
                   : resource === "patrimony"
                     ? (row) => String(row.code ?? "Código")
@@ -579,7 +593,7 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
                     className={"btn-primary min-h-11 w-full " + buttonMotion}
                     onClick={openCreate}
                   >
-                    Novo cadastro
+                    {createLabel}
                   </button>
                 ) : undefined
               }
@@ -604,7 +618,9 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
         open={dialogMode !== null}
         title={
           dialogMode === "create"
-            ? `Novo ${config.singular}`
+            ? hideHeader
+              ? createLabel
+              : `Novo ${config.singular}`
             : dialogMode === "edit"
               ? `Editar ${config.itemLabel(selected ?? {})}`
               : dialogMode === "view"
@@ -639,6 +655,8 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
             dynamicChoices={choices}
             stages={getCrudFormStages(resource)}
             onSubmit={handleSave}
+            onRetryPresentationTypes={retryPresentationTypes}
+            onRetrySongs={retrySongs}
             onEdit={
               dialogMode === "view" && canUpdate && selected
                 ? () => openItem(selected, "edit")
@@ -729,120 +747,9 @@ function GenericDomainWorkspace({ resource }: DomainWorkspaceProps) {
   );
 }
 
-function songHasScore(row: Record<string, unknown>): boolean {
-  return (
-    Array.isArray(row.scores) &&
-    row.scores.some((score) => {
-      if (!score || typeof score !== "object") return false;
-      const url = (score as { url?: unknown }).url;
-      return typeof url === "string" && url.length > 0;
-    })
-  );
-}
-
-function uniqueFieldsForResource(resource: CrudResource): string[] {
-  if (resource === "users") return ["username"];
-  if (resource === "people") return ["email", "document.number"];
-  if (resource === "media") return ["slug"];
-  if (resource === "patrimony") return ["code"];
-  if (resource === "instruments") return ["name"];
-  return [];
-}
-
 function normalizeUniqueValue(value: unknown): string {
   return String(value ?? "")
     .replace(/[.\-\s/]/g, "")
     .trim()
     .toLocaleLowerCase("pt-BR");
-}
-
-function withAudit(
-  values: Record<string, unknown>,
-  current?: Record<string, unknown>,
-): Record<string, unknown> {
-  const now = new Date().toISOString();
-  return { ...values, createdAt: current?.createdAt ?? now, updatedAt: now };
-}
-
-function formatCell(
-  row: Record<string, unknown>,
-  column: CrudColumn,
-  roleChoices: CrudOption[] | null,
-  personChoices: PersonChoice[] | null,
-): string {
-  const value = getValue(row, column.path);
-  if (column.path === "hasScore") return songHasScore(row) ? "Sim" : "Não";
-  if (column.path === "createdBy")
-    return value == null || value === "" ? "system" : String(value);
-  if (column.path === "visibility") {
-    if (value === "public") return "Pública";
-    const who = [
-      row.visibleToStudents ? "alunos" : "",
-      row.visibleToMusicians ? "músicos" : "",
-    ].filter(Boolean);
-    return who.length > 0 ? `Privada · ${who.join(" e ")}` : "Privada";
-  }
-  if (column.format === "status") {
-    const labels: Record<string, string> = {
-      active: "Ativo",
-      inactive: "Inativo",
-      available: "Disponível",
-      in_use: "Em uso",
-      maintenance: "Manutenção",
-      retired: "Baixado",
-      draft: "Rascunho",
-      scheduled: "Agendada",
-      done: "Realizada",
-      cancelled: "Cancelada",
-      published: "Publicado",
-      public: "Pública",
-      private: "Privada",
-      none: "—",
-      processing: "Processando",
-      ready: "Pronta",
-      failed: "Falhou",
-      skipped: "Sem áudio",
-    };
-    return labels[String(value)] ?? String(value ?? "—");
-  }
-  if (column.format === "boolean") return value ? "Sim" : "Não";
-  if (column.format === "count")
-    return String(Array.isArray(value) ? value.length : 0);
-  if (column.format === "currency") {
-    return typeof value === "number"
-      ? new Intl.NumberFormat("pt-BR", {
-          style: "currency",
-          currency: "BRL",
-        }).format(value)
-      : "—";
-  }
-  if (column.format === "date" || column.format === "datetime") {
-    if (!value) return "—";
-    const date = new Date(String(value));
-    if (Number.isNaN(date.getTime())) return "—";
-    return column.format === "date"
-      ? date.toLocaleDateString("pt-BR")
-      : date.toLocaleString("pt-BR");
-  }
-  if (column.format === "roles" && Array.isArray(value)) {
-    return value
-      .map(
-        (role) =>
-          roleChoices?.find((option) => option.value === String(role))?.label ??
-          roleLabels([String(role)]),
-      )
-      .join(", ");
-  }
-  if (
-    (column.path === "personId" ||
-      column.path === "assignedPersonId" ||
-      column.path === "guardianId") &&
-    value
-  ) {
-    return (
-      personChoices?.find((option) => option.value === String(value))?.label ??
-      "Vinculada"
-    );
-  }
-  return value == null || value === "" ? "—" : String(value);
 }

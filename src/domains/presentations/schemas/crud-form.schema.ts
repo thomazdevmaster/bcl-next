@@ -7,6 +7,7 @@ export const presentationsCrudFormSchema = z
   .object({
     resource: z.literal("presentations"),
     id: z.union([z.string(), z.number()]).optional(),
+    eventTypeId: z.string(),
     title: z.string().trim().min(1, "Informe o título."),
     venue: z.string().trim().min(1, "Informe o local."),
     startsAt: z
@@ -22,13 +23,20 @@ export const presentationsCrudFormSchema = z
         "Informe uma data e hora de fim válidas.",
       ),
     description: z.string(),
-    repertoireIds: z.string(),
+    repertoireIds: z.array(z.string()),
     coverUrl: z.string(),
     isPublic: z.boolean(),
     status: z.enum(["", "draft", "scheduled", "done", "cancelled"]),
     notifyAll: z.boolean(),
   })
   .superRefine((values, context) => {
+    if (values.id == null && !values.eventTypeId.trim()) {
+      context.addIssue({
+        code: "custom",
+        path: ["eventTypeId"],
+        message: "Selecione o tipo do evento.",
+      });
+    }
     if (!values.status) {
       context.addIssue({
         code: "custom",

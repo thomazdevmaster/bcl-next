@@ -11,10 +11,10 @@ import {
 } from "react";
 import {
   type DefaultValues,
+  type FieldErrors,
   type FieldPath,
   type FieldPathByValue,
   FormProvider,
-  type UseFormReturn,
   useController,
   useForm,
   useFormContext,
@@ -32,6 +32,7 @@ import type {
   CrudField,
   CrudFormStage,
   CrudOption,
+  CrudOptionSource,
 } from "@/domains/crudConfig";
 import type { DomainCrudFormResource } from "@/domains/crudConfig";
 import {
@@ -39,17 +40,24 @@ import {
   domainCrudFormSchema,
 } from "@/domains/crudFormSchema";
 import { formatPhoneNumber } from "@/domains/people/formatting";
-import {
-  isMusicXmlUploadFile,
-  looksLikeMusicXml,
-  metadataFromMusicXml,
-} from "@/domains/songs/musicXmlMetadata";
 import { youtubeEmbedUrl, youtubeWatchUrl } from "@/domains/songs/youtube";
-import { extractInstrumentsFromXml } from "@/study/studyUtils";
+import { prepareMusicXmlUpload } from "./prepareMusicXmlUpload";
 
 export interface EntityFormDynamicChoices {
   people: Array<CrudOption & { hasUser: boolean }> | null;
   instruments: CrudOption[] | null;
+  presentationTypes: Array<
+    CrudOption & {
+      isPublicByDefault: boolean;
+      isActive: boolean;
+      isSystem: boolean;
+    }
+  > | null;
+  presentationTypesLoading?: boolean;
+  presentationTypesError?: string | null;
+  songs?: CrudOption[] | null;
+  songsLoading?: boolean;
+  songsError?: string | null;
 }
 
 export interface EntityFormProps {
@@ -65,6 +73,8 @@ export interface EntityFormProps {
   onSubmit: (
     values: Record<string, unknown>,
   ) => Promise<Record<string, string> | undefined>;
+  onRetryPresentationTypes?: () => void;
+  onRetrySongs?: () => void;
   onEdit?: () => void;
 }
 
@@ -82,6 +92,8 @@ export function EntityForm({
   dynamicChoices,
   stages,
   onSubmit,
+  onRetryPresentationTypes,
+  onRetrySongs,
   onEdit,
 }: EntityFormProps) {
   const form = useForm<DomainCrudFormValues>({
@@ -92,11 +104,13 @@ export function EntityForm({
       values,
     ) as DefaultValues<DomainCrudFormValues>,
     shouldUnregister: false,
-    mode: "onTouched",
+    mode: editing ? "onChange" : "onTouched",
   });
+  const formErrors = form.formState.errors;
   const watched = useWatch({ control: form.control });
   const flatValues = toCrudValues(watched);
   const [activeStage, setActiveStage] = useState(0);
+  const [validatedOnOpen, setValidatedOnOpen] = useState(false);
   const [maxReachable, setMaxReachable] = useState(
     readOnly ? stages.length - 1 : 0,
   );
@@ -108,7 +122,23 @@ export function EntityForm({
       (!field.showWhen || field.showWhen(flatValues)),
   );
   const hasSections = visibleFields.some((field) => field.section);
-  const stageStatuses = getStageStatuses(stages, form, maxReachable);
+  const stageStatuses = getStageStatuses(
+    stages,
+    formErrors,
+    maxReachable,
+    validatedOnOpen,
+  );
+
+  useEffect(() => {
+    if (!editing || readOnly) return;
+    let active = true;
+    void form.trigger().then(() => {
+      if (active) setValidatedOnOpen(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [editing, form, readOnly]);
 
   useEffect(() => {
     contentRef.current?.scrollTo({ top: 0 });
@@ -294,11 +324,15 @@ export function EntityForm({
                 return (
                   <FieldSlot key={field.name} heading={heading} wide={wide}>
                     <CrudFormField
+                      resource={resource}
                       field={field}
                       values={flatValues}
                       dynamicChoices={dynamicChoices}
+                      validatedOnOpen={validatedOnOpen}
                       readOnly={readOnly}
                       editing={editing}
+                      onRetryPresentationTypes={onRetryPresentationTypes}
+                      onRetrySongs={onRetrySongs}
                     />
                   </FieldSlot>
                 );
@@ -342,56 +376,83 @@ export function EntityForm({
   );
 }
 
+function usesFormStageField(field: CrudField): boolean {
+  return !["checkbox", "select", "multiselect", "textarea", "xml"].includes(
+    field.type ?? "",
+  );
+}
+
+export function simpleFieldPresentation(
+  resource: DomainCrudFormResource,
+  field: CrudField,
+) {
+  const isEventDate = field.name === "startsAt" || field.name === "endsAt";
+  return {
+    calendarVariant:
+      resource === "presentations" && isEventDate ? "date-time" : undefined,
+    optionalMessage: field.required ? undefined : "Opcional",
+    inputMode:
+      field.type === "tel"
+        ? "tel"
+        : field.type === "number"
+          ? "decimal"
+          : undefined,
+    autoComplete: field.type === "password" ? "new-password" : undefined,
+    step: field.type === "number" ? "0.01" : undefined,
+  } as const;
+}
+
+export function formatCrudFieldValue(
+  field: CrudField,
+  value: string,
+  values: Record<string, unknown>,
+): string {
+  if (field.type === "tel") return formatPhoneNumber(value);
+  return field.format ? field.format(value, values) : value;
+}
+
 function CrudFormField({
+  resource,
   field,
   values,
   dynamicChoices,
+  validatedOnOpen,
   readOnly,
   editing,
+  onRetryPresentationTypes,
+  onRetrySongs,
 }: {
+  resource: DomainCrudFormResource;
   field: CrudField;
   values: Record<string, unknown>;
   dynamicChoices: EntityFormDynamicChoices;
+  validatedOnOpen: boolean;
   readOnly: boolean;
   editing: boolean;
+  onRetryPresentationTypes?: () => void;
+  onRetrySongs?: () => void;
 }) {
   const formName = toFormFieldName(field.name);
   const fieldPath = formName as FieldPath<DomainCrudFormValues>;
   const disabled = readOnly || (editing && Boolean(field.lockOnEdit));
-  const formatValue = (value: string) =>
-    field.type === "tel"
-      ? formatPhoneNumber(value)
-      : field.format
-        ? field.format(value, values)
-        : value;
-
-  if (
-    field.type !== "checkbox" &&
-    field.type !== "select" &&
-    field.type !== "multiselect" &&
-    field.type !== "textarea" &&
-    field.type !== "xml"
-  ) {
+  const presentation = simpleFieldPresentation(resource, field);
+  if (usesFormStageField(field)) {
     return (
       <FormStageField<DomainCrudFormValues>
         name={fieldPath as FieldPathByValue<DomainCrudFormValues, string>}
         label={field.label}
         type={field.type ?? "text"}
+        calendarVariant={presentation.calendarVariant}
         placeholder={field.placeholder}
         required={field.required ?? false}
+        validatedOnOpen={validatedOnOpen}
         readOnly={disabled}
         infoMessage={field.helpText}
-        optionalMessage={field.required ? undefined : "Opcional"}
-        inputMode={
-          field.type === "tel"
-            ? "tel"
-            : field.type === "number"
-              ? "decimal"
-              : undefined
-        }
-        autoComplete={field.type === "password" ? "new-password" : undefined}
-        step={field.type === "number" ? "0.01" : undefined}
-        formatValue={formatValue}
+        optionalMessage={presentation.optionalMessage}
+        inputMode={presentation.inputMode}
+        autoComplete={presentation.autoComplete}
+        step={presentation.step}
+        formatValue={(value) => formatCrudFieldValue(field, value, values)}
         className="min-w-0"
       />
     );
@@ -404,7 +465,11 @@ function CrudFormField({
       values={values}
       dynamicChoices={dynamicChoices}
       disabled={disabled}
+      validatedOnOpen={validatedOnOpen}
       readOnly={readOnly}
+      editing={editing}
+      onRetryPresentationTypes={onRetryPresentationTypes}
+      onRetrySongs={onRetrySongs}
     />
   );
 }
@@ -415,16 +480,24 @@ function ControlledCrudField({
   values,
   dynamicChoices,
   disabled,
+  validatedOnOpen,
   readOnly,
+  editing,
+  onRetryPresentationTypes,
+  onRetrySongs,
 }: {
   field: CrudField;
   fieldPath: FieldPath<DomainCrudFormValues>;
   values: Record<string, unknown>;
   dynamicChoices: EntityFormDynamicChoices;
   disabled: boolean;
+  validatedOnOpen: boolean;
   readOnly: boolean;
+  editing: boolean;
+  onRetryPresentationTypes?: () => void;
+  onRetrySongs?: () => void;
 }) {
-  const { control, clearErrors, setError, setValue } =
+  const { control, clearErrors, getFieldState, setError, setValue } =
     useFormContext<DomainCrudFormValues>();
   const { field: controllerField, fieldState } = useController({
     control,
@@ -434,7 +507,7 @@ function ControlledCrudField({
   const message = fieldState.error?.message;
   const state = fieldState.invalid
     ? "invalid"
-    : fieldState.isTouched || fieldState.isDirty
+    : fieldState.isTouched || fieldState.isDirty || validatedOnOpen
       ? "valid"
       : "info";
   const options = optionsForField(field, values, dynamicChoices);
@@ -455,58 +528,26 @@ function ControlledCrudField({
     const file = input.files?.[0];
     if (!file) return;
     clearErrors(fieldPath);
-    if (!isMusicXmlUploadFile(file)) {
+    const result = await prepareMusicXmlUpload(file);
+    if (!result.ok) {
       input.value = "";
-      setError(fieldPath, {
-        type: "validate",
-        message:
-          "Formato não aceito. Envie apenas MusicXML (.xml ou .musicxml). Exporte a partitura como MusicXML e tente novamente.",
-      });
+      setError(fieldPath, { type: "validate", message: result.message });
       return;
     }
-    try {
-      const content = await file.text();
-      if (!looksLikeMusicXml(content)) {
-        input.value = "";
-        setError(fieldPath, {
-          type: "validate",
-          message:
-            "O arquivo não parece ser MusicXML válido. Confira a exportação e tente novamente.",
-        });
-        return;
-      }
-      if (extractInstrumentsFromXml(content).length === 0) {
-        input.value = "";
-        setError(fieldPath, {
-          type: "validate",
-          message:
-            "A partitura não define naipes utilizáveis. Exporte como MusicXML partwise com a lista de instrumentos.",
-        });
-        return;
-      }
-      const encoded = `data:${file.type || "application/xml"};base64,${btoa(unescape(encodeURIComponent(content)))}`;
-      setFileFieldValue("scoreFile", encoded);
-      setFileFieldValue("scoreFileName", file.name);
-      setFileFieldValue("scoreMimeType", file.type || "application/xml");
-      const metadata = metadataFromMusicXml(content);
-      for (const name of [
+    setFileFieldValue("scoreFile", result.dataUrl);
+    setFileFieldValue("scoreFileName", result.fileName);
+    setFileFieldValue("scoreMimeType", result.mimeType);
+    for (const name of [
         "title",
         "composer",
         "arranger",
         "genre",
         "key",
-      ] as const) {
-        if (metadata[name]) setFileFieldValue(name, metadata[name]);
-      }
-      if (metadata.durationSeconds != null) {
-        setFileFieldValue("durationSeconds", String(metadata.durationSeconds));
-      }
-    } catch {
-      setError(fieldPath, {
-        type: "validate",
-        message:
-          "Não foi possível ler a partitura. Confira o arquivo e tente novamente.",
-      });
+    ] as const) {
+      if (result.metadata[name]) setFileFieldValue(name, result.metadata[name]);
+    }
+    if (result.metadata.durationSeconds != null) {
+      setFileFieldValue("durationSeconds", String(result.metadata.durationSeconds));
     }
   };
 
@@ -552,21 +593,69 @@ function ControlledCrudField({
         }
 
         if (field.type === "select") {
+          const handleChange = (nextValue: string) => {
+            controllerField.onChange(nextValue);
+            if (
+              field.name === "eventTypeId" &&
+              !editing &&
+              !getFieldState("isPublic").isTouched
+            ) {
+              const selectedType = dynamicChoices.presentationTypes?.find(
+                (item) => item.value === nextValue,
+              );
+              if (selectedType) {
+                setValue("isPublic", selectedType.isPublicByDefault, {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                });
+              }
+            }
+          };
+          const isPresentationType = field.name === "eventTypeId";
           return (
-            <IconSelect
-              id={id}
-              label={field.label}
-              options={options}
-              value={String(value ?? "")}
-              disabled={disabled}
-              required={fieldRequired}
-              invalid={invalid}
-              describedBy={describedBy}
-              onTriggerRef={controllerField.ref}
-              triggerClassName={`${className} !pr-3`}
-              onBlur={controllerField.onBlur}
-              onChange={controllerField.onChange}
-            />
+            <div className="min-w-0 space-y-2">
+              <IconSelect
+                id={id}
+                label={field.label}
+                options={options}
+                value={String(value ?? "")}
+                disabled={
+                  disabled ||
+                  (isPresentationType &&
+                    (dynamicChoices.presentationTypesLoading ||
+                      Boolean(dynamicChoices.presentationTypesError)))
+                }
+                required={fieldRequired}
+                invalid={invalid}
+                describedBy={describedBy}
+                onTriggerRef={controllerField.ref}
+                triggerClassName={`${className} !pr-3`}
+                onBlur={controllerField.onBlur}
+                onChange={handleChange}
+              />
+              {isPresentationType && dynamicChoices.presentationTypesLoading ? (
+                <p className="text-sm text-[var(--muted)]" role="status">
+                  Carregando tipos de evento…
+                </p>
+              ) : null}
+              {isPresentationType && dynamicChoices.presentationTypesError ? (
+                <div
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--destructive)]/40 p-3 text-sm text-[var(--destructive)]"
+                  role="alert"
+                >
+                  <span>{dynamicChoices.presentationTypesError}</span>
+                  {!readOnly && onRetryPresentationTypes ? (
+                    <button
+                      type="button"
+                      className="min-h-11 rounded-lg px-3 font-semibold underline underline-offset-2"
+                      onClick={onRetryPresentationTypes}
+                    >
+                      Tentar novamente
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           );
         }
 
@@ -591,6 +680,56 @@ function ControlledCrudField({
 
         if (field.type === "multiselect") {
           const selectedValues = Array.isArray(value) ? value.map(String) : [];
+          if (field.optionsSource === "songs") {
+            return (
+              <div className="min-w-0 space-y-2">
+                <IconSelect
+                  id={id}
+                  label={field.label}
+                  options={options}
+                  multiple
+                  value={selectedValues}
+                  allowEmptySelection
+                  selectedSummary={(selected) =>
+                    selected.length === 0
+                      ? "Selecione músicas…"
+                      : `${selected.length} ${selected.length === 1 ? "música selecionada" : "músicas selecionadas"}`
+                  }
+                  disabled={
+                    disabled ||
+                    dynamicChoices.songsLoading === true ||
+                    Boolean(dynamicChoices.songsError)
+                  }
+                  describedBy={describedBy}
+                  onBlur={controllerField.onBlur}
+                  onChange={controllerField.onChange}
+                  triggerClassName={`${className} !pr-3`}
+                />
+                {dynamicChoices.songsLoading ? (
+                  <p className="text-sm text-[var(--muted)]" role="status">
+                    Carregando músicas…
+                  </p>
+                ) : null}
+                {dynamicChoices.songsError ? (
+                  <div
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--destructive)]/40 p-3 text-sm text-[var(--destructive)]"
+                    role="alert"
+                  >
+                    <span>{dynamicChoices.songsError}</span>
+                    {!readOnly && onRetrySongs ? (
+                      <button
+                        type="button"
+                        className="min-h-11 rounded-lg px-3 font-semibold underline underline-offset-2"
+                        onClick={onRetrySongs}
+                      >
+                        Tentar novamente
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            );
+          }
           return (
             <div
               id={id}
@@ -760,31 +899,57 @@ function FieldSlot({
   );
 }
 
-function makeFormDefaults(
+export function makeFormDefaults(
   resource: DomainCrudFormResource,
   fields: CrudField[],
   values: Record<string, unknown>,
 ): Record<string, unknown> {
   const defaults: Record<string, unknown> = { resource };
   if (values.id != null) defaults.id = values.id;
-  for (const field of fields) {
-    const value = values[field.name];
-    defaults[toFormFieldName(field.name)] =
-      value ?? defaultValueForField(field);
-  }
+  addFieldDefaults(defaults, fields, values);
   if (resource === "people" && values.userId != null)
     defaults.userId = values.userId;
-  if (resource === "songs") {
-    defaults.scoreFileName = values.scoreFileName ?? "";
-    defaults.scoreMimeType = values.scoreMimeType ?? "";
-  }
-  if (resource === "presentations") {
-    defaults.notifyAll = values.notifyAll ?? true;
-  }
+  if (resource === "songs") addSongDefaults(defaults, values);
+  if (resource === "presentations") addPresentationDefaults(defaults, values);
   return defaults;
 }
 
-function defaultValueForField(field: CrudField): unknown {
+function addFieldDefaults(
+  defaults: Record<string, unknown>,
+  fields: CrudField[],
+  values: Record<string, unknown>,
+): void {
+  for (const field of fields) {
+    defaults[toFormFieldName(field.name)] =
+      values[field.name] ?? defaultValueForField(field);
+  }
+}
+
+function addSongDefaults(
+  defaults: Record<string, unknown>,
+  values: Record<string, unknown>,
+): void {
+  defaults.scoreFileName = values.scoreFileName ?? "";
+  defaults.scoreMimeType = values.scoreMimeType ?? "";
+}
+
+function addPresentationDefaults(
+  defaults: Record<string, unknown>,
+  values: Record<string, unknown>,
+): void {
+  defaults.notifyAll = values.notifyAll ?? true;
+  const eventType = asRecord(values.eventType);
+  defaults.eventTypeName = eventType?.name ?? "";
+  defaults.eventTypeIcon = eventType?.icon ?? "event";
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+export function defaultValueForField(field: CrudField): unknown {
   if (field.type === "checkbox") return false;
   if (field.type === "multiselect") return [];
   return "";
@@ -807,20 +972,17 @@ function toFormFieldName(name: string): string {
 
 function getStageStatuses(
   stages: CrudFormStage[],
-  form: UseFormReturn<DomainCrudFormValues>,
+  errors: FieldErrors<DomainCrudFormValues>,
   maxReachable: number,
+  validatedOnOpen: boolean,
 ): Record<string, "complete" | "warning" | "error"> {
   const statuses: Record<string, "complete" | "warning" | "error"> = {};
   stages.forEach((stage, index) => {
     const hasError = stage.fields.some((name) =>
-      Boolean(
-        form.getFieldState(
-          toFormFieldName(name) as FieldPath<DomainCrudFormValues>,
-        ).error,
-      ),
+      hasNestedError(errors, toFormFieldName(name)),
     );
     if (hasError) statuses[stage.title] = "error";
-    else if (index < maxReachable) {
+    else if (validatedOnOpen || index < maxReachable) {
       statuses[stage.title] = "complete";
     }
   });
@@ -835,43 +997,36 @@ function hasNestedError(errors: unknown, path: string): boolean {
   return Boolean(value && typeof value === "object" && "message" in value);
 }
 
-function optionsForField(
+export function optionsForField(
   field: CrudField,
   values: Record<string, unknown>,
   dynamic: EntityFormDynamicChoices,
 ): CrudOption[] {
   const value = values[field.name];
-  const selectedValue = value == null ? "" : String(value);
-  let options: CrudOption[];
+  const selectedValue =
+    value == null || Array.isArray(value) ? "" : String(value);
+  const options = optionsForSource(
+    field,
+    values,
+    dynamic,
+    value,
+    selectedValue,
+  );
+  const withEmptyChoice = addEmptyChoice(field, options);
+  const withSelection = addSelectedOption(
+    field,
+    withEmptyChoice,
+    selectedValue,
+  );
+  return addFallbackIcons(withSelection);
+}
 
-  if (!field.optionsSource) {
-    options = field.options ?? [];
-  } else if (field.optionsSource === "instruments") {
-    options = (dynamic.instruments ?? []).map((option) => ({
-      ...option,
-      icon: option.icon ?? "music_note",
-    }));
-  } else {
-    const selfId = values.id == null ? null : String(values.id);
-    const selectedPeopleValue = selectedValue || null;
-    const people = dynamic.people ?? [];
-    const filtered = people.filter((person) => {
-      if (person.value === selfId) return false;
-      return (
-        field.optionsSource !== "people-without-user" ||
-        !person.hasUser ||
-        person.value === selectedPeopleValue
-      );
-    });
-    options = filtered.map(({ value: id, label }) => ({
-      value: id,
-      label,
-      icon: "person",
-    }));
+function addEmptyChoice(field: CrudField, options: CrudOption[]): CrudOption[] {
+  if (field.type === "multiselect" && field.optionsSource === "songs") {
+    return options;
   }
-
   const emptyOption = options.find((option) => option.value === "");
-  options = [
+  return [
     {
       value: "",
       label: "Selecione…",
@@ -879,23 +1034,128 @@ function optionsForField(
     },
     ...options.filter((option) => option.value !== ""),
   ];
+}
 
+function addSelectedOption(
+  field: CrudField,
+  options: CrudOption[],
+  selectedValue: string,
+): CrudOption[] {
   if (
-    selectedValue &&
-    !options.some((option) => option.value === selectedValue)
+    !selectedValue ||
+    options.some((option) => option.value === selectedValue)
   ) {
-    const isPerson =
-      field.optionsSource === "people" ||
-      field.optionsSource === "people-without-user";
-    options.push({
+    return options;
+  }
+  const isPerson =
+    field.optionsSource === "people" ||
+    field.optionsSource === "people-without-user";
+  return [
+    ...options,
+    {
       value: selectedValue,
       label: `${isPerson ? "Pessoa" : "Opção"} #${selectedValue}`,
       icon: isPerson ? "person" : "tune",
-    });
-  }
+    },
+  ];
+}
 
+function addFallbackIcons(options: CrudOption[]): CrudOption[] {
   return options.map((option) => ({
     ...option,
     icon: option.icon ?? (option.value ? "tune" : "more_horiz"),
   }));
+}
+
+function optionsForSource(
+  field: CrudField,
+  values: Record<string, unknown>,
+  dynamic: EntityFormDynamicChoices,
+  value: unknown,
+  selectedValue: string,
+): CrudOption[] {
+  const source = field.optionsSource;
+  if (!source) return field.options ?? [];
+  return sourceOptionBuilders[source](
+    field,
+    values,
+    dynamic,
+    value,
+    selectedValue,
+  );
+}
+
+type SourceOptionBuilder = (
+  field: CrudField,
+  values: Record<string, unknown>,
+  dynamic: EntityFormDynamicChoices,
+  value: unknown,
+  selectedValue: string,
+) => CrudOption[];
+
+const sourceOptionBuilders: Record<CrudOptionSource, SourceOptionBuilder> = {
+  "presentation-types": (_field, values, dynamic, _value, selectedValue) =>
+    presentationTypeOptions(values, dynamic, selectedValue),
+  instruments: (_field, _values, dynamic) =>
+    addDefaultIcon(dynamic.instruments ?? [], "music_note"),
+  songs: (_field, _values, dynamic, value) =>
+    songOptions(dynamic.songs ?? [], value),
+  people: (field, values, dynamic, _value, selectedValue) =>
+    peopleOptions(field, values, dynamic, selectedValue),
+  "people-without-user": (field, values, dynamic, _value, selectedValue) =>
+    peopleOptions(field, values, dynamic, selectedValue),
+};
+
+function presentationTypeOptions(
+  values: Record<string, unknown>,
+  dynamic: EntityFormDynamicChoices,
+  selectedValue: string,
+): CrudOption[] {
+  const types = (dynamic.presentationTypes ?? [])
+    .filter((type) => type.isActive || type.value === selectedValue)
+    .map((type) => ({ ...type, icon: type.icon ?? "event" }));
+  if (selectedValue !== "__snapshot__") return types;
+  return [
+    ...types,
+    {
+      value: "__snapshot__",
+      label: `${String(values.eventTypeName || "Tipo removido")} (removido)`,
+      icon: String(values.eventTypeIcon || "event"),
+    },
+  ];
+}
+
+function addDefaultIcon(options: CrudOption[], icon: string): CrudOption[] {
+  return options.map((option) => ({ ...option, icon: option.icon ?? icon }));
+}
+
+function songOptions(options: CrudOption[], value: unknown): CrudOption[] {
+  const available = addDefaultIcon(options, "library_music");
+  const selectedIds = Array.isArray(value) ? value.map(String) : [];
+  const unavailable = selectedIds
+    .filter((id) => !available.some((option) => option.value === id))
+    .map((id) => ({
+      value: id,
+      label: `Música #${id} (indisponível)`,
+      icon: "library_music",
+    }));
+  return [...available, ...unavailable];
+}
+
+function peopleOptions(
+  field: CrudField,
+  values: Record<string, unknown>,
+  dynamic: EntityFormDynamicChoices,
+  selectedValue: string,
+): CrudOption[] {
+  const selfId = values.id == null ? null : String(values.id);
+  return (dynamic.people ?? [])
+    .filter((person) => person.value !== selfId)
+    .filter(
+      (person) =>
+        field.optionsSource !== "people-without-user" ||
+        !person.hasUser ||
+        person.value === (selectedValue || null),
+    )
+    .map(({ value, label }) => ({ value, label, icon: "person" }));
 }

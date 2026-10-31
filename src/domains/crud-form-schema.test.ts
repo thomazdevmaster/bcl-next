@@ -38,6 +38,21 @@ const validPeople = {
 };
 
 describe("domain CRUD form schemas", () => {
+  it("preserves the presentation desktop column order", () => {
+    const columns = getCrudConfig("presentations").columns;
+
+    expect(columns.slice(0, 3)).toEqual([
+      { path: "eventType.name", label: "Tipo" },
+      { path: "title", label: "Título" },
+      { path: "venue", label: "Local" },
+    ]);
+    expect(columns[3]).toEqual({
+      path: "startsAt",
+      label: "Data",
+      format: "datetime",
+    });
+  });
+
   it.each([
     ["pessoas", peopleCrudFormSchema, validPeople],
     [
@@ -101,12 +116,13 @@ describe("domain CRUD form schemas", () => {
       presentationsCrudFormSchema,
       {
         resource: "presentations",
+        eventTypeId: "1",
         title: "Concerto",
         venue: "Praça",
         startsAt: "2026-11-20T19:00",
         endsAt: "2026-11-20T20:00",
         description: "",
-        repertoireIds: "12, 13",
+        repertoireIds: ["12", "13"],
         coverUrl: "",
         isPublic: true,
         status: "scheduled",
@@ -127,7 +143,11 @@ describe("domain CRUD form schemas", () => {
     if (result.success) return;
     expect(
       result.error.issues
-        .filter((issue) => issue.path[0] === "student__enrollmentDate" || issue.path[0] === "student__level")
+        .filter(
+          (issue) =>
+            issue.path[0] === "student__enrollmentDate" ||
+            issue.path[0] === "student__level",
+        )
         .map((issue) => issue.message),
     ).toEqual(["Informe a data de matrícula.", "Selecione o nível do aluno."]);
   });
@@ -135,12 +155,13 @@ describe("domain CRUD form schemas", () => {
   it("uses the visible End label for invalid presentation end times", () => {
     const result = presentationsCrudFormSchema.safeParse({
       resource: "presentations",
+      eventTypeId: "1",
       title: "Concerto",
       venue: "Praça",
       startsAt: "2026-11-20T20:00",
       endsAt: "2026-11-20T19:00",
       description: "",
-      repertoireIds: "",
+      repertoireIds: [],
       coverUrl: "",
       isPublic: true,
       status: "scheduled",
@@ -157,12 +178,13 @@ describe("domain CRUD form schemas", () => {
   it("uses the visible End label for malformed presentation end times", () => {
     const result = presentationsCrudFormSchema.safeParse({
       resource: "presentations",
+      eventTypeId: "1",
       title: "Concerto",
       venue: "Praça",
       startsAt: "2026-11-20T19:00",
       endsAt: "fim inválido",
       description: "",
-      repertoireIds: "",
+      repertoireIds: [],
       coverUrl: "",
       isPublic: true,
       status: "scheduled",
@@ -174,6 +196,29 @@ describe("domain CRUD form schemas", () => {
     expect(
       result.error.issues.find((issue) => issue.path[0] === "endsAt")?.message,
     ).toBe("Informe uma data e hora de fim válidas.");
+  });
+
+  it("presentationRequiresEventType", () => {
+    const values = {
+      resource: "presentations",
+      title: "Concerto",
+      venue: "Praça",
+      startsAt: "2026-11-20T19:00",
+      endsAt: "",
+      description: "",
+      repertoireIds: [],
+      coverUrl: "",
+      isPublic: true,
+      status: "scheduled",
+      notifyAll: true,
+      eventTypeId: "",
+    };
+    const result = presentationsCrudFormSchema.safeParse(values);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(
+      result.error.issues.some((issue) => issue.path[0] === "eventTypeId"),
+    ).toBe(true);
   });
 });
 
@@ -255,20 +300,68 @@ describe("domain CRUD payloads", () => {
     ]);
   });
 
-  it("converts presentation time and repertoire values for the API", () => {
-    const toPayload = getCrudConfig("presentations").toPayload;
-    if (!toPayload) throw new Error("Presentation payload converter is missing");
+  it("preserves selected presentation song IDs in the API payload", () => {
+    const config = getCrudConfig("presentations");
+    if (!config.toPayload)
+      throw new Error("Presentation payload converter is missing");
 
-    const payload = toPayload({
+    const payload = config.toPayload({
       title: "Concerto",
       venue: "Praça",
       startsAt: "2026-11-20T19:00",
       endsAt: "2026-11-20T20:00",
-      repertoireIds: "12, 13",
+      repertoireIds: ["12", "13"],
     });
 
-    expect(Number.isNaN(new Date(String(payload.startsAt)).getTime())).toBe(false);
-    expect(Number.isNaN(new Date(String(payload.endsAt)).getTime())).toBe(false);
+    expect(Number.isNaN(new Date(String(payload.startsAt)).getTime())).toBe(
+      false,
+    );
+    expect(Number.isNaN(new Date(String(payload.endsAt)).getTime())).toBe(
+      false,
+    );
+    expect(payload.startsAt).toBe("2026-11-20T22:00:00.000Z");
+    expect(payload.endsAt).toBe("2026-11-20T23:00:00.000Z");
     expect(payload.repertoireIds).toEqual(["12", "13"]);
+  });
+
+  it("converts presentation instants to Brasília wall time for editing", () => {
+    const toForm = getCrudConfig("presentations").toForm;
+    if (!toForm) throw new Error("Presentation form converter is missing");
+
+    const values = toForm({
+      startsAt: "2026-11-20T22:00:00.000Z",
+      endsAt: "2026-11-20T23:00:00.000Z",
+    });
+
+    expect(values.startsAt).toBe("2026-11-20T19:00");
+    expect(values.endsAt).toBe("2026-11-20T20:00");
+  });
+
+  it("converts presentation repertoire IDs to form values", () => {
+    const toForm = getCrudConfig("presentations").toForm;
+    if (!toForm) throw new Error("Presentation form converter is missing");
+
+    expect(toForm({ repertoireIds: [12, "13"] }).repertoireIds).toEqual([
+      "12",
+      "13",
+    ]);
+  });
+
+  it("omitsAnUnchangedRemovedEventTypeInsteadOfClearingItsSnapshot", () => {
+    const toPayload = getCrudConfig("presentations").toPayload;
+    if (!toPayload)
+      throw new Error("Presentation payload converter is missing");
+
+    const payload = toPayload(
+      {
+        eventTypeId: "__snapshot__",
+        title: "Ensaio aberto",
+      },
+      {
+        eventType: { id: null, name: "Tipo antigo", icon: "event" },
+      },
+    );
+
+    expect(payload).not.toHaveProperty("eventTypeId");
   });
 });
