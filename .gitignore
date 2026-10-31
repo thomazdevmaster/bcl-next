@@ -65,3 +65,9 @@ src/components/prototype
 
 # Glossary e documentação
 GLOSSARY.md
+
+# Pasta de resultados
+target/
+
+# Uncle Bob's Skills
+.metrics/
