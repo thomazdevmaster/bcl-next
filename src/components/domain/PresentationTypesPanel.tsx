@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { useAuth } from "@/contexts/AuthContext";
-import { hasRole } from "@/core/auth/roles";
+import { can } from "@/core/auth/permissions";
 import {
   replaceOrAppendPresentationType,
   savePresentationType,
@@ -39,11 +39,11 @@ function toFormValues(type: PresentationType): EventTypeFormValues {
 }
 
 export function PresentationTypesPanel() {
-  const { roles } = useAuth();
-  const canManage = hasRole(roles, "admin") || hasRole(roles, "maestro");
-  const { types, setTypes, loading, error, setError, loadTypes } =
-    usePresentationTypes();
+  const { roles, permissions } = useAuth();
+  const canManage = can(roles, "presentations", "update", permissions);
+  const { types, setTypes, loading, error, loadTypes } = usePresentationTypes();
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingType, setEditingType] = useState<PresentationType | null>(null);
   const form = useForm<EventTypeFormValues>({
@@ -63,19 +63,20 @@ export function PresentationTypesPanel() {
   const openCreate = () => {
     setEditingType(null);
     form.reset(emptyType);
-    setError(null);
+    setSaveError(null);
     setFormOpen(true);
   };
 
   const openEdit = (type: PresentationType) => {
     setEditingType(type);
     form.reset(toFormValues(type));
-    setError(null);
+    setSaveError(null);
     setFormOpen(true);
   };
 
   const closeForm = () => {
     if (saving) return;
+    setSaveError(null);
     setFormOpen(false);
     setEditingType(null);
     form.reset(emptyType);
@@ -83,7 +84,7 @@ export function PresentationTypesPanel() {
 
   const saveType = async (values: EventTypeFormValues) => {
     setSaving(true);
-    setError(null);
+    setSaveError(null);
     try {
       const saved = await savePresentationType(values, editingType);
       setTypes((current) =>
@@ -93,7 +94,7 @@ export function PresentationTypesPanel() {
       setEditingType(null);
       form.reset(emptyType);
     } catch (caught) {
-      setError(
+      setSaveError(
         userFacingError(caught, "Não foi possível salvar o tipo de evento."),
       );
     } finally {
@@ -124,7 +125,7 @@ export function PresentationTypesPanel() {
           editingType={editingType}
           title={title}
           saving={saving}
-          error={error}
+          error={saveError}
           onSubmit={saveType}
           onCancel={closeForm}
         />

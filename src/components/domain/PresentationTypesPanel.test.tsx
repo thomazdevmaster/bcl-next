@@ -8,10 +8,13 @@ import { apiFetch } from "@/lib/api";
 
 import { PresentationTypesPanel } from "./PresentationTypesPanel";
 
-const session = vi.hoisted(() => ({ roles: ["maestro"] as string[] }));
+const session = vi.hoisted(() => ({
+  roles: ["maestro"] as string[],
+  permissions: null as string[] | null,
+}));
 
 vi.mock("@/contexts/AuthContext", () => ({
-  useAuth: () => ({ roles: session.roles }),
+  useAuth: () => ({ roles: session.roles, permissions: session.permissions }),
 }));
 vi.mock("@/lib/api", () => ({ apiFetch: vi.fn() }));
 
@@ -36,6 +39,7 @@ const customType: PresentationType = {
 describe("PresentationTypesPanel", () => {
   beforeEach(() => {
     session.roles = ["maestro"];
+    session.permissions = null;
     vi.mocked(apiFetch).mockReset();
   });
 
@@ -139,5 +143,57 @@ describe("PresentationTypesPanel", () => {
     expect(screen.queryByRole("button", { name: /novo tipo/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /editar/i })).toBeNull();
     expect(screen.queryByRole("checkbox", { name: /tipo ativo/i })).toBeNull();
+  });
+
+  it("allowsAccountsWithPresentationUpdatePermissionToManageTypes", async () => {
+    session.roles = ["aluno"];
+    session.permissions = ["presentations:update"];
+    vi.mocked(apiFetch).mockResolvedValueOnce([systemType]);
+    render(<PresentationTypesPanel />);
+
+    expect(await screen.findByText(systemType.name)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /novo tipo/i })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /editar apresentação/i }),
+    ).toBeTruthy();
+  });
+
+  it("clearsSaveErrorWhenCancelingInsteadOfShowingItAsAListLoadFailure", async () => {
+    session.roles = ["maestro"];
+    vi.mocked(apiFetch)
+      .mockResolvedValueOnce([customType])
+      .mockRejectedValueOnce(new Error("Falha ao salvar"));
+    const user = userEvent.setup();
+    render(<PresentationTypesPanel />);
+
+    await user.click(
+      await screen.findByRole("button", { name: /editar encontro/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /salvar tipo/i }));
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /cancelar/i }));
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /tentar novamente/i }),
+    ).toBeNull();
+  });
+
+  it("keepsListLoadErrorAndRetryAfterOpeningAndCancelingTheForm", async () => {
+    session.roles = ["maestro"];
+    vi.mocked(apiFetch).mockRejectedValueOnce(new Error("API indisponível"));
+    const user = userEvent.setup();
+    render(<PresentationTypesPanel />);
+
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /novo tipo/i }));
+    await user.click(screen.getByRole("button", { name: /cancelar/i }));
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      "API indisponível",
+    );
+    expect(
+      screen.getByRole("button", { name: /tentar novamente/i }),
+    ).toBeTruthy();
   });
 });

@@ -220,6 +220,26 @@ describe("domain CRUD form schemas", () => {
       result.error.issues.some((issue) => issue.path[0] === "eventTypeId"),
     ).toBe(true);
   });
+
+  it("keepsLegacyPresentationEditableWithoutEventType", () => {
+    const result = presentationsCrudFormSchema.safeParse({
+      resource: "presentations",
+      id: 12,
+      eventTypeId: "",
+      title: "Ensaio legado",
+      venue: "Sede",
+      startsAt: "2026-11-20T19:00",
+      endsAt: "",
+      description: "",
+      repertoireIds: [],
+      coverUrl: "",
+      isPublic: false,
+      status: "scheduled",
+      notifyAll: true,
+    });
+
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("domain CRUD payloads", () => {
