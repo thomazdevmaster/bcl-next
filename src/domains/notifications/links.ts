@@ -50,8 +50,7 @@ export function resolveNotificationLink(
       break;
     }
     case "blog_post_published": {
-      const slug =
-        typeof payload?.slug === "string" ? payload.slug.trim() : "";
+      const slug = typeof payload?.slug === "string" ? payload.slug.trim() : "";
       if (slug) {
         return internalHref(`/blog/${encodeURIComponent(slug)}`);
       }
@@ -64,11 +63,7 @@ export function resolveNotificationLink(
     case "agenda_event_published": {
       const presentationId = readPayloadId(payload, "presentationId");
       if (presentationId) {
-        return gestaoEditPath(
-          "/gestao/apresentacoes",
-          "evento",
-          presentationId,
-        );
+        return gestaoEditPath("/gestao/agenda", "evento", presentationId);
       }
       break;
     }
