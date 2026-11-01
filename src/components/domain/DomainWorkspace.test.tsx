@@ -33,13 +33,18 @@ vi.mock("@/components/shared/EntityDialog", () => ({
     open,
     title,
     children,
+    onClose,
   }: {
     open: boolean;
     title: string;
     children: React.ReactNode;
+    onClose: () => void;
   }) =>
     open ? (
       <div role="dialog" aria-label={title}>
+        <button type="button" onClick={onClose}>
+          Fechar diálogo
+        </button>
         {children}
       </div>
     ) : null,
@@ -48,12 +53,19 @@ vi.mock("./EntityForm", () => ({
   EntityForm: ({
     onSubmit,
     values,
+    dynamicChoices,
   }: {
     onSubmit: (values: Record<string, unknown>) => Promise<unknown>;
     values: Record<string, unknown>;
+    dynamicChoices?: {
+      songs?: Array<{ value: string; label: string }> | null;
+    };
   }) => (
     <>
       <p>Event form</p>
+      {dynamicChoices?.songs?.map((song) => (
+        <p key={song.value}>{song.label}</p>
+      ))}
       <button
         type="button"
         onClick={() => void onSubmit({ ...values, name: "Flauta" })}
@@ -79,9 +91,7 @@ vi.mock("@/components/tables/core/TableView", () => ({
       <ol aria-label="Itens exibidos no mobile">
         {data.map((item) => (
           <li key={String(item.id)}>
-            {getMobilePrimaryLabel
-              ? String(getMobilePrimaryLabel(item))
-              : ""}
+            {getMobilePrimaryLabel ? String(getMobilePrimaryLabel(item)) : ""}
             {getMobilePrimary ? String(getMobilePrimary(item)) : ""}
             {String(item.name ?? item.title ?? "")}
           </li>
@@ -159,26 +169,36 @@ describe("domain option loading", () => {
 });
 
 describe("event creation action", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.mocked(apiFetch).mockReset();
+  });
 
   it("shows each presentation date as its mobile card label and title as value", async () => {
+    const previousTimeZone = process.env.TZ;
+    process.env.TZ = "UTC";
     vi.mocked(apiFetch).mockImplementation(async (path) => {
       if (path === "/presentations")
         return [
           {
             id: 7,
             title: "Encontro da banda",
-            startsAt: "2026-11-20T22:00:00.000Z",
+            startsAt: "2026-11-21T01:00:00.000Z",
           },
         ];
       return [];
     });
 
-    render(<DomainWorkspace resource="presentations" hideHeader />);
+    try {
+      render(<DomainWorkspace resource="presentations" hideHeader />);
 
-    const item = await screen.findByRole("listitem");
-    expect(item.textContent).toContain("20/11/2026");
-    expect(item.textContent).toContain("Encontro da banda");
+      const item = await screen.findByRole("listitem");
+      expect(item.textContent).toContain("20/11/2026, 22:00:00");
+      expect(item.textContent).toContain("Encontro da banda");
+    } finally {
+      if (previousTimeZone === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTimeZone;
+    }
   });
 
   it("showsAndOpensTheCreateEventFlowWhenTheDomainHeaderIsHidden", async () => {
@@ -193,6 +213,8 @@ describe("event creation action", () => {
       />,
     );
 
+    expect(apiFetch).not.toHaveBeenCalledWith("/songs");
+
     const createButtons = screen.getAllByRole("button", {
       name: "Novo evento",
     });
@@ -201,6 +223,69 @@ describe("event creation action", () => {
     await user.click(createButtons[0]);
 
     expect(screen.getByRole("dialog", { name: "Novo evento" })).toBeTruthy();
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/songs"));
+  });
+
+  it("reusesLoadedRepertoireChoicesWhenReopeningTheEventForm", async () => {
+    vi.mocked(apiFetch).mockImplementation(async (path) => {
+      if (path === "/songs") {
+        return [{ id: 23, title: "Hino da Banda", composer: "" }];
+      }
+      return [];
+    });
+    const user = userEvent.setup();
+    render(
+      <DomainWorkspace resource="presentations" hideHeader createNoun="evento" />,
+    );
+
+    await user.click(screen.getAllByRole("button", { name: "Novo evento" })[0]);
+    expect(await screen.findByText("Hino da Banda")).toBeTruthy();
+    expect(
+      vi.mocked(apiFetch).mock.calls.filter(([path]) => path === "/songs"),
+    ).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "Fechar diálogo" }));
+    await user.click(screen.getAllByRole("button", { name: "Novo evento" })[0]);
+
+    await waitFor(() =>
+      expect(
+        vi.mocked(apiFetch).mock.calls.filter(([path]) => path === "/songs"),
+      ).toHaveLength(1),
+    );
+    expect(screen.getByText("Hino da Banda")).toBeTruthy();
+  });
+
+  it("retriesARepertoireLoadCanceledWhenTheEventFormCloses", async () => {
+    let releaseFirstRequest: (() => void) | undefined;
+    let songRequests = 0;
+    vi.mocked(apiFetch).mockImplementation((path) => {
+      if (path === "/songs") {
+        songRequests += 1;
+        if (songRequests === 1) {
+          return new Promise((resolve) => {
+            releaseFirstRequest = () =>
+              resolve([{ id: 1, title: "Resposta antiga", composer: "" }]);
+          });
+        }
+        return Promise.resolve([
+          { id: 2, title: "Resposta atual", composer: "" },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    const user = userEvent.setup();
+    render(
+      <DomainWorkspace resource="presentations" hideHeader createNoun="evento" />,
+    );
+
+    await user.click(screen.getAllByRole("button", { name: "Novo evento" })[0]);
+    await waitFor(() => expect(songRequests).toBe(1));
+    await user.click(screen.getByRole("button", { name: "Fechar diálogo" }));
+    await user.click(screen.getAllByRole("button", { name: "Novo evento" })[0]);
+    expect(await screen.findByText("Resposta atual")).toBeTruthy();
+
+    releaseFirstRequest?.();
+    await waitFor(() => expect(screen.queryByText("Resposta antiga")).toBeNull());
+    expect(songRequests).toBe(2);
   });
 
   it("placesANewlyCreatedItemAtTheTopOfTheMobileList", async () => {

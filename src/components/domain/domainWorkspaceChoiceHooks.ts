@@ -1,12 +1,13 @@
-import { useEffect, type Dispatch, type SetStateAction } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useRef } from "react";
 
-import type { EntityFormDynamicChoices } from "./EntityForm";
 import type { CrudOption } from "@/domains/crudConfig";
 import type { Person } from "@/domains/people/types";
 import type { PresentationType } from "@/domains/presentations/types";
 import type { Song } from "@/domains/songs/types";
 import { apiFetch } from "@/lib/api";
 import { userFacingError } from "@/lib/userMessages";
+
+import type { EntityFormDynamicChoices } from "./EntityForm";
 
 type SetChoices = Dispatch<SetStateAction<EntityFormDynamicChoices>>;
 
@@ -94,7 +95,8 @@ export function useInstrumentChoices(enabled: boolean, setChoices: SetChoices) {
         }));
       })
       .catch(() => {
-        if (active) setChoices((current) => ({ ...current, instruments: null }));
+        if (active)
+          setChoices((current) => ({ ...current, instruments: null }));
       });
     return () => {
       active = false;
@@ -153,15 +155,25 @@ export function usePresentationSongChoices(
   request: number,
   setChoices: SetChoices,
 ) {
+  const lastRequest = useRef<number | null>(null);
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || lastRequest.current === request) return;
+    lastRequest.current = request;
     let active = true;
+    setChoices((current) => ({
+      ...current,
+      songsLoading: true,
+      songsError: null,
+    }));
+    let completed = false;
     loadPresentationSongChoices()
       .then((songs) => {
+        completed = true;
         if (active)
           setChoices((current) => ({ ...current, songs, songsError: null }));
       })
       .catch((caught: unknown) => {
+        completed = true;
         if (active)
           setChoices((current) => ({
             ...current,
@@ -178,6 +190,9 @@ export function usePresentationSongChoices(
       });
     return () => {
       active = false;
+      if (!completed && lastRequest.current === request) {
+        lastRequest.current = null;
+      }
     };
   }, [enabled, request, setChoices]);
 }

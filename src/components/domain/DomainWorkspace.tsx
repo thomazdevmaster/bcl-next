@@ -33,14 +33,14 @@ import { failureMessage, userFacingError } from "@/lib/userMessages";
 import { DomainGuard } from "./DomainGuard";
 import { EntityForm, type EntityFormDynamicChoices } from "./EntityForm";
 import { uniqueFieldsForResource, withAudit } from "./crudWorkspaceHelpers";
-import { formatCell, songHasScore } from "./formatCell";
-import { createDomainTableColumns } from "./table-columns";
 import {
   useInstrumentChoices,
   usePeopleChoices,
   usePresentationSongChoices,
   usePresentationTypeChoices,
 } from "./domainWorkspaceChoiceHooks";
+import { formatCell, songHasScore } from "./formatCell";
+import { createDomainTableColumns } from "./table-columns";
 import { UsersWorkspace } from "./users/UsersWorkspace";
 
 export {
@@ -119,7 +119,7 @@ function GenericDomainWorkspace({
     presentationTypesLoading: false,
     presentationTypesError: null,
     songs: null,
-    songsLoading: resource === "presentations",
+    songsLoading: false,
     songsError: null,
   });
   const [presentationTypesRequest, setPresentationTypesRequest] = useState(0);
@@ -168,7 +168,7 @@ function GenericDomainWorkspace({
   useEffect(() => {
     // A listagem precisa iniciar quando o workspace monta.
 
-    void fetchItems();
+    void Promise.resolve().then(fetchItems);
   }, [fetchItems]);
 
   useEffect(() => {
@@ -191,8 +191,16 @@ function GenericDomainWorkspace({
 
   usePeopleChoices(needsPeople, setChoices);
   useInstrumentChoices(needsInstruments, setChoices);
-  usePresentationTypeChoices(needsPresentationTypes, presentationTypesRequest, setChoices);
-  usePresentationSongChoices(needsSongs, songsRequest, setChoices);
+  usePresentationTypeChoices(
+    needsPresentationTypes,
+    presentationTypesRequest,
+    setChoices,
+  );
+  usePresentationSongChoices(
+    needsSongs && dialogMode !== null,
+    songsRequest,
+    setChoices,
+  );
 
   const retryPresentationTypes = () =>
     setPresentationTypesRequest((current) => current + 1);
@@ -552,18 +560,21 @@ function GenericDomainWorkspace({
                 resource === "presentations"
                   ? (row) => String(row.title ?? "—")
                   : resource === "users"
-                  ? (row) =>
-                      String(
-                        row.personName ?? row.name ?? row.username ?? "Usuário",
-                      )
-                  : resource === "people"
                     ? (row) =>
-                        `${String(row.firstName ?? "")} ${String(row.lastName ?? "")}`.trim()
-                    : resource === "patrimony"
-                      ? (row) => String(row.name ?? "—")
-                      : resource === "songs"
-                        ? (row) => String(row.title ?? "—")
-                        : undefined
+                        String(
+                          row.personName ??
+                            row.name ??
+                            row.username ??
+                            "Usuário",
+                        )
+                    : resource === "people"
+                      ? (row) =>
+                          `${String(row.firstName ?? "")} ${String(row.lastName ?? "")}`.trim()
+                      : resource === "patrimony"
+                        ? (row) => String(row.name ?? "—")
+                        : resource === "songs"
+                          ? (row) => String(row.title ?? "—")
+                          : undefined
               }
               getMobilePrimaryLabel={
                 resource === "presentations"
@@ -579,12 +590,12 @@ function GenericDomainWorkspace({
                         null,
                       )
                   : resource === "users"
-                  ? (row) => String(row.username ?? "Usuário")
-                  : resource === "patrimony"
-                    ? (row) => String(row.code ?? "Código")
-                    : resource === "songs"
-                      ? (row) => String(row.composer ?? "Compositor")
-                      : undefined
+                    ? (row) => String(row.username ?? "Usuário")
+                    : resource === "patrimony"
+                      ? (row) => String(row.code ?? "Código")
+                      : resource === "songs"
+                        ? (row) => String(row.composer ?? "Compositor")
+                        : undefined
               }
               mobilePrimaryAction={
                 canCreate ? (
