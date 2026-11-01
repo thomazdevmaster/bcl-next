@@ -66,8 +66,5 @@ src/components/prototype
 # Glossary e documentação
 GLOSSARY.md
 
-# Pasta de resultados
-target/
-
-# Uncle Bob's Skills
+# Resultados locais das ferramentas de métricas
 .metrics/
