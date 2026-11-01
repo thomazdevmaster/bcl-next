@@ -58,11 +58,14 @@ function getFilterVariant(
   resource: CrudResource,
 ): FilterVariant {
   if (isSongCatalogSelect(column, resource)) return "select";
+  if (resource === "presentations" && column.path === "eventType.name") {
+    return "select";
+  }
   const formattedVariant = column.format
     ? FORMATTED_FILTER_VARIANTS[column.format]
     : undefined;
   if (formattedVariant) return formattedVariant;
-  return resource === "presentations" ? "select" : "text";
+  return "text";
 }
 
 function isSongCatalogSelect(
@@ -70,8 +73,7 @@ function isSongCatalogSelect(
   resource: CrudResource,
 ): boolean {
   return (
-    resource === "songs" &&
-    (column.path === "genre" || column.path === "key")
+    resource === "songs" && (column.path === "genre" || column.path === "key")
   );
 }
 

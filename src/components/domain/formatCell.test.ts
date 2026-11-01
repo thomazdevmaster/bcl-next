@@ -82,41 +82,53 @@ describe("formatCell", () => {
   });
 
   it("formats dates and handles empty or invalid cell values", () => {
-    const date = new Date("2025-03-04T12:30:00.000Z");
-    expect(
-      formatCell(
-        { day: date.toISOString() },
-        { path: "day", label: "Data", format: "date" },
-        null,
-        null,
-      ),
-    ).toBe(date.toLocaleDateString("pt-BR"));
-    expect(
-      formatCell(
-        { startsAt: date.toISOString() },
-        { path: "startsAt", label: "Início", format: "datetime" },
-        null,
-        null,
-      ),
-    ).toBe(date.toLocaleString("pt-BR"));
-    expect(
-      formatCell(
-        { day: "invalid" },
-        { path: "day", label: "Data", format: "date" },
-        null,
-        null,
-      ),
-    ).toBe("—");
-    expect(
-      formatCell({ title: "" }, { path: "title", label: "Título" }, null, null),
-    ).toBe("—");
-    expect(
-      formatCell(
-        { createdBy: "" },
-        { path: "createdBy", label: "Criado por" },
-        null,
-        null,
-      ),
-    ).toBe("system");
+    const date = new Date("2025-03-04T01:30:00.000Z");
+    const previousTimeZone = process.env.TZ;
+    process.env.TZ = "UTC";
+    try {
+      expect(
+        formatCell(
+          { day: date.toISOString() },
+          { path: "day", label: "Data", format: "date" },
+          null,
+          null,
+        ),
+      ).toBe("03/03/2025");
+      expect(
+        formatCell(
+          { startsAt: date.toISOString() },
+          { path: "startsAt", label: "Início", format: "datetime" },
+          null,
+          null,
+        ),
+      ).toBe("03/03/2025, 22:30:00");
+      expect(
+        formatCell(
+          { day: "invalid" },
+          { path: "day", label: "Data", format: "date" },
+          null,
+          null,
+        ),
+      ).toBe("—");
+      expect(
+        formatCell(
+          { title: "" },
+          { path: "title", label: "Título" },
+          null,
+          null,
+        ),
+      ).toBe("—");
+      expect(
+        formatCell(
+          { createdBy: "" },
+          { path: "createdBy", label: "Criado por" },
+          null,
+          null,
+        ),
+      ).toBe("system");
+    } finally {
+      if (previousTimeZone === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTimeZone;
+    }
   });
 });

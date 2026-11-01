@@ -68,8 +68,8 @@ function formatTemporal(value: unknown, format: CrudColumn["format"]): string {
   const date = new Date(String(value));
   if (Number.isNaN(date.getTime())) return "—";
   return format === "date"
-    ? date.toLocaleDateString("pt-BR")
-    : date.toLocaleString("pt-BR");
+    ? date.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
+    : date.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 }
 
 function formatRoles(value: unknown, choices: CrudOption[] | null): string {

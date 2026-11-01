@@ -18,13 +18,14 @@ describe("presentation management columns", () => {
     );
   });
 
-  it("uses searchable select filters for ordinary text columns", () => {
+  it("uses text filters for free-text agenda columns and selects for closed values", () => {
     const columns = createDomainTableColumns(
       [
         { path: "eventType.name", label: "Tipo" },
         { path: "title", label: "Título" },
-        { path: "location", label: "Local" },
+        { path: "venue", label: "Local" },
         { path: "createdBy", label: "Criado por" },
+        { path: "status", label: "Status", format: "status" },
       ],
       () => "",
       "presentations",
@@ -34,8 +35,9 @@ describe("presentation management columns", () => {
       columns.map((column) => [column.meta?.filterVariant, column.filterFn]),
     ).toEqual([
       ["select", "includesAnyString"],
-      ["select", "includesAnyString"],
-      ["select", "includesAnyString"],
+      ["text", undefined],
+      ["text", undefined],
+      ["text", undefined],
       ["select", "includesAnyString"],
     ]);
   });
