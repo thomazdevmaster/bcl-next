@@ -88,6 +88,9 @@ describe("StudyMobileSheet", () => {
     expect(panel.style.bottom).toBe("0px");
     expect(panel.style.width).toBe("100vw");
     expect(panel.style.transform).toBe("translate3d(0, 0, 0)");
+    expect(
+      document.querySelector("[data-sheet-overlay]")?.parentElement?.className,
+    ).toContain("z-[1400]");
     expect(screen.queryByRole("button", { name: "Fechar painel" })).toBeNull();
     expect(document.body.style.overflow).toBe("hidden");
 
@@ -122,8 +125,9 @@ describe("StudyMobileSheet", () => {
     expect(
       screen.getByRole("link", { name: "YouTube" }).getAttribute("href"),
     ).toBe("https://www.youtube.com/watch?v=abc123def45");
-    expect(screen.getByRole("button", { name: "Gerar com selecionados" }))
-      .toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Gerar com selecionados" }),
+    ).toBeTruthy();
     expect(screen.getByRole("button", { name: "Cancelar" })).toBeTruthy();
   });
 });

@@ -17,6 +17,7 @@ import {
   applyCalendarDateDraftChange,
   chooseCalendarDate,
   getCalendarMenuPosition,
+  timeValueAtScrollPosition,
   updateCalendarTime,
 } from "./calendarDateDraft";
 
@@ -44,26 +45,11 @@ export type CalendarControlProps = {
 
 const WEEKDAYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 const CALENDAR_HEIGHT = 380;
-const DESKTOP_TIME_WHEEL_HEIGHT = 216;
 
 function timeWheelDirection(key: string): number {
   if (key === "ArrowDown" || key === "PageDown") return 1;
   if (key === "ArrowUp" || key === "PageUp") return -1;
   return 0;
-}
-
-function timeValueAtScrollPosition(
-  scrollTop: number,
-  isMobile: boolean,
-  maxValue: number,
-): string {
-  const rowHeight = isMobile ? 44 : 36;
-  const centeredIndex = isMobile
-    ? Math.round(scrollTop / rowHeight)
-    : Math.round(
-        (scrollTop + (DESKTOP_TIME_WHEEL_HEIGHT - rowHeight) / 2) / rowHeight,
-      );
-  return `${Math.max(0, Math.min(maxValue, centeredIndex))}`.padStart(2, "0");
 }
 
 function TimeWheelOptions({
@@ -244,7 +230,9 @@ function isDateOutOfRange(
   minDate: string | null,
   maxDate: string | null,
 ): boolean {
-  return Boolean((minDate && isoDate < minDate) || (maxDate && isoDate > maxDate));
+  return Boolean(
+    (minDate && isoDate < minDate) || (maxDate && isoDate > maxDate),
+  );
 }
 
 function calendarDateClassName(
@@ -457,7 +445,7 @@ function TimeWheel({
             event.preventDefault();
             selectValue(selectedValue + direction);
           }}
-          className="h-[132px] min-h-0 snap-y snap-mandatory touch-pan-y overflow-y-auto overscroll-contain rounded-lg border border-[var(--border)] bg-[var(--card-secondary)] py-[44px] outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] aria-disabled:opacity-50 min-[640px]:h-[216px] min-[640px]:snap-none min-[640px]:py-0"
+          className="h-[132px] min-h-0 snap-y snap-mandatory touch-pan-y overflow-y-auto overscroll-contain rounded-lg border border-[var(--border)] bg-[var(--card-secondary)] py-[44px] outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] aria-disabled:opacity-50 min-[640px]:h-[216px] min-[640px]:snap-none min-[640px]:py-[90px]"
         >
           <TimeWheelOptions
             id={id}
@@ -671,7 +659,8 @@ export function IconCalendar({
       isInsideCalendar: (target) =>
         target instanceof Node &&
         Boolean(
-          rootRef.current?.contains(target) || menuRef.current?.contains(target),
+          rootRef.current?.contains(target) ||
+          menuRef.current?.contains(target),
         ),
       parseDateDraft,
       toISODate,

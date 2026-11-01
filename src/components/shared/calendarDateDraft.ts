@@ -51,7 +51,10 @@ export function applyCalendarDateDraftBlur(
     const digits = context.dateDraft.replace(/\D/g, "");
     const typedDate = context.parseDateDraft(digits);
     const isoDate = typedDate ? context.toISODate(typedDate) : "";
-    if (typedDate && !context.isDateOutOfRange(isoDate, context.minDate, context.maxDate)) {
+    if (
+      typedDate &&
+      !context.isDateOutOfRange(isoDate, context.minDate, context.maxDate)
+    ) {
       context.onValueChange(context.withTime(isoDate));
     } else if (digits.length === 0) {
       context.onValueChange("");
@@ -115,6 +118,16 @@ export function updateCalendarTime(
   onValueChange(`${date}T${nextHour}:${nextMinute}`);
 }
 
+export function timeValueAtScrollPosition(
+  scrollTop: number,
+  isMobile: boolean,
+  maxValue: number,
+): string {
+  const rowHeight = isMobile ? 44 : 36;
+  const centeredIndex = Math.round(scrollTop / rowHeight);
+  return `${Math.max(0, Math.min(maxValue, centeredIndex))}`.padStart(2, "0");
+}
+
 interface CalendarDateChoiceContext {
   readOnly: boolean;
   minDate: string | null;
@@ -141,7 +154,8 @@ export function chooseCalendarDate(
 ): void {
   if (context.readOnly) return;
   const isoDate = context.toISODate(date);
-  if (context.isDateOutOfRange(isoDate, context.minDate, context.maxDate)) return;
+  if (context.isDateOutOfRange(isoDate, context.minDate, context.maxDate))
+    return;
   context.onValueChange(context.withTime(isoDate));
   if (context.variant === "date") {
     context.closeCalendar(true);
@@ -187,7 +201,9 @@ export function getCalendarMenuPosition({
     viewportHeight - margin * 2,
   );
   const openUpward = below < height && above > below;
-  const anchoredTop = openUpward ? inputRect.top - height - 4 : inputRect.bottom + 4;
+  const anchoredTop = openUpward
+    ? inputRect.top - height - 4
+    : inputRect.bottom + 4;
   const top = Math.max(
     margin,
     Math.min(anchoredTop, viewportHeight - height - margin),

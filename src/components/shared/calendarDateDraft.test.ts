@@ -5,6 +5,7 @@ import {
   applyCalendarDateDraftChange,
   chooseCalendarDate,
   getCalendarMenuPosition,
+  timeValueAtScrollPosition,
   updateCalendarTime,
 } from "./calendarDateDraft";
 
@@ -18,7 +19,11 @@ const context = () => ({
       : digits,
   parseDateDraft: (digits: string) => {
     if (digits.length !== 8) return null;
-    const date = new Date(Number(digits.slice(4)), Number(digits.slice(2, 4)) - 1, Number(digits.slice(0, 2)));
+    const date = new Date(
+      Number(digits.slice(4)),
+      Number(digits.slice(2, 4)) - 1,
+      Number(digits.slice(0, 2)),
+    );
     return date.getDate() === Number(digits.slice(0, 2)) ? date : null;
   },
   toISODate: (date: Date) =>
@@ -81,7 +86,7 @@ describe("applyCalendarDateDraftBlur", () => {
       dateDraft: "15/02/2026",
       dateDraftInvalid: false,
       value: "",
-      formatDate: (value: string) => value ? `formatted:${value}` : "",
+      formatDate: (value: string) => (value ? `formatted:${value}` : ""),
       isInsideCalendar: (target: EventTarget | null) => target === insideTarget,
       closeCalendar: vi.fn(),
       onBlur: vi.fn(),
@@ -101,7 +106,7 @@ describe("applyCalendarDateDraftBlur", () => {
       dateDraft: "",
       dateDraftInvalid: true,
       value: "",
-      formatDate: (value: string) => value ? `formatted:${value}` : "",
+      formatDate: (value: string) => (value ? `formatted:${value}` : ""),
       isInsideCalendar: () => false,
       closeCalendar: vi.fn(),
       onBlur: vi.fn(),
@@ -140,6 +145,14 @@ describe("updateCalendarTime", () => {
     updateCalendarTime("hour", "12", "", onValueChange);
     updateCalendarTime("minute", "bad", "2026-02-15T09:30", onValueChange);
     expect(onValueChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("timeValueAtScrollPosition", () => {
+  it("keeps desktop wheel options centered at both ends of the range", () => {
+    expect(timeValueAtScrollPosition(0, false, 59)).toBe("00");
+    expect(timeValueAtScrollPosition(36, false, 59)).toBe("01");
+    expect(timeValueAtScrollPosition(59 * 36, false, 59)).toBe("59");
   });
 });
 

@@ -51,7 +51,6 @@ export function TableFilterPopover({
     const popover = popoverRef.current;
     if (!popover) return;
 
-    if (typeof popover.showPopover === "function") popover.showPopover();
     positionPopover();
 
     const reposition = () => positionPopover();
@@ -60,12 +59,6 @@ export function TableFilterPopover({
     return () => {
       window.removeEventListener("resize", reposition);
       window.removeEventListener("scroll", reposition, true);
-      if (
-        typeof popover.hidePopover === "function" &&
-        popover.matches(":popover-open")
-      ) {
-        popover.hidePopover();
-      }
     };
   }, [isOpen]);
 
@@ -79,6 +72,8 @@ export function TableFilterPopover({
         aria-expanded={isOpen}
         aria-controls={popoverId}
         aria-pressed={active}
+        popoverTarget={popoverId}
+        popoverTargetAction="toggle"
         title={`Clique para abrir ${label.toLocaleLowerCase("pt-BR")}`}
         onClick={() => setIsOpen((current) => !current)}
         className={`inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-[var(--radius)] border bg-[var(--input)] text-[var(--table-header-fg)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] hover:bg-[var(--card-secondary)] ${active ? "border-[var(--primary)]" : "border-[var(--border)]"}`}

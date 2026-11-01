@@ -23,7 +23,10 @@ const baseProps = {
 };
 
 describe("IconCalendar variants", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
 
   it("keeps date-only as the default", () => {
     render(
@@ -40,11 +43,7 @@ describe("IconCalendar variants", () => {
   it("formats typed day, month, and year and emits an ISO date", () => {
     const onValueChange = vi.fn();
     render(
-      <IconCalendar
-        {...baseProps}
-        value=""
-        onValueChange={onValueChange}
-      />,
+      <IconCalendar {...baseProps} value="" onValueChange={onValueChange} />,
     );
 
     const input = screen.getByRole("combobox");
@@ -62,7 +61,9 @@ describe("IconCalendar variants", () => {
         onValueChange={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Abrir calendário de início" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Abrir calendário de início" }),
+    );
     const picker = screen.getByRole("dialog", { name: "Calendário de início" });
     const selectedDate = picker.querySelector<HTMLButtonElement>(
       '[data-date="2026-10-31"]',
@@ -100,7 +101,9 @@ describe("IconCalendar variants", () => {
         onValueChange={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Abrir calendário de início" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Abrir calendário de início" }),
+    );
     const picker = screen.getByRole("dialog", { name: "Calendário de início" });
     const onlyDate = picker.querySelector<HTMLButtonElement>(
       '[data-date="2026-11-02"]',
@@ -182,6 +185,8 @@ describe("IconCalendar variants", () => {
   });
 
   it("shows the selected date without separately emphasizing today", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-25T15:00:00.000Z"));
     render(
       <IconCalendar
         {...baseProps}
@@ -307,6 +312,56 @@ describe("IconCalendar variants", () => {
 
       await waitFor(() => {
         expect(onValueChange).toHaveBeenLastCalledWith("2026-10-31T11:15");
+      });
+    } finally {
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: originalWidth,
+      });
+    }
+  });
+
+  it("keeps desktop wheel endpoints selected after scrolling", async () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 1280,
+    });
+    const onValueChange = vi.fn();
+
+    function StatefulDateTimeCalendar() {
+      const [value, setValue] = useState("2026-10-31T18:15");
+      return (
+        <IconCalendar
+          {...baseProps}
+          value={value}
+          variant="date-time"
+          onValueChange={(nextValue) => {
+            setValue(nextValue);
+            onValueChange(nextValue);
+          }}
+        />
+      );
+    }
+
+    try {
+      render(<StatefulDateTimeCalendar />);
+      fireEvent.click(
+        screen.getByRole("button", { name: "Abrir calendário de início" }),
+      );
+      const minutes = screen.getByRole("listbox", {
+        name: "Minuto de início",
+      });
+      expect(minutes.className).toContain("min-[640px]:py-[90px]");
+
+      fireEvent.scroll(minutes, { target: { scrollTop: 0 } });
+      await waitFor(() => {
+        expect(onValueChange).toHaveBeenLastCalledWith("2026-10-31T18:00");
+      });
+
+      fireEvent.scroll(minutes, { target: { scrollTop: 59 * 36 } });
+      await waitFor(() => {
+        expect(onValueChange).toHaveBeenLastCalledWith("2026-10-31T18:59");
       });
     } finally {
       Object.defineProperty(window, "innerWidth", {

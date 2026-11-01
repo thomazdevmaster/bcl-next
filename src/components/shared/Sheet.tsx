@@ -158,7 +158,10 @@ function handleSheetTabKeyDown(event: KeyboardEvent, panel: HTMLDivElement) {
   const first = focusable[0];
   const last = focusable[focusable.length - 1];
   const focusOutsidePanel = !panel.contains(document.activeElement);
-  if (event.shiftKey && (document.activeElement === first || focusOutsidePanel)) {
+  if (
+    event.shiftKey &&
+    (document.activeElement === first || focusOutsidePanel)
+  ) {
     event.preventDefault();
     last.focus();
   } else if (
@@ -345,7 +348,7 @@ export function SheetContent({
   return createPortal(
     <div
       aria-hidden={!context.open}
-      className="pointer-events-none fixed inset-0 z-50"
+      className="pointer-events-none fixed inset-0 z-[1400]"
       data-state={state}
     >
       <div
