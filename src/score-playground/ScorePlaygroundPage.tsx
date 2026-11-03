@@ -35,6 +35,7 @@ export default function ScorePlaygroundPage() {
     setVelocity,
     setVolume,
     toggleMute,
+    toggleMetronome,
     zoomIn,
     zoomOut,
   } = useScorePlaygroundPlayer(ownerId);
@@ -141,9 +142,7 @@ export default function ScorePlaygroundPage() {
   if (inSession) {
     return (
       <div
-        className={`fixed inset-0 z-[15] flex flex-col overflow-hidden bg-[var(--background)] md:left-[var(--content-margin)] ${
-          mobile ? 'pb-[calc(5rem+env(safe-area-inset-bottom))]' : ''
-        }`}
+        className="fixed inset-0 z-[15] flex flex-col overflow-hidden bg-[var(--background)] md:left-[var(--content-margin)]"
         aria-label="Sessão de partitura"
       >
         {state.phase === 'error' ? (
@@ -204,15 +203,11 @@ export default function ScorePlaygroundPage() {
             </div>
 
             <div
-              className="shrink-0 border-t border-[var(--border)] bg-[var(--card)] px-3 py-3 sm:px-4"
-              style={
-                mobile
-                  ? { paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }
-                  : undefined
-              }
+              className="shrink-0 border-t border-[var(--border)] bg-[var(--card)] px-2 py-1 sm:px-3"
+              style={{ paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))' }}
             >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center justify-center gap-1 sm:justify-start">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <div className="flex items-center gap-1">
                   <button
                     type="button"
                     aria-label="Voltar ao início"
@@ -235,6 +230,18 @@ export default function ScorePlaygroundPage() {
                       {state.playing ? 'pause' : 'play_arrow'}
                     </span>
                   </button>
+                  <button
+                    type="button"
+                    aria-pressed={state.metronomeEnabled}
+                    aria-label={state.metronomeEnabled ? 'Desligar metrônomo' : 'Ligar metrônomo'}
+                    className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full hover:bg-[var(--secondary)] disabled:cursor-not-allowed disabled:opacity-40 ${state.metronomeEnabled ? 'bg-[var(--primary)] text-white' : 'bg-transparent'}`}
+                    onClick={toggleMetronome}
+                    disabled={!state.playerReady}
+                  >
+                    <span className="material-icons" aria-hidden>
+                      timer
+                    </span>
+                  </button>
                   {state.instruments.length > 0 ? (
                     <button
                       type="button"
@@ -253,10 +260,13 @@ export default function ScorePlaygroundPage() {
                       Instrumentos
                     </button>
                   ) : null}
+                  <p className="ml-1 text-xs tabular-nums text-[var(--muted)]">
+                    {formatMs(state.positionMs)} / {formatMs(state.durationMs)}
+                  </p>
                 </div>
 
-                <div className="flex flex-col gap-2 sm:min-w-[16rem]">
-                  <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
+                <div className="flex min-w-0 flex-1 basis-full items-center gap-3 text-xs text-[var(--muted)] sm:basis-auto sm:justify-end">
+                  <div className="flex min-w-0 flex-1 items-center gap-1 sm:max-w-56">
                     <button
                       type="button"
                       aria-label={state.volume <= 0 ? 'Ativar som' : 'Silenciar'}
@@ -268,25 +278,22 @@ export default function ScorePlaygroundPage() {
                         {playgroundVolumeIcon(state.volume)}
                       </span>
                     </button>
-                    <label className="flex min-w-0 flex-1 items-center gap-2">
-                      <span className="whitespace-nowrap">Volume</span>
+                    <label className="flex min-w-0 flex-1 items-center gap-1.5">
+                      <span className="sr-only">Volume</span>
                       <input
                         type="range"
                         min={0}
                         max={1}
                         step={0.05}
                         value={state.volume}
-                        className="min-h-11 min-w-0 flex-1"
+                        className="h-11 min-w-0 flex-1"
                         onChange={(event) => setVolume(Number(event.target.value))}
                         aria-label="Volume geral"
                         aria-valuetext={`${Math.round(state.volume * 100)} por cento`}
                       />
-                      <span className="w-10 text-right tabular-nums">
-                        {Math.round(state.volume * 100)}%
-                      </span>
                     </label>
                   </div>
-                  <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
+                  <label className="flex min-w-0 flex-1 items-center gap-1.5 sm:max-w-56">
                     <span className="whitespace-nowrap">Andamento</span>
                     <input
                       type="range"
@@ -294,17 +301,15 @@ export default function ScorePlaygroundPage() {
                       max={1.5}
                       step={0.05}
                       value={state.velocity}
-                      className="min-h-11 flex-1"
+                      className="h-11 min-w-0 flex-1"
                       onChange={(event) => setVelocity(Number(event.target.value))}
+                      aria-label="Andamento"
                       aria-valuetext={`${Math.round(state.velocity * 100)} por cento`}
                     />
-                    <span className="w-10 text-right tabular-nums">
+                    <span className="w-10 shrink-0 text-right tabular-nums">
                       {Math.round(state.velocity * 100)}%
                     </span>
                   </label>
-                  <p className="text-center text-xs tabular-nums text-[var(--muted)] sm:text-left">
-                    {formatMs(state.positionMs)} / {formatMs(state.durationMs)}
-                  </p>
                 </div>
               </div>
             </div>

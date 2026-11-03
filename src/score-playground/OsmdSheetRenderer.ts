@@ -11,6 +11,7 @@ import {
   measuresPerDesktopLine,
   measuresPerMobileLine,
 } from './osmdPlaygroundLayout';
+import { soundingNoteCursorX } from './playgroundCursorPosition';
 import { followPlaygroundCursor } from './playgroundFollowCursor';
 import type { PlaygroundZoomState } from './playgroundZoomTypes';
 import {
@@ -27,8 +28,18 @@ type GraphicalMeasure = {
   };
 };
 
+type StaffEntryLike = {
+  relInMeasureTimestamp?: { RealValue?: number };
+  boundingBox?: { AbsolutePosition?: { x: number } };
+};
+
+type GraphicalMeasureWithEntries = GraphicalMeasure & {
+  staffEntries?: StaffEntryLike[];
+};
+
 type GraphicSheetLike = {
   NumberOfStaves?: number;
+  MeasureList?: GraphicalMeasureWithEntries[][];
   findGraphicalMeasure?: (measureIndex: number, staffIndex: number) => GraphicalMeasure | null | undefined;
 };
 
@@ -164,7 +175,10 @@ export class OsmdSheetRenderer implements ISheetRenderer {
     if (!bounds) return;
 
     const cursor = this.ensureCursor();
-    const x = bounds.x + fraction * bounds.width;
+    const measureWhole = osmd.Sheet.SourceMeasures[index]?.Duration?.RealValue ?? 1;
+    const x =
+      soundingNoteCursorX(this.noteColumnsPx(osmd, index), fraction, measureWhole) ??
+      bounds.x + fraction * bounds.width;
     cursor.style.display = 'block';
     cursor.style.position = 'absolute';
     const mountTop = this.osmdMount?.offsetTop ?? 0;
@@ -204,6 +218,27 @@ export class OsmdSheetRenderer implements ISheetRenderer {
     this.container?.appendChild(cursor);
     this.cursorEl = cursor;
     return cursor;
+  }
+
+  private noteColumnsPx(
+    osmd: OpenSheetMusicDisplay,
+    measureIndex: number,
+  ): { rel: number; x: number }[] {
+    const graphic = (osmd as OpenSheetMusicDisplay & { GraphicSheet?: GraphicSheetLike }).GraphicSheet;
+    const measures = graphic?.MeasureList?.[measureIndex];
+    if (!measures) return [];
+    const zoom = osmd.Zoom > 0 ? osmd.Zoom : 1;
+    const unit = 10 * zoom;
+    const columns: { rel: number; x: number }[] = [];
+    for (const measure of measures) {
+      for (const entry of measure?.staffEntries ?? []) {
+        const rel = entry.relInMeasureTimestamp?.RealValue;
+        const x = entry.boundingBox?.AbsolutePosition?.x;
+        if (rel == null || x == null) continue;
+        columns.push({ rel, x: x * unit });
+      }
+    }
+    return columns;
   }
 
   private measureDurationMs(measure: { TempoInBPM: number; Duration?: { RealValue?: number } }): number {

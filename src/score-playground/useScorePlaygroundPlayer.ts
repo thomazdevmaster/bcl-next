@@ -21,6 +21,15 @@ import { patchMusicXmlPlayerAudioWorklet } from './patchMusicXmlPlayerForNext';
 import type { PlaygroundZoomState } from './playgroundZoomTypes';
 import type { InstrumentInfo } from '@/study/studyUtils';
 import { clampPlaygroundVolume, connectMasterGain } from './playgroundVolume';
+import {
+  buildMetronomeBeats,
+  metronomeBeatsDue,
+  metronomeClickDelaySeconds,
+  metronomePositionJumped,
+  playMetronomeClick,
+  readBeatsPerMeasure,
+  type MetronomeBeat,
+} from './playgroundMetronome';
 
 /** O Player indexa compassos em 0…n-1; o backend pode enviar números escritos na partitura. */
 function timemapForPlayer(entries: MeasureTimemapEntry[]): MeasureTimemapEntry[] {
@@ -54,6 +63,7 @@ export interface ScorePlaygroundViewState {
   scoreInstrumentIds: string[];
   midiInstrumentIds: string[];
   volume: number;
+  metronomeEnabled: boolean;
 }
 
 const INITIAL: ScorePlaygroundViewState = {
@@ -71,6 +81,7 @@ const INITIAL: ScorePlaygroundViewState = {
   scoreInstrumentIds: [],
   midiInstrumentIds: [],
   volume: 1,
+  metronomeEnabled: false,
 };
 
 export function useScorePlaygroundPlayer(ownerId: string | null) {
@@ -84,7 +95,54 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
   const volumeRef = useRef(1);
   const volumeBeforeMuteRef = useRef(1);
   const gainRef = useRef<{ gain: { value: number } } | null>(null);
+  const metronomeEnabledRef = useRef(false);
+  const metronomeBeatsRef = useRef<MetronomeBeat[]>([]);
+  const metronomeScheduledRef = useRef(new Map<number, () => void>());
+  const metronomeLastPosRef = useRef<number | null>(null);
   const [state, setState] = useState<ScorePlaygroundViewState>(INITIAL);
+
+  const clearMetronomeSchedule = useCallback(() => {
+    for (const stop of metronomeScheduledRef.current.values()) stop();
+    metronomeScheduledRef.current.clear();
+    metronomeLastPosRef.current = null;
+  }, []);
+
+  const syncMetronome = useCallback((player: Player) => {
+    const audio = player as unknown as { _context?: AudioContext };
+    const context = audio._context;
+    const playing = metronomeEnabledRef.current && player.state === PlayerState.Playing;
+    if (!playing || !context) {
+      if (metronomeScheduledRef.current.size > 0) clearMetronomeSchedule();
+      return;
+    }
+    const positionMs = player.position;
+    if (metronomePositionJumped(metronomeLastPosRef.current, positionMs)) {
+      clearMetronomeSchedule();
+    }
+    const due = metronomeBeatsDue(
+      metronomeBeatsRef.current,
+      positionMs,
+      velocityRef.current,
+      new Set(metronomeScheduledRef.current.keys()),
+    );
+    for (const beat of due) {
+      const when =
+        context.currentTime +
+        metronomeClickDelaySeconds(beat.songMs, positionMs, velocityRef.current);
+      metronomeScheduledRef.current.set(
+        beat.id,
+        playMetronomeClick(context, when, beat.accent),
+      );
+    }
+    for (const [id, stop] of metronomeScheduledRef.current) {
+      const beat = metronomeBeatsRef.current[id];
+      if (beat && beat.songMs < positionMs - 250) {
+        stop();
+        metronomeScheduledRef.current.delete(id);
+      }
+    }
+    metronomeLastPosRef.current = positionMs;
+  }, [clearMetronomeSchedule]);
 
   const stopPositionLoop = useCallback(() => {
     if (rafRef.current != null) {
@@ -104,20 +162,23 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
           durationMs: player.duration,
           playing: player.state === PlayerState.Playing,
         }));
+        syncMetronome(player);
       }
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
-  }, [stopPositionLoop]);
+  }, [stopPositionLoop, syncMetronome]);
 
   const teardownPlayer = useCallback(() => {
     stopPositionLoop();
     playerRef.current?.destroy();
     playerRef.current = null;
     gainRef.current = null;
+    clearMetronomeSchedule();
+    metronomeBeatsRef.current = [];
     rendererRef.current = null;
     if (sheetRef.current) sheetRef.current.replaceChildren();
-  }, [stopPositionLoop]);
+  }, [stopPositionLoop, clearMetronomeSchedule]);
 
   const refreshZoomState = useCallback(() => {
     const renderer = rendererRef.current;
@@ -179,6 +240,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
         scoreLoading: true,
         velocity,
         volume,
+        metronomeEnabled: metronomeEnabledRef.current,
       });
 
       try {
@@ -216,6 +278,11 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
         const renderer = new ScorePlaygroundSheetRenderer();
         rendererRef.current = renderer;
         const playerTimemap = timemapForPlayer(assets.timemap);
+        metronomeBeatsRef.current = buildMetronomeBeats(
+          playerTimemap,
+          readBeatsPerMeasure(playbackXml),
+        );
+        clearMetronomeSchedule();
         const converter = new FetchConverter(playbackMidi, playerTimemap);
 
         const player = await Player.create({
@@ -261,6 +328,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
           durationMs: player.duration,
           velocity,
           volume,
+          metronomeEnabled: metronomeEnabledRef.current,
           scoreLoading: false,
           zoom: renderer.getZoomState(),
           ...selection,
@@ -284,7 +352,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
         });
       }
     },
-    [ownerId, startPositionLoop, teardownPlayer],
+    [ownerId, startPositionLoop, teardownPlayer, clearMetronomeSchedule],
   );
 
   const startSession = useCallback(
@@ -349,14 +417,22 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     else applyVolume(0);
   }, [applyVolume]);
 
+  const toggleMetronome = useCallback(() => {
+    const enabled = !metronomeEnabledRef.current;
+    metronomeEnabledRef.current = enabled;
+    if (!enabled) clearMetronomeSchedule();
+    setState((prev) => ({ ...prev, metronomeEnabled: enabled }));
+  }, [clearMetronomeSchedule]);
+
   const setVelocity = useCallback((value: number) => {
     const player = playerRef.current;
     if (!player) return;
     const clamped = Math.min(1.5, Math.max(0.5, value));
     player.velocity = clamped;
     velocityRef.current = clamped;
+    clearMetronomeSchedule();
     setState((prev) => ({ ...prev, velocity: clamped }));
-  }, []);
+  }, [clearMetronomeSchedule]);
 
   return {
     sheetRef,
@@ -370,6 +446,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     setVelocity,
     setVolume,
     toggleMute,
+    toggleMetronome,
     zoomIn,
     zoomOut,
   };

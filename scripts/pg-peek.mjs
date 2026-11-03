@@ -1,0 +1,26 @@
+import { createRequire } from 'node:module';
+import { constants, createPublicKey, publicEncrypt } from 'node:crypto';
+const require = createRequire(import.meta.url);
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE);
+const API = 'http://127.0.0.1:8080';
+const jwk = await (await fetch(`${API}/auth/public-key`)).json();
+const key = createPublicKey({ key: { kty: 'RSA', n: jwk.n, e: jwk.e }, format: 'jwk' });
+const sealed = publicEncrypt({ key, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' }, Buffer.from('#bcl.2026@')).toString('base64');
+const res = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: sealed, keepLoggedIn: true }) });
+console.log('login', res.status);
+const data = await res.json();
+console.log(Object.keys(data), data.user && Object.keys(data.user));
+const browser = await chromium.launch({ headless: true });
+const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+await ctx.addInitScript(({ token, userJson }) => {
+  localStorage.setItem('app.auth.keepLoggedIn', 'true');
+  localStorage.setItem('app.auth.user', userJson);
+  localStorage.setItem('app.auth.token', token);
+}, { token: data.token, userJson: JSON.stringify(data.user) });
+const page = await ctx.newPage();
+page.on('console', (m) => { if (m.type() === 'error') console.log('err:', m.text().slice(0, 200)); });
+await page.goto('http://127.0.0.1:3000/score_playground', { waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(25000);
+await page.screenshot({ path: '/tmp/pg-peek.png' });
+console.log((await page.locator('body').innerText()).slice(0, 1500));
+await browser.close();
