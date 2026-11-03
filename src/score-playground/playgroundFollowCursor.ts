@@ -16,9 +16,17 @@ export type PlaygroundCursorBox = {
 };
 
 /**
- * Mantém o cursor na faixa confortável da viewport.
- * Devolve a nova posição só quando precisa mover — o caller aplica na hora,
- * sem `behavior: 'smooth'`, porque um scroll suave por frame nunca chega.
+ * Rola continuamente para manter o cursor preso na linha do meio da tela.
+ *
+ * Nas primeiras linhas a partitura não se mexe: o alvo de rolagem fica negativo
+ * e é limitado a 0, então a primeira linha permanece onde está. A partir do
+ * instante em que o centro do cursor cruza a metade da altura visível, o alvo
+ * passa a acompanhar o cursor pixel a pixel — sem faixa de conforto nem pulo —
+ * até a rolagem chegar ao fim da partitura (`maxTop`); dali em diante o cursor
+ * segue livre pela tela, pois não há mais o que subir.
+ *
+ * Devolve a nova posição a cada quadro — o caller aplica na hora, sem
+ * `behavior: 'smooth'`, porque um scroll suave por frame nunca chega.
  */
 export function nextPlaygroundScroll(
   scroll: PlaygroundScrollBox,
@@ -28,17 +36,12 @@ export function nextPlaygroundScroll(
   let left = scroll.scrollLeft;
   let changed = false;
 
-  const marginTop = scroll.clientHeight * 0.22;
-  const marginBottom = scroll.clientHeight * 0.18;
-  const cursorBottom = cursor.top + cursor.height;
-  if (cursor.top < marginTop || cursorBottom > scroll.clientHeight - marginBottom) {
-    const maxTop = Math.max(0, scroll.scrollHeight - scroll.clientHeight);
-    const delta = cursor.top - scroll.clientHeight * 0.32;
-    const next = Math.max(0, Math.min(scroll.scrollTop + delta, maxTop));
-    if (Math.abs(next - scroll.scrollTop) > 4) {
-      top = next;
-      changed = true;
-    }
+  const maxTop = Math.max(0, scroll.scrollHeight - scroll.clientHeight);
+  const cursorCenter = scroll.scrollTop + cursor.top + cursor.height / 2;
+  const targetTop = Math.max(0, Math.min(cursorCenter - scroll.clientHeight / 2, maxTop));
+  if (Math.abs(targetTop - scroll.scrollTop) > 0.5) {
+    top = targetTop;
+    changed = true;
   }
 
   if (scroll.scrollWidth > scroll.clientWidth + 8) {
