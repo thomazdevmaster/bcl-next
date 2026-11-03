@@ -53,6 +53,8 @@ next-env.d.ts
 
 # SKILLS ESPECÍFICAS
 .agents/*
+.agents/
+.agents
 skills-lock.json
 .impeccable/
 

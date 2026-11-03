@@ -1,6 +1,6 @@
 {
   "name": "front-next",
-  "version": "0.49.9",
+  "version": "0.49.10",
   "private": true,
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
