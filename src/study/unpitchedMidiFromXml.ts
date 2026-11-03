@@ -108,19 +108,27 @@ function dynamicsToVelocity(raw: string | null | undefined): number {
   return Math.max(1, Math.min(127, Math.round((n / 127) * 127)));
 }
 
+/** PPQ do SMF gerado: cada naipe converte as próprias `divisions` para esta base. */
+const SMF_DIVISION = 480;
+
 function collectPartEvents(
   doc: Document,
   partId: string,
   instrumentMap: Map<string, number>,
-): { events: TimedEvent[]; divisions: number } {
+): TimedEvent[] {
   const part = doc.querySelector(`part[id="${partId}"]`);
   const scorePart = doc.querySelector(`part-list > score-part[id="${partId}"]`);
-  if (!part) return { events: [], divisions: 480 };
+  if (!part) return [];
 
   const events: TimedEvent[] = [];
   let tick = 0;
-  let divisions = 480;
+  let lastOnset = 0;
+  let divisions = 1;
   let pendingVelocity = 96;
+  const ticksOf = (node: Element): number => {
+    const dur = Number(node.querySelector('duration')?.textContent?.trim() ?? '0');
+    return Number.isNaN(dur) || dur <= 0 ? 0 : (dur * SMF_DIVISION) / divisions;
+  };
 
   const measures = Array.from(part.children).filter(
     (node) => node.nodeType === Node.ELEMENT_NODE && node.tagName.toLowerCase() === 'measure',
@@ -144,49 +152,36 @@ function collectPartEvents(
         continue;
       }
       if (tag === 'backup') {
-        const dur = Number(node.querySelector('duration')?.textContent?.trim() ?? '0');
-        if (!Number.isNaN(dur)) tick = Math.max(measureStart, tick - dur);
+        tick = Math.max(measureStart, tick - ticksOf(node));
         continue;
       }
       if (tag === 'forward') {
-        const dur = Number(node.querySelector('duration')?.textContent?.trim() ?? '0');
-        if (!Number.isNaN(dur)) tick += dur;
+        tick += ticksOf(node);
         continue;
       }
       if (tag !== 'note') continue;
 
       const noteEl = node;
-      if (noteEl.querySelector('rest')) {
-        const dur = Number(noteEl.querySelector('duration')?.textContent?.trim() ?? '0');
-        if (!Number.isNaN(dur)) tick += dur;
-        continue;
+      // Nota de acorde começa junto da anterior; o cursor de tempo já andou com ela.
+      const isChord = noteEl.querySelector('chord') != null;
+      const start = isChord ? lastOnset : tick;
+      const dur = ticksOf(noteEl);
+      if (!isChord) {
+        lastOnset = start;
+        tick += dur;
       }
-      if (!noteEl.querySelector('unpitched')) {
-        const dur = Number(noteEl.querySelector('duration')?.textContent?.trim() ?? '0');
-        if (!Number.isNaN(dur)) tick += dur;
-        continue;
-      }
+      if (noteEl.querySelector('rest') || !noteEl.querySelector('unpitched') || dur <= 0) continue;
 
       const midiNote = resolveNoteMidiPitch(noteEl, instrumentMap, scorePart);
-      if (midiNote == null) {
-        const dur = Number(noteEl.querySelector('duration')?.textContent?.trim() ?? '0');
-        if (!Number.isNaN(dur)) tick += dur;
-        continue;
-      }
+      if (midiNote == null) continue;
 
-      const dur = Number(noteEl.querySelector('duration')?.textContent?.trim() ?? '0');
-      if (Number.isNaN(dur) || dur <= 0) continue;
-
-      const isChord = noteEl.querySelector('chord') != null;
-      const start = tick;
       const vel = pendingVelocity;
-      events.push({ tick: start, status: 0x90 | DRUM_CHANNEL, d1: midiNote, d2: vel });
-      events.push({ tick: start + dur, status: 0x80 | DRUM_CHANNEL, d1: midiNote, d2: 0 });
-      if (!isChord) tick += dur;
+      events.push({ tick: Math.round(start), status: 0x90 | DRUM_CHANNEL, d1: midiNote, d2: vel });
+      events.push({ tick: Math.round(start + dur), status: 0x80 | DRUM_CHANNEL, d1: midiNote, d2: 0 });
     }
   }
 
-  return { events, divisions };
+  return events;
 }
 
 function encodeTrack(events: TimedEvent[], tempoBpm: number): Uint8Array {
@@ -259,20 +254,16 @@ export function buildUnpitchedMidiFromXml(
       ? tempoOverrideBpm
       : extractTempoInfoFromXml(xml)?.bpm ?? 120;
   const allEvents: TimedEvent[] = [];
-  let smfDivision = 480;
 
   for (const partId of partIds) {
     const map = buildInstrumentMidiMap(doc, partId);
-    const collected = collectPartEvents(doc, partId, map);
-    if (collected.events.length === 0) continue;
-    smfDivision = collected.divisions;
-    allEvents.push(...collected.events);
+    allEvents.push(...collectPartEvents(doc, partId, map));
   }
 
   if (allEvents.length === 0) return null;
 
   const track = encodeTrack(allEvents, tempo);
-  const midi = buildSmf(track, smfDivision);
+  const midi = buildSmf(track, SMF_DIVISION);
   if (!midiHasAudibleNotes(midi) || countGmDrumChannelNoteOns(midi) === 0) return null;
   return midi;
 }

@@ -2,6 +2,10 @@ export type MeasureTimemapEntry = {
   measure: number;
   timestamp: number;
   duration: number;
+  /** Início do compasso em semínimas desde o começo (timemap v2 do bcl-api). */
+  qstamp?: number;
+  /** Duração do compasso em semínimas (timemap v2 do bcl-api). */
+  quarters?: number;
 };
 
 function medianPositive(values: number[]): number {
