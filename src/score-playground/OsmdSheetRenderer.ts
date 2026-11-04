@@ -11,7 +11,7 @@ import {
   measuresPerDesktopLine,
   measuresPerMobileLine,
 } from './osmdPlaygroundLayout';
-import { soundingNoteCursorX } from './playgroundCursorPosition';
+import { continuousCursorX } from './playgroundCursorPosition';
 import { followPlaygroundCursor } from './playgroundFollowCursor';
 import type { PlaygroundZoomState } from './playgroundZoomTypes';
 import {
@@ -182,9 +182,13 @@ export class OsmdSheetRenderer implements ISheetRenderer {
 
     const cursor = this.ensureCursor();
     const measureWhole = osmd.Sheet.SourceMeasures[index]?.Duration?.RealValue ?? 1;
-    const x =
-      soundingNoteCursorX(this.noteColumnsPx(osmd, index), fraction, measureWhole) ??
-      bounds.x + fraction * bounds.width;
+    const x = continuousCursorX(
+      this.noteColumnsPx(osmd, index),
+      fraction,
+      measureWhole,
+      bounds.x,
+      bounds.x + bounds.width,
+    );
     cursor.style.display = 'block';
     cursor.style.position = 'absolute';
     const mountTop = this.osmdMount?.offsetTop ?? 0;
