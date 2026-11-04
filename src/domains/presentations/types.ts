@@ -1,6 +1,15 @@
-import type { Auditable, EntityId } from '../shared';
+import type { Auditable, EntityId } from "../shared";
 
-export type PresentationStatus = 'draft' | 'scheduled' | 'done' | 'cancelled';
+export type PresentationStatus = "draft" | "scheduled" | "done" | "cancelled";
+
+export interface PresentationType {
+  id: number;
+  name: string;
+  icon?: string | null;
+  isPublicByDefault: boolean;
+  isActive: boolean;
+  isSystem: boolean;
+}
 
 export interface Presentation extends Auditable {
   id: EntityId;
@@ -13,4 +22,5 @@ export interface Presentation extends Auditable {
   coverUrl?: string;
   isPublic: boolean;
   status: PresentationStatus;
+  eventType?: { id: number | null; name: string; icon?: string | null } | null;
 }

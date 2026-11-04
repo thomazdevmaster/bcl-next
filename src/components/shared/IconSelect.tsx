@@ -40,6 +40,9 @@ type IconSelectProps<Value extends string> = {
   options: readonly IconSelectOption<Value>[];
   className?: string;
   triggerClassName?: string;
+  expandMenuToContent?: boolean;
+  fitTriggerToContent?: boolean;
+  wrapOptionLabels?: boolean;
   disabled?: boolean;
   id?: string;
   describedBy?: string;
@@ -61,6 +64,25 @@ function normalizeSearchText(value: string): string {
     .toLocaleLowerCase("pt-BR");
 }
 
+function measureOptionMenuWidth(options: readonly IconSelectOption<string>[]) {
+  const measurement = document.createElement("span");
+  measurement.className =
+    "fixed -left-[9999px] top-0 invisible whitespace-nowrap text-sm font-semibold";
+  measurement.setAttribute("aria-hidden", "true");
+  document.body.append(measurement);
+
+  try {
+    const widestLabel = options.reduce((widest, option) => {
+      measurement.textContent = option.label;
+      const measuredWidth = measurement.getBoundingClientRect().width;
+      return Math.max(widest, measuredWidth || option.label.length * 7.5);
+    }, 0);
+    return Math.ceil(widestLabel + 84);
+  } finally {
+    measurement.remove();
+  }
+}
+
 export function IconSelect<Value extends string>(
   props: IconSelectProps<Value>,
 ) {
@@ -69,6 +91,9 @@ export function IconSelect<Value extends string>(
     options,
     className = "relative min-w-0 w-full",
     triggerClassName,
+    expandMenuToContent = false,
+    fitTriggerToContent = false,
+    wrapOptionLabels = false,
     disabled = false,
     id,
     describedBy,
@@ -82,6 +107,7 @@ export function IconSelect<Value extends string>(
   const optionsId = `${id ?? generatedId}-options`;
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuContentWidthRef = useRef<number | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const pointerInteractionInMenuRef = useRef(false);
   const focusOptionOnOpenRef = useRef(false);
@@ -121,7 +147,8 @@ export function IconSelect<Value extends string>(
           ),
         )
       : options;
-  const shouldVirtualize = visibleOptions.length > VIRTUALIZATION_THRESHOLD;
+  const shouldVirtualize =
+    visibleOptions.length > VIRTUALIZATION_THRESHOLD && !wrapOptionLabels;
   const visibleStart = shouldVirtualize
     ? Math.max(0, Math.floor(listScrollTop / OPTION_HEIGHT) - VIRTUAL_OVERSCAN)
     : 0;
@@ -135,6 +162,9 @@ export function IconSelect<Value extends string>(
 
   const openMenu = () => {
     resetSearch();
+    menuContentWidthRef.current = expandMenuToContent
+      ? Math.max(176, measureOptionMenuWidth(options))
+      : null;
     const selectedIndex = options.findIndex((option) =>
       selectedValues.includes(option.value),
     );
@@ -148,7 +178,16 @@ export function IconSelect<Value extends string>(
           )
         : 0,
     );
-    setPortalContainer(rootRef.current?.closest("dialog") ?? document.body);
+    const root = rootRef.current;
+    const fullscreenElement = document.fullscreenElement;
+    const isInsideFullscreen = Boolean(
+      root && fullscreenElement?.contains(root),
+    );
+    setPortalContainer(
+      isInsideFullscreen
+        ? fullscreenElement
+        : (root?.closest("dialog") ?? document.body),
+    );
     focusOptionOnOpenRef.current = true;
     setIsOpen(true);
   };
@@ -241,7 +280,7 @@ export function IconSelect<Value extends string>(
         aria-selected={!props.multiple ? selected : undefined}
         onClick={() => selectOption(option)}
         disabled={disabled}
-        className={`flex h-11 w-full items-center gap-2 px-3 text-left text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-60 ${selected ? "bg-[var(--card-secondary)] text-[var(--foreground)]" : "text-[var(--muted)] hover:bg-[var(--card-secondary)]"}`}
+        className={`flex ${wrapOptionLabels ? "min-h-11 py-2" : "h-11"} w-full items-center gap-2 px-3 text-left text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-60 ${selected ? "bg-[var(--card-secondary)] text-[var(--foreground)]" : "text-[var(--muted)] hover:bg-[var(--card-secondary)]"}`}
       >
         {option.imageSrc ? (
           <Image
@@ -258,7 +297,11 @@ export function IconSelect<Value extends string>(
             {option.icon}
           </span>
         ) : null}
-        <span className="min-w-0 flex-1 truncate">{option.label}</span>
+        <span
+          className={`min-w-0 flex-1 ${wrapOptionLabels ? "whitespace-normal break-words" : "truncate"}`}
+        >
+          {option.label}
+        </span>
         {selected ? (
           <span className="material-icons text-lg" aria-hidden="true">
             check
@@ -288,15 +331,29 @@ export function IconSelect<Value extends string>(
         left: viewportMargin,
       };
       const boundsWidth = Math.max(0, bounds.right - bounds.left);
+      const requestedMenuWidth =
+        menuContentWidthRef.current ?? Math.min(176, boundsWidth);
       const menuWidth = Math.min(
-        Math.max(rect.width, Math.min(176, boundsWidth)),
+        Math.max(rect.width, Math.min(requestedMenuWidth, boundsWidth)),
         boundsWidth,
       );
       const left = Math.min(
         Math.max(rect.left, bounds.left),
         bounds.right - menuWidth,
       );
-      const desiredHeight = Math.min(options.length * 44 + 10, 320);
+      const optionList = menuRef.current?.querySelector<HTMLElement>(
+        '[role="listbox"], [role="menu"]',
+      );
+      const wrappedOptionsHeight =
+        wrapOptionLabels && optionList
+          ? Math.max(optionList.scrollHeight, OPTION_HEIGHT) +
+            (searchEnabled
+              ? ((menuRef.current?.firstElementChild as HTMLElement | null)
+                  ?.scrollHeight ?? 0)
+              : 0) +
+            10
+          : Math.max(options.length, 1) * OPTION_HEIGHT + 10;
+      const desiredHeight = Math.min(wrappedOptionsHeight, 320);
       const spaceAbove = Math.max(0, rect.top - gap - bounds.top);
       const spaceBelow = Math.max(0, bounds.bottom - rect.bottom - gap);
       const openUpward = spaceBelow < desiredHeight && spaceAbove > spaceBelow;
@@ -316,13 +373,23 @@ export function IconSelect<Value extends string>(
     };
 
     updateMenuPosition();
+    const frame = requestAnimationFrame(updateMenuPosition);
     window.addEventListener("resize", updateMenuPosition);
     window.addEventListener("scroll", updateMenuPosition, true);
     return () => {
+      cancelAnimationFrame(frame);
       window.removeEventListener("resize", updateMenuPosition);
       window.removeEventListener("scroll", updateMenuPosition, true);
     };
-  }, [isOpen, options.length, portalContainer]);
+  }, [
+    isOpen,
+    options.length,
+    portalContainer,
+    searchEnabled,
+    visibleOptions.length,
+    expandMenuToContent,
+    wrapOptionLabels,
+  ]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -401,7 +468,7 @@ export function IconSelect<Value extends string>(
         ?.focus();
     });
     return () => cancelAnimationFrame(frame);
-  }, [activeOptionIndex, isOpen, menuStyle]);
+  }, [activeOptionIndex, isOpen, menuStyle, visibleOptions.length]);
 
   const closeWhenFocusLeaves = (relatedTarget: EventTarget | null) => {
     if (relatedTarget instanceof Node) {
@@ -420,7 +487,9 @@ export function IconSelect<Value extends string>(
   return (
     <div
       ref={rootRef}
-      className={className}
+      className={
+        fitTriggerToContent ? "relative w-max max-w-full flex-none" : className
+      }
       onBlur={(event) => closeWhenFocusLeaves(event.relatedTarget)}
     >
       <button
@@ -452,7 +521,7 @@ export function IconSelect<Value extends string>(
             openMenu();
           }
         }}
-        className={`inline-flex min-h-11 w-full items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 text-left text-sm font-semibold text-[var(--foreground)] outline-none transition disabled:cursor-not-allowed disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-[var(--ring)] ${triggerClassName ?? ""}`}
+        className={`inline-flex min-h-11 ${fitTriggerToContent ? "w-max max-w-full" : "w-full"} items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 text-left text-sm font-semibold text-[var(--foreground)] outline-none transition disabled:cursor-not-allowed disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-[var(--ring)] ${triggerClassName ?? ""}`}
       >
         {selectedImageSrc ? (
           <Image
@@ -469,7 +538,11 @@ export function IconSelect<Value extends string>(
             {selectedIcon}
           </span>
         ) : null}
-        <span className="min-w-0 flex-1 truncate">{selectedLabel}</span>
+        <span
+          className={`min-w-0 flex-1 ${fitTriggerToContent ? "whitespace-nowrap" : wrapOptionLabels ? "whitespace-normal break-words" : "truncate"}`}
+        >
+          {selectedLabel}
+        </span>
         <span
           className="material-icons -mr-2.5 shrink-0 text-lg text-[var(--muted)]"
           aria-hidden="true"

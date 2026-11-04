@@ -1,4 +1,5 @@
 import type { CrudResource } from "@/core/auth/permissions";
+import { withAudit } from "@/domains/audit";
 import {
   INSTRUMENT_FAMILY_OPTIONS,
   INSTRUMENT_SIGNAL_OPTIONS,
@@ -36,7 +37,12 @@ export interface CrudOption {
  * - `people-without-user`: pessoas que ainda não têm conta;
  * - `instruments`: catálogo de instrumentos (trompete, sax alto), não a peça do patrimônio.
  */
-export type CrudOptionSource = "people" | "people-without-user" | "instruments";
+export type CrudOptionSource =
+  | "people"
+  | "people-without-user"
+  | "instruments"
+  | "presentation-types"
+  | "songs";
 
 export interface CrudField {
   name: string;
@@ -94,7 +100,7 @@ export interface CrudFormStage {
   fields: string[];
 }
 
-const validateUsername = (value: unknown) => {
+export const validateUsername = (value: unknown) => {
   const username = String(value ?? "").trim();
   if (!username) return null;
   return isValidUsername(username)
@@ -958,20 +964,30 @@ const presentations: DomainCrudConfig = {
   resource: "presentations",
   singular: "apresentação",
   defaults: {
+    eventTypeId: "",
     title: "",
     venue: "",
     startsAt: "",
     endsAt: "",
     description: "",
-    repertoireIds: "",
+    repertoireIds: [],
     coverUrl: "",
     isPublic: true,
     status: "draft",
     notifyAll: true,
   },
   fields: [
-    { name: "title", label: "Título", required: true },
-    { name: "venue", label: "Local", required: true },
+    {
+      name: "eventTypeId",
+      label: "Tipo do evento",
+      type: "select",
+      required: true,
+      wide: true,
+      optionsSource: "presentation-types",
+      icon: "event",
+    },
+    { name: "title", label: "Título", required: true, wide: true },
+    { name: "venue", label: "Local", required: true, wide: true },
     {
       name: "startsAt",
       label: "Início",
@@ -982,8 +998,11 @@ const presentations: DomainCrudConfig = {
     { name: "description", label: "Descrição", type: "textarea" },
     {
       name: "repertoireIds",
-      label: "IDs das músicas",
-      helpText: "Separe os IDs por vírgula.",
+      label: "Repertório",
+      type: "multiselect",
+      optionsSource: "songs",
+      wide: true,
+      helpText: "Busque e selecione uma ou mais músicas do repertório.",
     },
     { name: "coverUrl", label: "URL da capa" },
     { name: "isPublic", label: "Mostrar na agenda pública", type: "checkbox" },
@@ -1009,6 +1028,7 @@ const presentations: DomainCrudConfig = {
     },
   ],
   columns: [
+    { path: "eventType.name", label: "Tipo" },
     { path: "title", label: "Título" },
     { path: "venue", label: "Local" },
     { path: "startsAt", label: "Data", format: "datetime" },
@@ -1020,25 +1040,41 @@ const presentations: DomainCrudConfig = {
   itemLabel: (item) => String(item.title ?? "Apresentação"),
   toForm: (item) => ({
     ...item,
-    startsAt: toLocalDateTime(item.startsAt),
-    endsAt: toLocalDateTime(item.endsAt),
+    eventTypeId:
+      item.eventType && typeof item.eventType === "object"
+        ? (item.eventType as Record<string, unknown>).id == null
+          ? "__snapshot__"
+          : String((item.eventType as Record<string, unknown>).id)
+        : "",
+    startsAt: toBrasiliaLocalDateTime(item.startsAt),
+    endsAt: toBrasiliaLocalDateTime(item.endsAt),
     repertoireIds: Array.isArray(item.repertoireIds)
-      ? item.repertoireIds.join(", ")
-      : "",
+      ? item.repertoireIds.map(String)
+      : [],
   }),
-  toPayload: (values, current) =>
-    withAudit(
+  toPayload: (values, current) => {
+    const payload = withAudit(
       {
         ...values,
-        startsAt: toIsoDateTime(values.startsAt),
-        endsAt: values.endsAt ? toIsoDateTime(values.endsAt) : undefined,
-        repertoireIds: String(values.repertoireIds ?? "")
-          .split(",")
-          .map((id) => id.trim())
-          .filter(Boolean),
+        eventTypeId:
+          values.eventTypeId === "__snapshot__" || values.eventTypeId === ""
+            ? null
+            : Number(values.eventTypeId),
+        startsAt: toBrasiliaIsoDateTime(values.startsAt),
+        endsAt: values.endsAt
+          ? toBrasiliaIsoDateTime(values.endsAt)
+          : undefined,
+        repertoireIds: Array.isArray(values.repertoireIds)
+          ? values.repertoireIds.map(String)
+          : [],
       },
       current,
-    ),
+    );
+    if (values.eventTypeId === "__snapshot__") {
+      delete payload.eventTypeId;
+    }
+    return payload;
+  },
 };
 
 const media: DomainCrudConfig = {
@@ -1276,7 +1312,14 @@ const CRUD_FORM_STAGES: Partial<Record<CrudResource, CrudFormStage[]>> = {
       title: "Dados e datas",
       shortTitle: "Evento",
       icon: "event",
-      fields: ["title", "venue", "startsAt", "endsAt", "description"],
+      fields: [
+        "eventTypeId",
+        "title",
+        "venue",
+        "startsAt",
+        "endsAt",
+        "description",
+      ],
     },
     {
       id: "publication",
@@ -1314,7 +1357,7 @@ export function getValue(
   }, entity);
 }
 
-function flattenEntity(
+export function flattenEntity(
   entity: Record<string, unknown>,
 ): Record<string, unknown> {
   const flat = { ...entity };
@@ -1350,19 +1393,63 @@ function unflattenEntity(
   return entity;
 }
 
-function withAudit(
-  payload: Record<string, unknown>,
-  current?: Record<string, unknown>,
-): Record<string, unknown> {
-  const now = new Date().toISOString();
-  return {
-    ...payload,
-    createdAt: current?.createdAt ?? now,
-    updatedAt: now,
-  };
+const PRESENTATION_TIME_ZONE = "America/Sao_Paulo";
+const presentationDateTimeParts = new Intl.DateTimeFormat("en-CA", {
+  timeZone: PRESENTATION_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+function zonedDateTimeParts(value: Date): Map<string, string> {
+  return new Map(
+    presentationDateTimeParts
+      .formatToParts(value)
+      .map(({ type, value: part }) => [type, part]),
+  );
 }
 
-function toLocalDateTime(value: unknown): string {
+function toBrasiliaLocalDateTime(value: unknown): string {
+  if (!value) return "";
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = zonedDateTimeParts(date);
+  return `${parts.get("year")}-${parts.get("month")}-${parts.get("day")}T${parts.get("hour")}:${parts.get("minute")}`;
+}
+
+function toBrasiliaIsoDateTime(value: unknown): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(
+    String(value ?? ""),
+  );
+  if (!match) return "";
+
+  const [, year, month, day, hour, minute] = match;
+  const wallClockAsUtc = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+  );
+  const zoneParts = zonedDateTimeParts(new Date(wallClockAsUtc));
+  const zonedClockAsUtc = Date.UTC(
+    Number(zoneParts.get("year")),
+    Number(zoneParts.get("month")) - 1,
+    Number(zoneParts.get("day")),
+    Number(zoneParts.get("hour")),
+    Number(zoneParts.get("minute")),
+    Number(zoneParts.get("second")),
+  );
+  const offset = zonedClockAsUtc - wallClockAsUtc;
+  const instant = new Date(wallClockAsUtc - offset);
+  return Number.isNaN(instant.getTime()) ? "" : instant.toISOString();
+}
+
+export function toLocalDateTime(value: unknown): string {
   if (!value) return "";
   const date = new Date(String(value));
   if (Number.isNaN(date.getTime())) return "";
