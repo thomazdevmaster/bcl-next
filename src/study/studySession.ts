@@ -47,6 +47,7 @@ import {
   type StudyScoreHeader,
   type StudySongMetadataInput,
 } from './enrichStudyMusicXml';
+import { stampRenderedScoreHeading } from './stampRenderedScoreHeading';
 import {
   extractMarkedTempoBpmFromXml,
   extractTempoInfoFromXml,
@@ -1059,7 +1060,8 @@ export class StudySession {
         pageFormat: 'Endless',
         cursorsOptions: [{ type: 1, color: '#dc2626', alpha: 0.95, follow: false }],
       });
-      await this.osmd.load(xml);
+      const headedXml = stampRenderedScoreHeading(xml, this.lastSongMetadata ?? undefined);
+      await this.osmd.load(headedXml);
       if (mobile) this.applyMobileLayout();
       else this.fitScoreToViewport();
       await this.osmd.render();

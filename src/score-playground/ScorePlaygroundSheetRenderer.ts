@@ -11,6 +11,10 @@ import { WebMscoreSheetRenderer } from './WebMscoreSheetRenderer';
 import { OsmdSheetRenderer } from './OsmdSheetRenderer';
 import type { PlaygroundZoomState } from './playgroundZoomTypes';
 import { isPlaygroundZoomable } from './playgroundZoomTypes';
+import {
+  stampRenderedScoreHeading,
+  type RenderedScoreHeading,
+} from '@/study/stampRenderedScoreHeading';
 
 export type PlaygroundSheetEngine = 'webmscore' | 'osmd';
 
@@ -23,6 +27,12 @@ export class ScorePlaygroundSheetRenderer implements ISheetRenderer {
   sheetEngine: PlaygroundSheetEngine = 'webmscore';
 
   private inner: ISheetRenderer | null = null;
+  private heading: RenderedScoreHeading = {};
+
+  /** Título, autor e arranjo do cadastro, usados quando o XML não traz créditos. */
+  setHeading(heading: RenderedScoreHeading): void {
+    this.heading = heading;
+  }
 
   destroy(): void {
     this.inner?.destroy();
@@ -54,7 +64,7 @@ export class ScorePlaygroundSheetRenderer implements ISheetRenderer {
 
     container.replaceChildren();
     const osmd = new OsmdSheetRenderer();
-    await osmd.initialize(container, musicXml, options);
+    await osmd.initialize(container, stampRenderedScoreHeading(musicXml, this.heading), options);
     this.inner = osmd;
     this.sheetEngine = 'osmd';
   }

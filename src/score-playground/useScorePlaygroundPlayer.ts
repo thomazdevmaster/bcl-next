@@ -276,6 +276,11 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
 
         patchMusicXmlPlayerAudioWorklet();
         const renderer = new ScorePlaygroundSheetRenderer();
+        renderer.setHeading({
+          title: options.song.title,
+          composer: options.song.composer,
+          arranger: options.song.arranger,
+        });
         rendererRef.current = renderer;
         const playerTimemap = timemapForPlayer(assets.timemap);
         metronomeBeatsRef.current = buildMetronomeBeats(
