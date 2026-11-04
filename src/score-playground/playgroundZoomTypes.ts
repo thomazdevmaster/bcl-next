@@ -3,6 +3,8 @@ export type PlaygroundZoomState = {
   label: string;
   canZoomIn: boolean;
   canZoomOut: boolean;
+  /** Compassos por linha efetivos. `null` quando o motor não aplica zoom (página original). */
+  measuresPerLine: number | null;
 };
 
 export const MOBILE_MEASURES_MIN = 1;

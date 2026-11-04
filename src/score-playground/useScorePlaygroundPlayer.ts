@@ -24,6 +24,11 @@ import {
   buildUnrolledToWrittenMap,
   hasRealRepeats,
 } from './scorePlaygroundRepeatMap';
+import {
+  readPlaygroundSessionPrefs,
+  writePlaygroundSessionPrefs,
+  type ScorePlaygroundSessionPrefs,
+} from './scorePlaygroundSessionPrefs';
 import { patchMusicXmlPlayerAudioWorklet } from './patchMusicXmlPlayerForNext';
 import type { PlaygroundZoomState } from './playgroundZoomTypes';
 import type { InstrumentInfo } from '@/study/studyUtils';
@@ -114,7 +119,14 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
   const metronomeLastPosRef = useRef<number | null>(null);
   const playerTimemapRef = useRef<MeasureTimemapEntry[]>([]);
   const togglingDisplayModeRef = useRef(false);
+  const songIdRef = useRef<string | null>(null);
   const [state, setState] = useState<ScorePlaygroundViewState>(INITIAL);
+
+  const persistPrefs = useCallback((patch: ScorePlaygroundSessionPrefs) => {
+    const songId = songIdRef.current;
+    if (!songId || typeof localStorage === 'undefined') return;
+    writePlaygroundSessionPrefs(localStorage, ownerId, songId, patch);
+  }, [ownerId]);
 
   const clearMetronomeSchedule = useCallback(() => {
     for (const stop of metronomeScheduledRef.current.values()) stop();
@@ -206,6 +218,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
 
   const resetToCatalog = useCallback(() => {
     optionsRef.current = null;
+    songIdRef.current = null;
     volumeRef.current = 1;
     volumeBeforeMuteRef.current = 1;
     teardownPlayer();
@@ -213,7 +226,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
   }, [teardownPlayer]);
 
   const openSession = useCallback(
-    async (options: StudyStartOptions, velocity: number, volume: number) => {
+    async (options: StudyStartOptions) => {
       const token = loadTokenRef.current + 1;
       loadTokenRef.current = token;
       teardownPlayer();
@@ -226,9 +239,19 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
         scoreInstrumentIds: scoreIds,
         midiInstrumentIds: midiIds,
       };
+      const prefs =
+        typeof localStorage === 'undefined'
+          ? {}
+          : readPlaygroundSessionPrefs(localStorage, ownerId, songId);
+      const velocity = prefs.velocity ?? 1;
+      const volume = prefs.volume ?? 1;
+      const metronomeEnabled = prefs.metronome ?? false;
       optionsRef.current = options;
+      songIdRef.current = songId;
       velocityRef.current = velocity;
       volumeRef.current = volume;
+      volumeBeforeMuteRef.current = volume > 0 ? volume : 1;
+      metronomeEnabledRef.current = metronomeEnabled;
       if (scoreIds.length === 0 || midiIds.length === 0) {
         setState({
           ...INITIAL,
@@ -256,7 +279,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
         scoreLoading: true,
         velocity,
         volume,
-        metronomeEnabled: metronomeEnabledRef.current,
+        metronomeEnabled,
       });
 
       try {
@@ -311,6 +334,10 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
           canToggleScoreForm ? writtenXml : null,
           canToggleScoreForm ? unrolledToWrittenMap : null,
         );
+        renderer.setMeasuresPerLine(prefs.measuresPerLine ?? null);
+        const displayMode =
+          prefs.displayMode === 'written' && canToggleScoreForm ? 'written' : 'unrolled';
+        renderer.displayMode = displayMode;
         rendererRef.current = renderer;
         const playerTimemap = timemapForPlayer(assets.timemap);
         playerTimemapRef.current = playerTimemap;
@@ -364,10 +391,10 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
           durationMs: player.duration,
           velocity,
           volume,
-          metronomeEnabled: metronomeEnabledRef.current,
+          metronomeEnabled,
           scoreLoading: false,
           zoom: renderer.getZoomState(),
-          displayMode: 'unrolled',
+          displayMode,
           canToggleScoreForm,
           ...selection,
         });
@@ -394,7 +421,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
   );
 
   const startSession = useCallback(
-    (options: StudyStartOptions) => openSession(options, 1, 1),
+    (options: StudyStartOptions) => openSession(options),
     [openSession],
   );
 
@@ -403,11 +430,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
       const options = optionsRef.current;
       if (!options) return;
       playerRef.current?.pause();
-      void openSession(
-        { ...options, scoreInstrumentIds, midiInstrumentIds },
-        velocityRef.current,
-        volumeRef.current,
-      );
+      void openSession({ ...options, scoreInstrumentIds, midiInstrumentIds });
     },
     [openSession],
   );
@@ -424,19 +447,27 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     playerRef.current?.rewind();
   }, []);
 
+  const rememberZoom = useCallback(() => {
+    const measures = rendererRef.current?.getZoomState().measuresPerLine;
+    if (measures == null) return;
+    persistPrefs({ measuresPerLine: measures });
+  }, [persistPrefs]);
+
   const zoomIn = useCallback(() => {
     rendererRef.current?.zoomIn();
+    rememberZoom();
     refreshZoomState();
     requestAnimationFrame(() => refreshZoomState());
     window.setTimeout(() => refreshZoomState(), 1200);
-  }, [refreshZoomState]);
+  }, [refreshZoomState, rememberZoom]);
 
   const zoomOut = useCallback(() => {
     rendererRef.current?.zoomOut();
+    rememberZoom();
     refreshZoomState();
     requestAnimationFrame(() => refreshZoomState());
     window.setTimeout(() => refreshZoomState(), 1200);
-  }, [refreshZoomState]);
+  }, [refreshZoomState, rememberZoom]);
 
   const toggleDisplayMode = useCallback(() => {
     const renderer = rendererRef.current;
@@ -462,10 +493,11 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
         }
       }
       setState((prev) => ({ ...prev, displayMode: renderer.displayMode }));
+      persistPrefs({ displayMode: renderer.displayMode });
       refreshZoomState();
       togglingDisplayModeRef.current = false;
     });
-  }, [refreshZoomState]);
+  }, [persistPrefs, refreshZoomState]);
 
   const applyVolume = useCallback((value: number) => {
     const clamped = clampPlaygroundVolume(value);
@@ -473,7 +505,8 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     if (clamped > 0) volumeBeforeMuteRef.current = clamped;
     if (gainRef.current) gainRef.current.gain.value = clamped;
     setState((prev) => ({ ...prev, volume: clamped }));
-  }, []);
+    persistPrefs({ volume: clamped });
+  }, [persistPrefs]);
 
   const setVolume = useCallback((value: number) => {
     applyVolume(value);
@@ -489,7 +522,8 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     metronomeEnabledRef.current = enabled;
     if (!enabled) clearMetronomeSchedule();
     setState((prev) => ({ ...prev, metronomeEnabled: enabled }));
-  }, [clearMetronomeSchedule]);
+    persistPrefs({ metronome: enabled });
+  }, [clearMetronomeSchedule, persistPrefs]);
 
   const setVelocity = useCallback((value: number) => {
     const player = playerRef.current;
@@ -499,7 +533,8 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     velocityRef.current = clamped;
     clearMetronomeSchedule();
     setState((prev) => ({ ...prev, velocity: clamped }));
-  }, [clearMetronomeSchedule]);
+    persistPrefs({ velocity: clamped });
+  }, [clearMetronomeSchedule, persistPrefs]);
 
   return {
     sheetRef,

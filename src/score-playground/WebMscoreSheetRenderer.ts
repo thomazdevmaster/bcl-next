@@ -97,7 +97,6 @@ export class WebMscoreSheetRenderer implements ISheetRenderer {
     this.baselineMeasures = mobile
       ? measuresPerMobileLine(null)
       : measuresPerDesktopLine(this.containerWidth, null);
-    this.measuresOverride = null;
 
     const WebMscore = await loadWebMscoreModule();
     await this.loadAndRenderScore(WebMscore, this.rawSheet);
@@ -110,6 +109,7 @@ export class WebMscoreSheetRenderer implements ISheetRenderer {
         label: 'Página original',
         canZoomIn: false,
         canZoomOut: false,
+        measuresPerLine: null,
       };
     }
     const measures = this.currentMeasuresPerLine();
@@ -121,7 +121,13 @@ export class WebMscoreSheetRenderer implements ISheetRenderer {
       label: `${measures} comp./linha`,
       canZoomIn: !this.layoutRendering && measures > min,
       canZoomOut: !this.layoutRendering && measures < max,
+      measuresPerLine: measures,
     };
+  }
+
+  /** Restaura o zoom salvo antes do primeiro desenho. `null` volta ao automático. */
+  setMeasuresPerLine(value: number | null): void {
+    this.measuresOverride = value;
   }
 
   zoomIn(): void {

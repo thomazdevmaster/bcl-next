@@ -111,7 +111,13 @@ export class OsmdSheetRenderer implements ISheetRenderer {
         : `${measures} comp./linha`,
       canZoomIn: !this.layoutRendering && measures > min,
       canZoomOut: !this.layoutRendering && measures < max,
+      measuresPerLine: measures,
     };
+  }
+
+  /** Restaura o zoom salvo antes do primeiro desenho. `null` volta ao automático. */
+  setMeasuresPerLine(value: number | null): void {
+    this.measuresOverride = value;
   }
 
   zoomIn(): void {

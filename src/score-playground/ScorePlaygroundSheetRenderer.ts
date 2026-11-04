@@ -44,6 +44,7 @@ export class ScorePlaygroundSheetRenderer implements ISheetRenderer {
   private unrolledXml = '';
   private writtenXml: string | null = null;
   private unrolledToWritten: UnrolledToWrittenMap | null = null;
+  private measuresPerLine: number | null = null;
 
   /** Título, autor e arranjo do cadastro, usados quando o XML não traz créditos. */
   setHeading(heading: RenderedScoreHeading): void {
@@ -65,6 +66,11 @@ export class ScorePlaygroundSheetRenderer implements ISheetRenderer {
 
   hasWrittenAlternative(): boolean {
     return this.writtenXml != null && this.unrolledToWritten != null;
+  }
+
+  /** Zoom escolhido pelo músico, aplicado em cada redesenho (troca de forma inclusive). */
+  setMeasuresPerLine(value: number | null): void {
+    this.measuresPerLine = value;
   }
 
   destroy(): void {
@@ -105,6 +111,7 @@ export class ScorePlaygroundSheetRenderer implements ISheetRenderer {
     const skipWebMscore = isLargeScoreForWebMscoreLayout(musicXml);
     if (!skipWebMscore) {
       const webm = new WebMscoreSheetRenderer();
+      webm.setMeasuresPerLine(this.measuresPerLine);
       try {
         await webm.initialize(container, musicXml, options);
         this.inner = webm;
@@ -120,6 +127,7 @@ export class ScorePlaygroundSheetRenderer implements ISheetRenderer {
 
     container.replaceChildren();
     const osmd = new OsmdSheetRenderer();
+    osmd.setMeasuresPerLine(this.measuresPerLine);
     await osmd.initialize(container, stampRenderedScoreHeading(musicXml, this.heading), options);
     this.inner = osmd;
     this.sheetEngine = 'osmd';
@@ -161,14 +169,19 @@ export class ScorePlaygroundSheetRenderer implements ISheetRenderer {
       label: '—',
       canZoomIn: false,
       canZoomOut: false,
+      measuresPerLine: this.measuresPerLine,
     };
   }
 
   zoomIn(): void {
-    if (isPlaygroundZoomable(this.inner)) this.inner.zoomIn();
+    if (!isPlaygroundZoomable(this.inner)) return;
+    this.inner.zoomIn();
+    this.measuresPerLine = this.inner.getZoomState().measuresPerLine;
   }
 
   zoomOut(): void {
-    if (isPlaygroundZoomable(this.inner)) this.inner.zoomOut();
+    if (!isPlaygroundZoomable(this.inner)) return;
+    this.inner.zoomOut();
+    this.measuresPerLine = this.inner.getZoomState().measuresPerLine;
   }
 }
