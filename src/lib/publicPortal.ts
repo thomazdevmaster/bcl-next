@@ -13,6 +13,7 @@ export function mediaKindLabel(kind: MediaKind): string {
 
 export function formatPresentationWhen(iso: string): string {
   return new Date(iso).toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
     weekday: "short",
     day: "2-digit",
     month: "short",
@@ -54,6 +55,15 @@ export function upcomingPublicPresentations(
     items.filter((item) => isUpcomingPublicPresentation(item)),
   );
   return limit ? sorted.slice(0, limit) : sorted;
+}
+
+export function pastPublicPresentations(
+  items: Presentation[],
+  now = Date.now(),
+): Presentation[] {
+  return sortPresentationsByDate(
+    items.filter((item) => new Date(item.startsAt).getTime() < now),
+  ).reverse();
 }
 
 export function orderMediaPosts(

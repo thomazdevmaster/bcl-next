@@ -53,6 +53,8 @@ next-env.d.ts
 
 # SKILLS ESPECÍFICAS
 .agents/*
+.agents/
+.agents
 skills-lock.json
 .impeccable/
 
@@ -65,3 +67,6 @@ src/components/prototype
 
 # Glossary e documentação
 GLOSSARY.md
+
+# Resultados locais das ferramentas de métricas
+.metrics/

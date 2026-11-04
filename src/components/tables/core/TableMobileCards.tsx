@@ -9,7 +9,12 @@ import {
   useState,
 } from "react";
 
-import { EntityDialog } from "@/components/shared/EntityDialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/shared/Sheet";
 
 import { TableCheckbox } from "../toolbar/TableCheckbox";
 import { TableMobileIconAction } from "./TableMobileIconAction";
@@ -426,44 +431,53 @@ export function TableMobileCards<TData extends RowData>({
           );
         })}
       </ul>
-      <EntityDialog
+      <Sheet
         open={Boolean(viewingRow)}
-        title={
-          viewingRow
-            ? (getRowLabel?.(viewingRow.original) ?? "Detalhes do registro")
-            : "Detalhes do registro"
-        }
-        size="md"
-        placement="bottom"
-        confirmBeforeClose={false}
-        closeOnBackdropClick
-        onClose={() => setViewingRowId(null)}
+        onOpenChange={(open) => {
+          if (!open) setViewingRowId(null);
+        }}
       >
-        {viewingRow ? (
-          <dl className="px-4 py-1 sm:px-6">
-            {viewingRow
-              .getVisibleCells()
-              .filter(
-                (cell) =>
-                  cell.column.id !== ROW_CONTROLS_ID &&
-                  cell.column.id !== ROW_ACTIONS_ID,
-              )
-              .map((cell) => (
-                <div
-                  key={cell.id}
-                  className="flex items-start justify-between gap-4 border-b border-[var(--border)] py-3 last:border-b-0"
-                >
-                  <dt className="shrink-0 text-xs font-medium text-[var(--muted)]">
-                    {columnLabel(cell.column.columnDef.header, cell.column.id)}
-                  </dt>
-                  <dd className="min-w-0 break-words text-right text-sm text-[var(--foreground)]">
-                    <table.FlexRender cell={cell} />
-                  </dd>
-                </div>
-              ))}
-          </dl>
-        ) : null}
-      </EntityDialog>
+        <SheetContent
+          side="bottom"
+          showCloseButton={false}
+          className="max-h-[min(92dvh,48rem)] gap-0"
+        >
+          <SheetHeader className="border-b border-[var(--border)] px-4 py-3 sm:px-6">
+            <SheetTitle>
+              {viewingRow
+                ? (getRowLabel?.(viewingRow.original) ?? "Detalhes do registro")
+                : "Detalhes do registro"}
+            </SheetTitle>
+          </SheetHeader>
+          {viewingRow ? (
+            <dl className="overflow-y-auto px-4 py-1 sm:px-6">
+              {viewingRow
+                .getVisibleCells()
+                .filter(
+                  (cell) =>
+                    cell.column.id !== ROW_CONTROLS_ID &&
+                    cell.column.id !== ROW_ACTIONS_ID,
+                )
+                .map((cell) => (
+                  <div
+                    key={cell.id}
+                    className="flex items-start justify-between gap-4 border-b border-[var(--border)] py-3 last:border-b-0"
+                  >
+                    <dt className="shrink-0 text-xs font-medium text-[var(--muted)]">
+                      {columnLabel(
+                        cell.column.columnDef.header,
+                        cell.column.id,
+                      )}
+                    </dt>
+                    <dd className="min-w-0 break-words text-right text-sm text-[var(--foreground)]">
+                      <table.FlexRender cell={cell} />
+                    </dd>
+                  </div>
+                ))}
+            </dl>
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </>
   );
 }
