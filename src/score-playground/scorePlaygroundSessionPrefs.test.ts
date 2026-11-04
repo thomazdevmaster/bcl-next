@@ -97,6 +97,21 @@ describe('read/write por música', () => {
     });
   });
 
+  it('guarda o volume de cada naipe e descarta valor inválido', () => {
+    const storage = memoryStore();
+    writePlaygroundSessionPrefs(storage, 'user-1', 'song-a', {
+      volume: 0.5,
+      partVolumes: { P1: 0.25, P2: -1, ruim: 'alto' as unknown as number },
+    });
+    writePlaygroundSessionPrefs(storage, 'user-1', 'song-a', { metronome: true });
+
+    expect(readPlaygroundSessionPrefs(storage, 'user-1', 'song-a')).toEqual({
+      volume: 0.5,
+      metronome: true,
+      partVolumes: { P1: 0.25, P2: 0 },
+    });
+  });
+
   it('ignora JSON corrompido', () => {
     const storage = memoryStore();
     storage.setItem(playgroundSessionPrefsKey('user-1', 'song-a'), '{');

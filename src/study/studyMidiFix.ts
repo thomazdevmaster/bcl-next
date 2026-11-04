@@ -8,7 +8,7 @@ export type StudySmfEvent = { tick: number; status: number; d1: number; d2: numb
 const TARGET_DIVISION = 480;
 const GM_DRUM_NOTE_MIN = 35;
 const GM_DRUM_NOTE_MAX = 81;
-const DRUM_CHANNEL = 9;
+export const DRUM_CHANNEL = 9;
 
 function readVariableLength(data: Uint8Array, start: number): { value: number; next: number } {
   let value = 0;

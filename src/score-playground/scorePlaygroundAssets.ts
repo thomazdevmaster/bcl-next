@@ -5,6 +5,11 @@ import { fetchPartMidi } from '@/study/songParts';
 import type { MeasureTimemapEntry } from '@/study/studyTimemap';
 import { assembleStudyPlaybackMidi } from '@/study/studyPlaybackMidi';
 import { resolveStudyPlaybackTempoBpm } from '@/study/studyMidiFix';
+import { partIdIsPercussive } from '@/study/studyUtils';
+import {
+  assemblePlaygroundChannelMidi,
+  type PlaygroundMidiChannel,
+} from './playgroundMidiChannels';
 
 export type PlaygroundScoreForm = 'unrolled' | 'written';
 
@@ -55,17 +60,44 @@ function samePartSet(a: string[], b: string[]): boolean {
   return b.every((id) => set.has(id));
 }
 
+export type PlaygroundPlaybackMidi = {
+  buffer: ArrayBuffer;
+  channels: PlaygroundMidiChannel[];
+};
+
 export async function buildPlaygroundPlaybackMidi(
   catalogXml: string,
   songId: string,
   partIds: string[],
   prefetchedMidi: ArrayBuffer,
   timemap: MeasureTimemapEntry[],
-): Promise<ArrayBuffer> {
+): Promise<PlaygroundPlaybackMidi> {
   const tempoBpm = resolveStudyPlaybackTempoBpm({
     xml: catalogXml,
     midi: prefetchedMidi,
   });
+
+  const separated = await assemblePlaygroundChannelMidi({
+    partIds,
+    tempoBpm,
+    isPercussive: (partId) => partIdIsPercussive(catalogXml, partId),
+    loadStem: async (ids) => {
+      const stem = await assembleStudyPlaybackMidi(
+        {
+          catalogXml,
+          songId,
+          partIds: ids,
+          tempoBpm,
+          fetchPartMidi: (sid, stemIds) => fetchPartMidi(sid, stemIds),
+          resolvePartXml: (stemIds) => fetchPlaygroundScoreXml(songId, stemIds, 'unrolled'),
+        },
+        null,
+        timemap,
+      );
+      return stem?.buffer ?? null;
+    },
+  });
+  if (separated) return separated;
 
   const fetchStem = async (sid: string, ids: string[]): Promise<ArrayBuffer | null> => {
     if (sid === songId && samePartSet(ids, partIds)) {
@@ -87,7 +119,7 @@ export async function buildPlaygroundPlaybackMidi(
     timemap,
   );
 
-  return assembled?.buffer ?? prefetchedMidi;
+  return { buffer: assembled?.buffer ?? prefetchedMidi, channels: [] };
 }
 
 export async function fetchPlaygroundMidiAndTimemap(

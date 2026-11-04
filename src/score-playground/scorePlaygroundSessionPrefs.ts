@@ -15,6 +15,8 @@ export type ScorePlaygroundSessionPrefs = {
   volume?: number;
   /** Multiplicador do andamento (0,5–1,5). Ausente = 100%. */
   velocity?: number;
+  /** Volume de cada naipe do MIDI (0–1), pela chave da linha de volume. */
+  partVolumes?: Record<string, number>;
 };
 
 const VELOCITY_MIN = 0.5;
@@ -90,6 +92,16 @@ export function normalizePlaygroundSessionPrefs(raw: unknown): ScorePlaygroundSe
 
   if (typeof source.velocity === 'number' && Number.isFinite(source.velocity)) {
     prefs.velocity = Math.min(VELOCITY_MAX, Math.max(VELOCITY_MIN, source.velocity));
+  }
+
+  if (source.partVolumes && typeof source.partVolumes === 'object' && !Array.isArray(source.partVolumes)) {
+    const volumes: Record<string, number> = {};
+    for (const [key, value] of Object.entries(source.partVolumes as Record<string, unknown>)) {
+      if (!key || key.length > 80 || Object.keys(volumes).length >= 32) continue;
+      if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+      volumes[key] = clampPlaygroundVolume(value);
+    }
+    if (Object.keys(volumes).length > 0) prefs.partVolumes = volumes;
   }
 
   return prefs;

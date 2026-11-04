@@ -34,6 +34,7 @@ export default function ScorePlaygroundPage() {
     rewind,
     setVelocity,
     setVolume,
+    setPartVolume,
     toggleMute,
     toggleMetronome,
     zoomIn,
@@ -43,6 +44,7 @@ export default function ScorePlaygroundPage() {
 
   const [mobile, setMobile] = useState(false);
   const [instrumentsOpen, setInstrumentsOpen] = useState(false);
+  const [partVolumesOpen, setPartVolumesOpen] = useState(false);
   const scoreScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -292,7 +294,7 @@ export default function ScorePlaygroundPage() {
                 </div>
 
                 <div className="flex min-w-0 flex-1 basis-full items-center gap-3 text-xs text-[var(--muted)] sm:basis-auto sm:justify-end">
-                  <div className="flex min-w-0 flex-1 items-center gap-1 sm:max-w-56">
+                  <div className="flex min-w-0 flex-1 items-center gap-1 sm:max-w-72">
                     <button
                       type="button"
                       aria-label={state.volume <= 0 ? 'Ativar som' : 'Silenciar'}
@@ -318,6 +320,21 @@ export default function ScorePlaygroundPage() {
                         aria-valuetext={`${Math.round(state.volume * 100)} por cento`}
                       />
                     </label>
+                    {state.partVolumeRows.length > 0 ? (
+                      <button
+                        type="button"
+                        aria-expanded={partVolumesOpen}
+                        aria-controls="playground-part-volumes"
+                        aria-label={partVolumesOpen ? 'Ocultar volume dos naipes' : 'Volume dos naipes'}
+                        className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-[var(--secondary)] disabled:cursor-not-allowed disabled:opacity-40"
+                        onClick={() => setPartVolumesOpen((open) => !open)}
+                        disabled={!state.playerReady}
+                      >
+                        <span className="material-icons" aria-hidden>
+                          graphic_eq
+                        </span>
+                      </button>
+                    ) : null}
                   </div>
                   <label className="flex min-w-0 flex-1 items-center gap-1.5 sm:max-w-56">
                     <span className="whitespace-nowrap">Andamento</span>
@@ -338,6 +355,42 @@ export default function ScorePlaygroundPage() {
                   </label>
                 </div>
               </div>
+              {partVolumesOpen && state.partVolumeRows.length > 0 ? (
+                <div id="playground-part-volumes" className="mt-1 border-t border-[var(--border)] pt-1">
+                  <p className="px-1 text-xs text-[var(--muted)]">
+                    Volume de cada naipe. O volume geral continua valendo para todos.
+                  </p>
+                  <ul className="max-h-48 overflow-y-auto">
+                    {state.partVolumeRows.map((row) => {
+                      const level = state.partVolumes[row.id] ?? 1;
+                      return (
+                        <li key={row.id} className="flex min-h-11 items-center gap-2 px-1">
+                          <span className="w-[38%] min-w-0 truncate text-xs" title={row.label}>
+                            {row.label}
+                          </span>
+                          <label className="flex min-w-0 flex-1 items-center">
+                            <span className="sr-only">{`Volume de ${row.label}`}</span>
+                            <input
+                              type="range"
+                              min={0}
+                              max={1}
+                              step={0.05}
+                              value={level}
+                              className="h-11 min-w-0 flex-1"
+                              onChange={(event) => setPartVolume(row.id, Number(event.target.value))}
+                              aria-label={`Volume de ${row.label}`}
+                              aria-valuetext={`${Math.round(level * 100)} por cento`}
+                            />
+                          </label>
+                          <span className="w-10 shrink-0 text-right text-xs tabular-nums text-[var(--muted)]">
+                            {Math.round(level * 100)}%
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           </>
         )}

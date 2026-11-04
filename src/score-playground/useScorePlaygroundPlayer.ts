@@ -34,6 +34,12 @@ import type { PlaygroundZoomState } from './playgroundZoomTypes';
 import type { InstrumentInfo } from '@/study/studyUtils';
 import { clampPlaygroundVolume, connectMasterGain } from './playgroundVolume';
 import {
+  applyPlaygroundChannelVolumes,
+  playgroundPartVolumeRows,
+  type ChannelVolumeSynth,
+  type PlaygroundPartVolumeRow,
+} from './playgroundMidiChannels';
+import {
   buildMetronomeBeats,
   metronomeBeatsDue,
   metronomeClickDelaySeconds,
@@ -75,6 +81,9 @@ export interface ScorePlaygroundViewState {
   scoreInstrumentIds: string[];
   midiInstrumentIds: string[];
   volume: number;
+  /** Linhas de volume por naipe. Vazio quando o MIDI não pôde separar os canais. */
+  partVolumeRows: PlaygroundPartVolumeRow[];
+  partVolumes: Record<string, number>;
   metronomeEnabled: boolean;
   /** `written` mostra a partitura com voltas/D.C./D.S.; `unrolled` é o padrão (eixo do Player). */
   displayMode: 'unrolled' | 'written';
@@ -97,6 +106,8 @@ const INITIAL: ScorePlaygroundViewState = {
   scoreInstrumentIds: [],
   midiInstrumentIds: [],
   volume: 1,
+  partVolumeRows: [],
+  partVolumes: {},
   metronomeEnabled: false,
   displayMode: 'unrolled',
   canToggleScoreForm: false,
@@ -113,6 +124,9 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
   const volumeRef = useRef(1);
   const volumeBeforeMuteRef = useRef(1);
   const gainRef = useRef<{ gain: { value: number } } | null>(null);
+  const synthRef = useRef<ChannelVolumeSynth | null>(null);
+  const partVolumeRowsRef = useRef<PlaygroundPartVolumeRow[]>([]);
+  const partVolumesRef = useRef<Record<string, number>>({});
   const metronomeEnabledRef = useRef(false);
   const metronomeBeatsRef = useRef<MetronomeBeat[]>([]);
   const metronomeScheduledRef = useRef(new Map<number, () => void>());
@@ -201,6 +215,8 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     playerRef.current?.destroy();
     playerRef.current = null;
     gainRef.current = null;
+    synthRef.current = null;
+    partVolumeRowsRef.current = [];
     clearMetronomeSchedule();
     metronomeBeatsRef.current = [];
     playerTimemapRef.current = [];
@@ -221,6 +237,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     songIdRef.current = null;
     volumeRef.current = 1;
     volumeBeforeMuteRef.current = 1;
+    partVolumesRef.current = {};
     teardownPlayer();
     setState(INITIAL);
   }, [teardownPlayer]);
@@ -322,6 +339,13 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
           assets.timemap,
         );
         if (token !== loadTokenRef.current) return;
+        const partVolumeRows = playgroundPartVolumeRows(
+          playbackMidi.channels,
+          (partId) => options.instruments?.find((item) => item.id === partId)?.name ?? partId,
+        );
+        const partVolumes = prefs.partVolumes ?? {};
+        partVolumeRowsRef.current = partVolumeRows;
+        partVolumesRef.current = partVolumes;
 
         patchMusicXmlPlayerAudioWorklet();
         const renderer = new ScorePlaygroundSheetRenderer();
@@ -346,7 +370,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
           readBeatsPerMeasure(playbackXml),
         );
         clearMetronomeSchedule();
-        const converter = new FetchConverter(playbackMidi, playerTimemap);
+        const converter = new FetchConverter(playbackMidi.buffer, playerTimemap);
 
         const player = await Player.create({
           container: mount,
@@ -365,12 +389,19 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
 
         playerRef.current = player;
         gainRef.current = null;
+        synthRef.current = null;
         try {
           const audio = player as unknown as {
-            _synthesizer: Parameters<typeof connectMasterGain>[0];
+            _synthesizer: Parameters<typeof connectMasterGain>[0] & ChannelVolumeSynth;
             _context: Parameters<typeof connectMasterGain>[1];
           };
           gainRef.current = connectMasterGain(audio._synthesizer, audio._context, volume);
+          synthRef.current = audio._synthesizer;
+          applyPlaygroundChannelVolumes(
+            audio._synthesizer,
+            partVolumeRowsRef.current,
+            partVolumesRef.current,
+          );
         } catch (caught) {
           console.error('[score_playground] volume', caught);
         }
@@ -391,6 +422,8 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
           durationMs: player.duration,
           velocity,
           volume,
+          partVolumeRows,
+          partVolumes,
           metronomeEnabled,
           scoreLoading: false,
           zoom: renderer.getZoomState(),
@@ -517,6 +550,22 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     else applyVolume(0);
   }, [applyVolume]);
 
+  const setPartVolume = useCallback((rowId: string, value: number) => {
+    const clamped = clampPlaygroundVolume(value);
+    const next = { ...partVolumesRef.current, [rowId]: clamped };
+    partVolumesRef.current = next;
+    const synth = synthRef.current;
+    if (synth) {
+      try {
+        applyPlaygroundChannelVolumes(synth, partVolumeRowsRef.current, next);
+      } catch (caught) {
+        console.error('[score_playground] volume do naipe', caught);
+      }
+    }
+    setState((prev) => ({ ...prev, partVolumes: next }));
+    persistPrefs({ partVolumes: next });
+  }, [persistPrefs]);
+
   const toggleMetronome = useCallback(() => {
     const enabled = !metronomeEnabledRef.current;
     metronomeEnabledRef.current = enabled;
@@ -547,6 +596,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     rewind,
     setVelocity,
     setVolume,
+    setPartVolume,
     toggleMute,
     toggleMetronome,
     zoomIn,
