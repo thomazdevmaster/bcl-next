@@ -6,6 +6,12 @@ export type MeasureTimemapEntry = {
   qstamp?: number;
   /** Duração do compasso em semínimas (timemap v2 do bcl-api). */
   quarters?: number;
+  /**
+   * Índice (0-based) do compasso correspondente na partitura escrita (com voltas), antes do
+   * desdobro de repetições/D.C./D.S. — bcl-api marca isso em `MusicXmlScore.tagWrittenMeasureIndex`
+   * e `midi-worker/timemap.mjs` devolve no timemap (tm3+). Ausente em timemaps antigos/cacheados.
+   */
+  writtenMeasure?: number;
 };
 
 function medianPositive(values: number[]): number {

@@ -38,6 +38,7 @@ export default function ScorePlaygroundPage() {
     toggleMetronome,
     zoomIn,
     zoomOut,
+    toggleDisplayMode,
   } = useScorePlaygroundPlayer(ownerId);
 
   const [mobile, setMobile] = useState(false);
@@ -181,6 +182,31 @@ export default function ScorePlaygroundPage() {
                   onZoomIn={zoomIn}
                   onZoomOut={zoomOut}
                 />
+                {state.canToggleScoreForm ? (
+                  <button
+                    type="button"
+                    aria-pressed={state.displayMode === 'written'}
+                    aria-label={
+                      state.displayMode === 'written'
+                        ? 'Mostrar partitura desdobrada (sem voltas)'
+                        : 'Mostrar partitura escrita (com voltas)'
+                    }
+                    title={
+                      state.displayMode === 'written'
+                        ? 'Com voltas (D.C./D.S./repetições)'
+                        : 'Desdobrada (sem voltas)'
+                    }
+                    className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-[var(--border)] px-3 text-sm font-medium ${state.displayMode === 'written' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)]'}`}
+                    onClick={toggleDisplayMode}
+                  >
+                    <span className="material-icons text-lg" aria-hidden>
+                      repeat
+                    </span>
+                    <span className="hidden sm:inline">
+                      {state.displayMode === 'written' ? 'Com voltas' : 'Desdobrada'}
+                    </span>
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 text-sm font-medium"

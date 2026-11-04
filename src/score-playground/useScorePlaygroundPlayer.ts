@@ -16,7 +16,14 @@ import {
   resolvePlaygroundCatalogXml,
 } from './scorePlaygroundAssets';
 import { failureMessage } from '@/lib/userMessages';
-import type { MeasureTimemapEntry } from '@/study/studyTimemap';
+import {
+  findTimemapIndexAtPosition,
+  type MeasureTimemapEntry,
+} from '@/study/studyTimemap';
+import {
+  buildUnrolledToWrittenMap,
+  hasRealRepeats,
+} from './scorePlaygroundRepeatMap';
 import { patchMusicXmlPlayerAudioWorklet } from './patchMusicXmlPlayerForNext';
 import type { PlaygroundZoomState } from './playgroundZoomTypes';
 import type { InstrumentInfo } from '@/study/studyUtils';
@@ -64,6 +71,10 @@ export interface ScorePlaygroundViewState {
   midiInstrumentIds: string[];
   volume: number;
   metronomeEnabled: boolean;
+  /** `written` mostra a partitura com voltas/D.C./D.S.; `unrolled` é o padrão (eixo do Player). */
+  displayMode: 'unrolled' | 'written';
+  /** Só true quando a música tem repetição real e o backend enviou a correspondência de compassos. */
+  canToggleScoreForm: boolean;
 }
 
 const INITIAL: ScorePlaygroundViewState = {
@@ -82,6 +93,8 @@ const INITIAL: ScorePlaygroundViewState = {
   midiInstrumentIds: [],
   volume: 1,
   metronomeEnabled: false,
+  displayMode: 'unrolled',
+  canToggleScoreForm: false,
 };
 
 export function useScorePlaygroundPlayer(ownerId: string | null) {
@@ -99,6 +112,8 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
   const metronomeBeatsRef = useRef<MetronomeBeat[]>([]);
   const metronomeScheduledRef = useRef(new Map<number, () => void>());
   const metronomeLastPosRef = useRef<number | null>(null);
+  const playerTimemapRef = useRef<MeasureTimemapEntry[]>([]);
+  const togglingDisplayModeRef = useRef(false);
   const [state, setState] = useState<ScorePlaygroundViewState>(INITIAL);
 
   const clearMetronomeSchedule = useCallback(() => {
@@ -176,6 +191,7 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     gainRef.current = null;
     clearMetronomeSchedule();
     metronomeBeatsRef.current = [];
+    playerTimemapRef.current = [];
     rendererRef.current = null;
     if (sheetRef.current) sheetRef.current.replaceChildren();
   }, [stopPositionLoop, clearMetronomeSchedule]);
@@ -265,6 +281,16 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
         ]);
         if (token !== loadTokenRef.current) return;
 
+        const unrolledToWrittenMap = buildUnrolledToWrittenMap(assets.timemap);
+        const repeatsDetected = hasRealRepeats(unrolledToWrittenMap);
+        // Só baixa a partitura escrita quando há repetição real: evita tráfego extra em
+        // celular/4G para a maioria das músicas, que toca igual nas duas formas.
+        const writtenXml = repeatsDetected
+          ? await fetchPlaygroundScoreXml(songId, scoreIds, 'written').catch(() => null)
+          : null;
+        if (token !== loadTokenRef.current) return;
+        const canToggleScoreForm = repeatsDetected && writtenXml != null;
+
         const playbackMidi = await buildPlaygroundPlaybackMidi(
           catalogXml,
           songId,
@@ -281,8 +307,13 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
           composer: options.song.composer,
           arranger: options.song.arranger,
         });
+        renderer.setWrittenAlternative(
+          canToggleScoreForm ? writtenXml : null,
+          canToggleScoreForm ? unrolledToWrittenMap : null,
+        );
         rendererRef.current = renderer;
         const playerTimemap = timemapForPlayer(assets.timemap);
+        playerTimemapRef.current = playerTimemap;
         metronomeBeatsRef.current = buildMetronomeBeats(
           playerTimemap,
           readBeatsPerMeasure(playbackXml),
@@ -336,6 +367,8 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
           metronomeEnabled: metronomeEnabledRef.current,
           scoreLoading: false,
           zoom: renderer.getZoomState(),
+          displayMode: 'unrolled',
+          canToggleScoreForm,
           ...selection,
         });
         startPositionLoop();
@@ -405,6 +438,35 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     window.setTimeout(() => refreshZoomState(), 1200);
   }, [refreshZoomState]);
 
+  const toggleDisplayMode = useCallback(() => {
+    const renderer = rendererRef.current;
+    const player = playerRef.current;
+    if (!renderer || !player || !renderer.hasWrittenAlternative()) return;
+    if (togglingDisplayModeRef.current) return;
+    togglingDisplayModeRef.current = true;
+    const nextMode = renderer.displayMode === 'written' ? 'unrolled' : 'written';
+    void renderer.setDisplayMode(nextMode).then(() => {
+      // Reposiciona o cursor na posição atual (tocando ou pausado) para não "piscar"
+      // na origem só porque o motor de desenho foi trocado/reconstruído.
+      const timemap = playerTimemapRef.current;
+      if (timemap.length > 0) {
+        const index = findTimemapIndexAtPosition(timemap, player.position);
+        const entry = timemap[index];
+        if (entry) {
+          renderer.moveTo(
+            entry.measure,
+            entry.timestamp,
+            Math.max(0, player.position - entry.timestamp),
+            entry.duration,
+          );
+        }
+      }
+      setState((prev) => ({ ...prev, displayMode: renderer.displayMode }));
+      refreshZoomState();
+      togglingDisplayModeRef.current = false;
+    });
+  }, [refreshZoomState]);
+
   const applyVolume = useCallback((value: number) => {
     const clamped = clampPlaygroundVolume(value);
     volumeRef.current = clamped;
@@ -454,5 +516,6 @@ export function useScorePlaygroundPlayer(ownerId: string | null) {
     toggleMetronome,
     zoomIn,
     zoomOut,
+    toggleDisplayMode,
   };
 }

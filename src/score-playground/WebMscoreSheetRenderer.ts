@@ -36,9 +36,6 @@ const CURSOR_CLASS = 'score-playground-cursor';
 export class WebMscoreSheetRenderer implements ISheetRenderer {
   player?: Player;
 
-  /** Partitura para exibição (ex.: written); o Player pode usar XML desdobrado. */
-  displayMusicXml: string | null = null;
-
   private score: WebMscoreInstance | null = null;
   private container: HTMLElement | null = null;
   private pagesHost: HTMLElement | null = null;
@@ -94,8 +91,7 @@ export class WebMscoreSheetRenderer implements ISheetRenderer {
     container.appendChild(cursor);
     this.cursorEl = cursor;
 
-    this.rawSheet =
-      this.displayMusicXml?.includes('<score') ? this.displayMusicXml : musicXml;
+    this.rawSheet = musicXml;
     this.compactLayout = !isLargeScoreForWebMscoreLayout(this.rawSheet);
     const mobile = isMobileView();
     this.baselineMeasures = mobile
