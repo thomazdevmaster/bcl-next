@@ -1,14 +1,6 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import dynamic from 'next/dynamic';
-import { DomainGuard } from '@/components/domain/DomainGuard';
-
-const StudyRouteClient = dynamic(() => import('@/study/StudyRouteClient'), { ssr: false });
-
+/** O treino passou para o score playground. Links antigos de `/study` caem lá. */
 export default function StudyRoutePage() {
-  return (
-    <DomainGuard resource="study">
-      <StudyRouteClient />
-    </DomainGuard>
-  );
+  redirect('/score_playground');
 }

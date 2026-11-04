@@ -30,7 +30,6 @@ export const PUBLIC_NAV: NavItem[] = [
   { href: "/historia", label: "História", icon: "auto_stories" },
 ];
 
-const STUDY_NAV: NavItem = { href: "/study", label: "Estudo", icon: "school" };
 const SCORE_PLAYGROUND_NAV: NavItem = {
   href: "/score_playground",
   label: "Score playground",
@@ -94,14 +93,13 @@ function getManagementModuleItems(
   return items;
 }
 
-/** Lista plana para o painel `/gestao` (inclui Estudo junto aos módulos). */
+/** Lista plana para o painel `/gestao` (inclui o playground junto aos módulos). */
 function getMyAreaItems(
   roles: AccessRoles,
   permissions?: readonly string[] | null,
 ): NavItem[] {
   const items: NavItem[] = [];
   if (canAccessStudyModule(roles, permissions)) {
-    items.push(STUDY_NAV);
     items.push(SCORE_PLAYGROUND_NAV);
   }
   if (canAccessGamesNav(roles)) {
@@ -163,8 +161,7 @@ export function titleForPath(pathname: string): string {
   if (path === "/login") return "Entrar";
   if (path === "/profile") return "Meu perfil";
   if (path === "/configuracoes" || path === "/settings") return "Configurações";
-  if (path.startsWith("/study")) return "Estudo";
-  if (path.startsWith("/score_playground")) return "Score playground";
+  if (path.startsWith("/study") || path.startsWith("/score_playground")) return "Score playground";
   if (path === "/jogos") return "Jogos";
   if (path.startsWith("/jogos/")) {
     const parts = path.split("/").filter(Boolean);
