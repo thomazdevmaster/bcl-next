@@ -150,3 +150,64 @@ export function looksLikeMusicXml(content: string): boolean {
   if (!head.startsWith('<')) return false;
   return /<(score-partwise|score-timewise)\b/i.test(head);
 }
+
+/**
+ * Encore e outros editores antigos exportam MusicXML em UTF-16 (com ou sem BOM).
+ * `File.text()` assume UTF-8 e deixa o XML ilegível para a validação.
+ */
+export function decodeMusicXmlBytes(bytes: Uint8Array): string {
+  if (bytes.length >= 2) {
+    if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+      return new TextDecoder("utf-16le").decode(bytes);
+    }
+    if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+      return new TextDecoder("utf-16be").decode(bytes);
+    }
+  }
+  // UTF-16 LE sem BOM: '<' = 3c 00
+  if (bytes.length >= 4 && bytes[0] === 0x3c && bytes[1] === 0x00 && bytes[2] !== 0x00) {
+    return new TextDecoder("utf-16le").decode(bytes);
+  }
+  // UTF-16 BE sem BOM: '<' = 00 3c
+  if (bytes.length >= 2 && bytes[0] === 0x00 && bytes[1] === 0x3c) {
+    return new TextDecoder("utf-16be").decode(bytes);
+  }
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
+/** Alinha a declaração com o que enviamos depois (sempre UTF-8 no data URL). */
+export function normalizeMusicXmlEncodingDeclaration(xml: string): string {
+  if (!/<\?xml\b/i.test(xml.slice(0, 200))) return xml;
+  if (/\sencoding\s*=/i.test(xml.slice(0, 200))) {
+    return xml.replace(
+      /(<\?xml\b[^>]*?)\sencoding\s*=\s*(["'])[^"']*\2/i,
+      '$1 encoding="UTF-8"',
+    );
+  }
+  return xml.replace(/<\?xml\b([^>]*)\?>/i, '<?xml$1 encoding="UTF-8"?>');
+}
+
+export async function readMusicXmlText(file: Blob): Promise<string> {
+  const bytes = new Uint8Array(await readBlobBytes(file));
+  return normalizeMusicXmlEncodingDeclaration(decodeMusicXmlBytes(bytes));
+}
+
+async function readBlobBytes(file: Blob): Promise<ArrayBuffer> {
+  if (typeof file.arrayBuffer === "function") {
+    return file.arrayBuffer();
+  }
+  // jsdom e ambientes antigos: FileReader lê o conteúdo real do Blob.
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer) {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error("Não foi possível ler o arquivo."));
+    };
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("Não foi possível ler o arquivo."));
+    reader.readAsArrayBuffer(file);
+  });
+}

@@ -2,6 +2,7 @@ import {
   isMusicXmlUploadFile,
   looksLikeMusicXml,
   metadataFromMusicXml,
+  readMusicXmlText,
 } from "@/domains/songs/musicXmlMetadata";
 import { extractInstrumentsFromXml } from "@/study/studyUtils";
 
@@ -26,7 +27,7 @@ export async function prepareMusicXmlUpload(
     };
   }
   try {
-    const content = await file.text();
+    const content = await readMusicXmlText(file);
     if (!looksLikeMusicXml(content)) {
       return {
         ok: false,
