@@ -453,6 +453,40 @@
     filter: drop-shadow(0 0 2px rgba(220, 38, 38, 0.85));
   }
 
+  .score-playground-pages {
+    position: relative;
+    color-scheme: light;
+  }
+
+  .score-playground-sheet-host {
+    background-color: var(--score-canvas);
+  }
+
+  .score-playground-page {
+    background-color: var(--score-page);
+  }
+
+  .score-playground-cursor {
+    position: absolute;
+    z-index: 50;
+    width: 3px;
+    min-width: 3px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 1px;
+    background: #dc2626;
+    box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.35);
+    pointer-events: none;
+    display: none;
+    box-sizing: border-box;
+  }
+
+  .score-playground-osmd .score-playground-osmd-canvas svg {
+    position: relative;
+    z-index: 0;
+  }
+
   .score-container .study-playback-line {
     position: absolute;
     z-index: 40;

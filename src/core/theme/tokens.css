@@ -57,7 +57,7 @@
   --warning: #a16207;
   --ring: var(--color-brand);
   --radius: 0.75rem;
-  --shadow-soft: 0 10px 30px rgba(11, 28, 44, 0.08);
+  --shadow-soft: 0 10px 30px rgba(11, 28, 44, 0.404);
 
   --code-bg: #eef3f7;
   --header-bg: var(--color-ink);

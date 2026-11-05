@@ -205,15 +205,15 @@ export function defaultHomepage(): HomepageDocument {
         type: "donations",
         enabled: true,
         eyebrow: "Apoie a banda",
-        title: "Música gratuita na praça, sustentada por quem acredita",
-        body: "A Banda Carmelitana Luminarense leva concertos e tradição para Luminárias sem cobrar ingresso nas apresentações abertas ao público. Por trás do palco existem custos concretos: instrumentos e partituras, uniformes, deslocamentos, manutenção da sede e o trabalho de ensaio da corporação.\n\nSe a banda já marcou a sua história — ou se você quer que ela continue marcando a da cidade — pode colaborar com um Pix, no valor que couber. Cada doação ajuda a manter ensaios e apresentações ao longo do ano.",
+        title: "Música e educação musical de forma gratuita, sustentada por quem acredita na cultura e no conhecimento.",
+        body: "A Banda Carmelitana Luminarense leva concertos e tradição para Luminárias e região sem nenhuma fonte de renda e sem cobrar ingresso nas apresentações abertas ao público. Além de levar o nome de Luminárias para toda a região, a banda também leva música e educação musical para a cidade. Por trás disso, existem custos concretos: instrumentos e partituras, uniformes, deslocamentos, manutenção da sede, ensaios e custos administrativos, uma vez que a banda mantém toda sua documentação atualizada e legalizada.\n\nSe a banda já marcou a sua história ou se você quer que ela continue marcando a da cidade pode colaborar com um Pix, no valor que couber. Cada doação ajuda a manter ensaios e apresentações ao longo do ano.",
         pixKeyLabel: "Chave Pix (CNPJ)",
         pixKey: DEFAULT_PIX_KEY,
         copyButtonLabel: "Copiar chave Pix",
         qrCodeUrl: DEFAULT_PIX_QR_PATH,
         qrCodeAlt: "QR Code Pix para doação à Banda Carmelitana Luminarense",
         qrHint:
-          "Use o QR Code ou a chave ao lado. Qualquer valor faz diferença — obrigado por apoiar a BCL.",
+          "Use o QR Code ou a chave ao lado. Qualquer valor faz diferença\nObrigado por apoiar a Banda Carmelitana Luminarense.",
       },
       {
         type: "cta",

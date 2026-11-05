@@ -1,0 +1,292 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { MusicLoader } from '@/components/MusicLoader';
+import {
+  StudySongCatalog,
+  type StudyStartOptions,
+} from '@/components/study/StudySongCatalog';
+import { StudyPublicRepertoireNotice } from '@/components/study/StudyPublicRepertoireNotice';
+import { useScorePlaygroundPlayer } from './useScorePlaygroundPlayer';
+import { ScorePlaygroundZoomControls } from './ScorePlaygroundZoomControls';
+import { ScorePlaygroundInstrumentDialog } from './ScorePlaygroundInstrumentDialog';
+import { ScorePlaygroundTransport } from './ScorePlaygroundTransport';
+
+export default function ScorePlaygroundPage() {
+  const { user } = useAuth();
+  const ownerId = user?.id != null ? String(user.id) : null;
+  const {
+    sheetRef,
+    state,
+    startSession,
+    changeInstruments,
+    resetToCatalog,
+    play,
+    pause,
+    rewind,
+    setVelocity,
+    setVolume,
+    setPartVolume,
+    toggleMute,
+    toggleMetronome,
+    zoomIn,
+    zoomOut,
+    toggleDisplayMode,
+  } = useScorePlaygroundPlayer(ownerId);
+
+  const [mobile, setMobile] = useState(false);
+  const [instrumentsOpen, setInstrumentsOpen] = useState(false);
+  const scoreScrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = scoreScrollRef.current;
+    if (!el || state.phase !== 'ready') return;
+    let startDistance = 0;
+    let applied = false;
+    const distance = (touches: TouchList) => {
+      const a = touches[0];
+      const b = touches[1];
+      if (!a || !b) return 0;
+      return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    };
+    const onStart = (event: TouchEvent) => {
+      if (event.touches.length === 2) {
+        startDistance = distance(event.touches);
+        applied = false;
+      }
+    };
+    const onMove = (event: TouchEvent) => {
+      if (event.touches.length !== 2) return;
+      if (applied || startDistance <= 0) return;
+      const ratio = distance(event.touches) / startDistance;
+      if (ratio > 1.15) {
+        applied = true;
+        event.preventDefault();
+        zoomIn();
+      } else if (ratio < 0.87) {
+        applied = true;
+        event.preventDefault();
+        zoomOut();
+      }
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+    };
+  }, [state.phase, zoomIn, zoomOut]);
+
+  useEffect(() => {
+    if (state.phase !== 'ready') return;
+    const onHide = () => {
+      if (document.hidden) pause();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.code !== 'Space') return;
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLButtonElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      if (state.playing) pause();
+      else play();
+    };
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [pause, play, state.phase, state.playing]);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 600px)');
+    const apply = () => setMobile(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+
+  const inSession = state.phase === 'loading' || state.phase === 'ready' || state.phase === 'error';
+
+  useEffect(() => {
+    if (!inSession) return;
+    const html = document.documentElement;
+    const main = document.querySelector('main');
+    const prevHtml = html.style.overflow;
+    const prevMain = main instanceof HTMLElement ? main.style.overflow : '';
+    html.style.overflow = 'hidden';
+    if (main instanceof HTMLElement) main.style.overflow = 'hidden';
+    return () => {
+      html.style.overflow = prevHtml;
+      if (main instanceof HTMLElement) main.style.overflow = prevMain;
+    };
+  }, [inSession]);
+
+  const handleStart = (options: StudyStartOptions) => {
+    void startSession(options);
+  };
+
+  if (inSession) {
+    return (
+      <div
+        className="fixed inset-x-0 bottom-0 top-14 z-[15] flex flex-col overflow-hidden bg-[var(--background)] min-[960px]:top-0 min-[960px]:left-[var(--content-margin)]"
+        aria-label="Sessão de partitura"
+      >
+        {state.phase === 'error' ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6" role="alert">
+            <p className="text-lg font-semibold">{state.songTitle ?? 'Erro'}</p>
+            <p className="max-w-md text-center text-sm text-[var(--muted)]">{state.error}</p>
+            <button type="button" className="btn-outline-primary min-h-11 px-4" onClick={resetToCatalog}>
+              Voltar ao catálogo
+            </button>
+          </div>
+        ) : (
+          <>
+            {state.phase === 'loading' ? (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-[var(--background)]/95 p-6">
+                <MusicLoader
+                  label={
+                    state.scoreLoading
+                      ? 'Carregando partitura…'
+                      : 'Preparando sessão…'
+                  }
+                />
+                {state.songTitle ? (
+                  <p className="text-sm text-[var(--muted)]">{state.songTitle}</p>
+                ) : null}
+                <p className="max-w-sm text-center text-xs text-[var(--muted)]">
+                  Partituras longas levam mais tempo para desenhar. O áudio começa junto com a pauta.
+                </p>
+              </div>
+            ) : null}
+
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--card)] px-3 py-2 sm:px-4">
+              <h2 className="min-w-0 flex-1 truncate text-base font-semibold">{state.songTitle}</h2>
+              <div className="flex items-center gap-2">
+                {!mobile ? (
+                  <ScorePlaygroundZoomControls
+                    zoom={state.zoom}
+                    onZoomIn={zoomIn}
+                    onZoomOut={zoomOut}
+                  />
+                ) : null}
+                {state.canToggleScoreForm && !mobile ? (
+                  <button
+                    type="button"
+                    aria-pressed={state.displayMode === 'written'}
+                    aria-label={
+                      state.displayMode === 'written'
+                        ? 'Mostrar partitura desdobrada (sem voltas)'
+                        : 'Mostrar partitura escrita (com voltas)'
+                    }
+                    title={
+                      state.displayMode === 'written'
+                        ? 'Com voltas (D.C./D.S./repetições)'
+                        : 'Desdobrada (sem voltas)'
+                    }
+                    className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-[var(--border)] px-3 text-sm font-medium ${state.displayMode === 'written' ? 'bg-[var(--primary)] text-white' : 'bg-[var(--card)]'}`}
+                    onClick={toggleDisplayMode}
+                  >
+                    <span className="material-icons text-lg" aria-hidden>
+                      repeat
+                    </span>
+                    <span className="hidden sm:inline">
+                      {state.displayMode === 'written' ? 'Com voltas' : 'Desdobrada'}
+                    </span>
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  aria-label="Voltar ao catálogo"
+                  className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 text-sm font-medium"
+                  onClick={resetToCatalog}
+                >
+                  <span className="material-icons text-lg" aria-hidden>
+                    arrow_back
+                  </span>
+                  <span className="hidden sm:inline">Catálogo</span>
+                </button>
+              </div>
+            </div>
+
+            <div
+              ref={scoreScrollRef}
+              data-score-scroll
+              className="relative min-h-0 flex-1 touch-pan-x touch-pan-y overflow-x-auto overflow-y-auto overscroll-contain bg-[var(--background)] px-2 py-2 sm:px-3"
+            >
+              <div ref={sheetRef} className="score-playground-sheet min-h-[12rem] w-full" />
+            </div>
+
+            <div
+              className="shrink-0 border-t border-[var(--border)] bg-[var(--card)] px-2 py-1 sm:px-3"
+              style={{ paddingBottom: 'max(0.25rem, env(safe-area-inset-bottom))' }}
+            >
+              <ScorePlaygroundTransport
+                state={state}
+                mobile={mobile}
+                onRewind={rewind}
+                onPlay={play}
+                onPause={pause}
+                onToggleMetronome={toggleMetronome}
+                onOpenInstruments={() => {
+                  pause();
+                  setInstrumentsOpen(true);
+                }}
+                onToggleMute={toggleMute}
+                onVolume={setVolume}
+                onPartVolume={setPartVolume}
+                onVelocity={setVelocity}
+                onZoomIn={zoomIn}
+                onZoomOut={zoomOut}
+                onToggleDisplayMode={toggleDisplayMode}
+              />
+            </div>
+          </>
+        )}
+        {instrumentsOpen ? (
+          <ScorePlaygroundInstrumentDialog
+            instruments={state.instruments}
+            scoreInstrumentIds={state.scoreInstrumentIds}
+            midiInstrumentIds={state.midiInstrumentIds}
+            singleScore={mobile}
+            onClose={() => setInstrumentsOpen(false)}
+            onApply={(scoreIds, midiIds) => {
+              setInstrumentsOpen(false);
+              changeInstruments(scoreIds, midiIds);
+            }}
+          />
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex w-full min-w-0 flex-col gap-4 py-2 sm:py-4">
+      <header className="flex flex-col gap-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+          Laboratório
+        </p>
+        <h1 className="text-xl font-semibold sm:text-2xl">Score playground</h1>
+        <p className="mt-1 max-w-4xl text-sm text-[var(--muted)]">
+          Partitura renderizada com o motor MuseScore (webmscore) e áudio preparado pelo servidor,
+          como no estudo — com outra pilha de visualização e player.
+        </p>
+      </header>
+
+      <StudyPublicRepertoireNotice context="study" />
+      <StudySongCatalog
+        onStart={handleStart}
+        ownerId={ownerId}
+        personId={user?.personId != null ? String(user.personId) : null}
+      />
+    </div>
+  );
+}

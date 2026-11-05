@@ -8,7 +8,7 @@ export type StudySmfEvent = { tick: number; status: number; d1: number; d2: numb
 const TARGET_DIVISION = 480;
 const GM_DRUM_NOTE_MIN = 35;
 const GM_DRUM_NOTE_MAX = 81;
-const DRUM_CHANNEL = 9;
+export const DRUM_CHANNEL = 9;
 
 function readVariableLength(data: Uint8Array, start: number): { value: number; next: number } {
   let value = 0;
@@ -436,8 +436,9 @@ export function drumChannelPitchHistogram(midi: ArrayBuffer): Record<number, num
         if (status >= 0x80 && status <= 0xef) running = status;
       }
       if (status === 0xff) {
+        if (i >= end) break;
+        const meta = bytes[i];
         i += 1;
-        const meta = bytes[i++];
         const len = readVariableLength(bytes, i);
         i = len.next + len.value;
         if (meta === 0x2f) break;
@@ -732,22 +733,29 @@ export function mergeStudyMidiLayers(
 
 export type StudyTimemapEntry = MeasureTimemapEntry;
 
-/** Andamento do SMF (Set Tempo) — alinhado ao que Verovio/API geraram. */
+/**
+ * Andamento em vigor no início do SMF (Set Tempo). O Verovio grava 120 e logo depois o
+ * andamento da partitura no mesmo tick; vale o último desse tick, não o primeiro.
+ */
 export function readFirstSmfTempoBpm(midi: ArrayBuffer): number | null {
   if (!isStandardMidiFile(midi)) return null;
   const bytes = new Uint8Array(midi);
   const view = new DataView(midi);
   const tracks = view.getUint16(10);
   let offset = 14;
+  let firstTick = Infinity;
+  let firstUs = 0;
   for (let t = 0; t < tracks && offset + 8 <= bytes.length; t += 1) {
     const trackLen = view.getUint32(offset + 4);
     let i = offset + 8;
     const end = i + trackLen;
     let runningStatus = 0;
+    let tick = 0;
     while (i < end) {
       const delta = readVariableLength(bytes, i);
+      tick += delta.value;
       i = delta.next;
-      if (i >= end) break;
+      if (i >= end || tick > firstTick) break;
 
       let status = bytes[i];
       if (status < 0x80) {
@@ -764,7 +772,10 @@ export function readFirstSmfTempoBpm(midi: ArrayBuffer): number | null {
         if (metaType === 0x51 && len.value === 3 && len.next + 3 <= end) {
           const us =
             (bytes[len.next] << 16) | (bytes[len.next + 1] << 8) | bytes[len.next + 2];
-          if (us > 0) return 60_000_000 / us;
+          if (us > 0 && tick <= firstTick) {
+            firstTick = tick;
+            firstUs = us;
+          }
         }
         i = len.next + len.value;
         if (metaType === 0x2f) break;
@@ -784,7 +795,7 @@ export function readFirstSmfTempoBpm(midi: ArrayBuffer): number | null {
     }
     offset += 8 + trackLen;
   }
-  return null;
+  return firstUs > 0 ? 60_000_000 / firstUs : null;
 }
 
 /** Andamento inicial: metrônomo do primeiro compasso no XML; MIDI só se o XML não marcar. */
@@ -820,8 +831,8 @@ function smfWallDurationMs(maxTick: number, division: number, tempoBpm: number):
 }
 
 /**
- * Escala o SMF para a duração total do timemap (ms) no BPM da partitura.
- * Corrige stems Verovio mais longos/curtos que o relógio do cursor — ex. Africa ♩=93.
+ * Encurta stems mais longos que o timemap (ex.: Africa ♩=93).
+ * Não estica um arquivo mais curto: a folga final são pausas.
  */
 export function fitStudySmfToTimemap(
   midi: ArrayBuffer,
@@ -834,6 +845,20 @@ export function fitStudySmfToTimemap(
   if (targetMs <= 0) return midi;
 
   const targetBpm = Math.max(30, Math.round(tempoBpm));
+  const nativeTempo = readFirstSmfTempoBpm(midi) ?? targetBpm;
+  const native = extractTimedEventsFromSmf(midi);
+  const nativeMaxTick = native.events.reduce((max, event) => Math.max(max, event.tick), 0);
+  const nativeMs = smfWallDurationMs(nativeMaxTick, native.division, nativeTempo);
+  // A folga até o fim do timemap são pausas. Esticar os ticks para o último
+  // evento cair no ms final tira os ataques do compasso — no fim de Vento
+  // Ventania o rolê da bateria saía do compasso 96 e soava no 97.
+  if (nativeMs > 0 && nativeMs <= targetMs * 1.004) {
+    const kept = options?.preserveTickTimeline
+      ? retargetStudySmfToCatalogTempo(midi, nativeTempo)
+      : midi.slice(0);
+    return alignStudyPlaybackMidiToTimemap(kept, timemap, nativeTempo);
+  }
+
   let binary = options?.preserveTickTimeline
     ? retargetStudySmfToCatalogTempo(midi, targetBpm)
     : normalizeStudySmfTempo(midi, targetBpm);
@@ -945,7 +970,67 @@ export function alignStudyPlaybackLayerToTimemap(
   if (!timemap.length) {
     return retargetStudySmfToCatalogTempo(midi, tempoBpm);
   }
-  return fitStudySmfToTimemap(midi, timemap, tempoBpm, { preserveTickTimeline: true });
+  return (
+    warpStudySmfToTimemap(midi, timemap, tempoBpm) ??
+    fitStudySmfToTimemap(midi, timemap, tempoBpm, { preserveTickTimeline: true })
+  );
+}
+
+/** Timemap v2: cada compasso traz a posição em semínimas além do ms. */
+export function timemapHasQuarterGrid(timemap: StudyTimemapEntry[]): boolean {
+  return (
+    timemap.length > 0 &&
+    timemap.every(
+      (entry) =>
+        typeof entry.qstamp === 'number' &&
+        Number.isFinite(entry.qstamp) &&
+        typeof entry.quarters === 'number' &&
+        Number.isFinite(entry.quarters) &&
+        entry.quarters >= 0,
+    )
+  );
+}
+
+function quarterToTimemapMs(timemap: StudyTimemapEntry[], quarter: number): number {
+  let lo = 0;
+  let hi = timemap.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if ((timemap[mid].qstamp ?? 0) <= quarter) lo = mid;
+    else hi = mid - 1;
+  }
+  const entry = timemap[lo];
+  const quarters = entry.quarters ?? 0;
+  if (quarters <= 0) return entry.timestamp;
+  return entry.timestamp + ((quarter - (entry.qstamp ?? 0)) / quarters) * entry.duration;
+}
+
+/**
+ * Põe cada evento no ms do timemap que corresponde à sua posição musical (tick ÷ PPQ).
+ * O Set Tempo do arquivo é ignorado: stems do Verovio e a percussão montada no cliente
+ * seguem o mesmo relógio do cursor, mesmo quando o andamento gravado diverge.
+ */
+export function warpStudySmfToTimemap(
+  midi: ArrayBuffer,
+  timemap: StudyTimemapEntry[],
+  tempoBpm: number,
+): ArrayBuffer | null {
+  if (!isStandardMidiFile(midi) || !timemapHasQuarterGrid(timemap)) return null;
+  const totalMs = sumTimemapDurationMs(timemap);
+  if (totalMs <= 0) return null;
+  const { events, division } = extractTimedEventsFromSmf(midi);
+  if (events.length === 0 || division <= 0) return null;
+
+  const bpm = Math.max(30, Math.round(tempoBpm));
+  const ticksPerMs = (bpm * TARGET_DIVISION) / 60_000;
+  const warped = events.map((event) => {
+    const ms = quarterToTimemapMs(timemap, event.tick / division);
+    return { ...event, tick: Math.round(Math.min(totalMs, Math.max(0, ms)) * ticksPerMs) };
+  });
+  // O sequenciador mede a música pelo último evento; sem isto as pausas finais somem
+  // e a posição do cursor (proporcional à duração) deixa de bater.
+  warped.push({ tick: Math.round(totalMs * ticksPerMs), status: 0xb0, d1: 50, d2: 0 });
+  return smfFromTimedEvents(warped, bpm, TARGET_DIVISION);
 }
 
 /**

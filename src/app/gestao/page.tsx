@@ -37,7 +37,7 @@ export default function GestaoPage() {
           const writable = domain
             ? can(roles, domain.id, 'create', permissions) || can(roles, domain.id, 'update', permissions)
             : false;
-          const isStudy = item.href === '/study';
+          const isPlayground = item.href === '/score_playground';
           const isSongs = item.href === '/gestao/musicas';
           return (
             <Link
@@ -49,16 +49,18 @@ export default function GestaoPage() {
               <h2 className="mt-3 text-lg font-semibold text-[var(--foreground)]">{item.label}</h2>
               <p className="mt-1 text-sm text-[var(--muted)]">
                 {domain?.description ??
-                  (isStudy && seesPublicRepertoireOnly(roles, permissions)
+                  (isPlayground && seesPublicRepertoireOnly(roles, permissions)
                     ? 'Treino com partitura e MIDI — neste perfil, apenas o repertório público.'
-                    : isSongs && seesPublicRepertoireOnly(roles, permissions)
-                      ? 'Consulta ao repertório público — partituras liberadas para amigos.'
-                      : isSongs
-                        ? 'Repertório e gestão de partituras conforme suas permissões.'
-                        : 'Estudos e treinamentos com partituras e acompanhamento MIDI.')}
+                    : isPlayground
+                      ? 'Treino com partitura, áudio e metrônomo.'
+                      : isSongs && seesPublicRepertoireOnly(roles, permissions)
+                        ? 'Consulta ao repertório público — partituras liberadas para amigos.'
+                        : isSongs
+                          ? 'Repertório e gestão de partituras conforme suas permissões.'
+                          : 'Módulo disponível para o seu perfil.')}
               </p>
               <p className="mt-3 text-xs uppercase tracking-wide text-[var(--color-brand-strong)]">
-                {isStudy || isSongs
+                {isPlayground || isSongs
                   ? 'Abrir módulo'
                   : writable
                     ? 'Leitura e escrita'

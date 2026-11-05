@@ -21,6 +21,7 @@ import { prepareMusicXmlForMidiPlayback } from './studyUnrollMusicXml';
 import type { MeasureTimemapEntry } from './studyTimemap';
 import {
   enrichPercussionPartListFromCatalog,
+  extractTempoInfoFromXml,
   filterXmlByPartIds,
   partIdIsPercussive,
   prepareMusicXmlForStudyPlayback,
@@ -49,6 +50,24 @@ export type AssembledStudyPlaybackMidi = {
   /** Camadas já ajustadas ao timemap do servidor — evita segundo fit no player. */
   timemapPreAligned: boolean;
 };
+
+/** BPM da semínima no primeiro compasso do timemap — o relógio que o cursor usa. */
+function quarterBpmFromTimemap(
+  xml: string,
+  timemap: MeasureTimemapEntry[] | null | undefined,
+): number | null {
+  const durationMs = timemap?.[0]?.duration ?? 0;
+  if (durationMs <= 0) return null;
+  const info = extractTempoInfoFromXml(xml);
+  const beats = info?.beatsPerMeasure;
+  const beatType = info?.beatUnit;
+  if (!beats || !beatType || beats <= 0 || beatType <= 0) return null;
+  const quarters = beats * (4 / beatType);
+  const quarterMs = durationMs / quarters;
+  if (!Number.isFinite(quarterMs) || quarterMs <= 0) return null;
+  const bpm = Math.round(60_000 / quarterMs);
+  return bpm > 0 ? bpm : null;
+}
 
 function finalizePlaybackLayer(
   buffer: ArrayBuffer,
@@ -149,8 +168,8 @@ async function loadPercussionStem(
 }
 
 /**
- * Monta o buffer final: melódicos sempre do merge de stems do servidor; percussão stem
- * a stem (servidor → fallback XML no cliente), depois mergeStudyMidiLayers (mesmo relógio).
+ * Monta o buffer final: melódicos do servidor; percussão do stem do servidor
+ * (fallback MusicXML) e depois o mesmo relógio do timemap.
  */
 export async function assembleStudyPlaybackMidi(
   input: ComposeStudyPlaybackMidiInput,
@@ -164,6 +183,7 @@ export async function assembleStudyPlaybackMidi(
   const melodicIds = partIds.filter((id) => !percIds.includes(id));
   const playbackTempoBpm = tempoBpm;
   const timemapPreAligned = Boolean(timemap?.length);
+  const percussionTempoBpm = quarterBpmFromTimemap(catalogXml, timemap) ?? playbackTempoBpm;
 
   if (percIds.length === 0) {
     const melRaw = await fetchStemMidi(input, melodicIds, prefetchedAll);
@@ -182,7 +202,7 @@ export async function assembleStudyPlaybackMidi(
     input,
     percIds,
     prefetchedAll,
-    playbackTempoBpm,
+    percussionTempoBpm,
   );
   if (fromClient) usedClientPerc = true;
 
