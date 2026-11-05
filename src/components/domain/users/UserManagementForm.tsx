@@ -17,6 +17,7 @@ import {
   isMusicXmlUploadFile,
   looksLikeMusicXml,
   metadataFromMusicXml,
+  readMusicXmlText,
 } from "@/domains/songs/musicXmlMetadata";
 import { youtubeEmbedUrl, youtubeWatchUrl } from "@/domains/songs/youtube";
 
@@ -144,7 +145,7 @@ export function EntityForm({
       );
       return;
     }
-    const content = await file.text();
+    const content = await readMusicXmlText(file);
     if (!looksLikeMusicXml(content)) {
       input.value = "";
       setFileError(
