@@ -42,6 +42,8 @@ import {
 import { formatPhoneNumber } from "@/domains/people/formatting";
 import { youtubeEmbedUrl, youtubeWatchUrl } from "@/domains/songs/youtube";
 import { prepareMusicXmlUpload } from "./prepareMusicXmlUpload";
+import { SongGenreField } from "./SongGenreField";
+import { SongNotifyFields } from "./SongNotifyFields";
 
 export interface EntityFormDynamicChoices {
   people: Array<CrudOption & { hasUser: boolean }> | null;
@@ -76,6 +78,8 @@ export interface EntityFormProps {
   onRetryPresentationTypes?: () => void;
   onRetrySongs?: () => void;
   onEdit?: () => void;
+  genreSuggestions?: readonly string[];
+  onRememberGenre?: (genre: string) => void;
 }
 
 const buttonMotion =
@@ -95,6 +99,8 @@ export function EntityForm({
   onRetryPresentationTypes,
   onRetrySongs,
   onEdit,
+  genreSuggestions = [],
+  onRememberGenre,
 }: EntityFormProps) {
   const form = useForm<DomainCrudFormValues>({
     resolver: zodResolver(domainCrudFormSchema),
@@ -331,6 +337,8 @@ export function EntityForm({
                       validatedOnOpen={validatedOnOpen}
                       readOnly={readOnly}
                       editing={editing}
+                      genreSuggestions={genreSuggestions}
+                      onRememberGenre={onRememberGenre}
                       onRetryPresentationTypes={onRetryPresentationTypes}
                       onRetrySongs={onRetrySongs}
                     />
@@ -419,6 +427,8 @@ function CrudFormField({
   validatedOnOpen,
   readOnly,
   editing,
+  genreSuggestions,
+  onRememberGenre,
   onRetryPresentationTypes,
   onRetrySongs,
 }: {
@@ -429,6 +439,8 @@ function CrudFormField({
   validatedOnOpen: boolean;
   readOnly: boolean;
   editing: boolean;
+  genreSuggestions: readonly string[];
+  onRememberGenre?: (genre: string) => void;
   onRetryPresentationTypes?: () => void;
   onRetrySongs?: () => void;
 }) {
@@ -436,6 +448,21 @@ function CrudFormField({
   const fieldPath = formName as FieldPath<DomainCrudFormValues>;
   const disabled = readOnly || (editing && Boolean(field.lockOnEdit));
   const presentation = simpleFieldPresentation(resource, field);
+  if (resource === "songs" && field.name === "notifySong") {
+    return <SongNotifyFields readOnly={disabled} />;
+  }
+  if (resource === "songs" && field.name === "genre") {
+    return (
+      <SongGenreField<DomainCrudFormValues>
+        name={fieldPath as FieldPathByValue<DomainCrudFormValues, string>}
+        suggestions={genreSuggestions}
+        onRemember={onRememberGenre}
+        validatedOnOpen={validatedOnOpen}
+        readOnly={disabled}
+        infoMessage={field.helpText}
+      />
+    );
+  }
   if (usesFormStageField(field)) {
     return (
       <FormStageField<DomainCrudFormValues>

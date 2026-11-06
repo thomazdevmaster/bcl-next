@@ -25,6 +25,11 @@ export const songsCrudFormSchema = z
     visibility: z.enum(["", "public", "private"]),
     visibleToStudents: z.boolean(),
     visibleToMusicians: z.boolean(),
+    notifySong: z.boolean().default(false),
+    notifyRoles: z
+      .array(z.enum(["amigos", "aluno", "musico", "maestro", "admin"]))
+      .default([]),
+    notifyRecipientIds: z.array(z.string()).default([]),
     videoUrl: z
       .string()
       .trim()
@@ -58,6 +63,17 @@ export const songsCrudFormSchema = z
         path: ["visibleToStudents"],
         message:
           "Selecione pelo menos um perfil para visualizar a música privada.",
+      });
+    }
+    if (
+      values.notifySong &&
+      values.notifyRoles.length === 0 &&
+      values.notifyRecipientIds.length === 0
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["notifyRoles"],
+        message: "Escolha perfis ou pessoas para receber a notificação.",
       });
     }
   });

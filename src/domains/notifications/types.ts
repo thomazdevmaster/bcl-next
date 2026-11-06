@@ -21,7 +21,7 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   admin_message: "Alertas enviados pela gestão",
   blog_post_published: "Publicações do blog",
   agenda_event_published: "Novidades da agenda",
-  repertoire_song_created: "Música nova no repertório",
+  repertoire_song_created: "Músicas do repertório",
   board_message: "Mensagem da diretoria",
   rehearsal_reminder: "Lembrete de ensaio",
 };

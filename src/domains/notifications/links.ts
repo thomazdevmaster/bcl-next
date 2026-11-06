@@ -67,13 +67,8 @@ export function resolveNotificationLink(
       }
       break;
     }
-    case "repertoire_song_created": {
-      const songId = readPayloadId(payload, "songId");
-      if (songId) {
-        return gestaoEditPath("/gestao/musicas", "musica", songId);
-      }
-      break;
-    }
+    case "repertoire_song_created":
+      return internalHref("/score_playground");
     default:
       break;
   }

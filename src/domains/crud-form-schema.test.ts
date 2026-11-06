@@ -384,4 +384,98 @@ describe("domain CRUD payloads", () => {
 
     expect(payload).not.toHaveProperty("eventTypeId");
   });
+
+  it("turns the API song duration into text before the edit form renders", () => {
+    const toForm = getCrudConfig("songs").toForm;
+    if (!toForm) throw new Error("Song form converter is missing");
+
+    const values = toForm({
+      title: "Linda Demais",
+      composer: "Kiko",
+      arranger: null,
+      genre: null,
+      key: null,
+      durationSeconds: 228,
+      videoUrl: null,
+      visibility: "private",
+    });
+
+    expect(values.durationSeconds).toBe("228");
+    expect(values.arranger).toBe("");
+    expect(values.genre).toBe("");
+    expect(values.key).toBe("");
+    expect(values.videoUrl).toBe("");
+    expect(songsCrudFormSchema.safeParse({
+      resource: "songs",
+      ...values,
+      scoreFile: "",
+      scoreFileName: "",
+      scoreMimeType: "",
+      status: "active",
+      visibleToStudents: true,
+      visibleToMusicians: false,
+    }).success).toBe(true);
+  });
+
+  it("asks for an audience when the song notification is enabled", () => {
+    const parsed = songsCrudFormSchema.safeParse({
+      resource: "songs",
+      title: "Dobrado",
+      composer: "Compositor",
+      arranger: "",
+      genre: "",
+      key: "",
+      durationSeconds: "",
+      scoreFile: "",
+      scoreFileName: "",
+      scoreMimeType: "",
+      status: "active",
+      visibility: "public",
+      visibleToStudents: false,
+      visibleToMusicians: false,
+      videoUrl: "",
+      notifySong: true,
+      notifyRoles: [],
+      notifyRecipientIds: [],
+    });
+
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.error.issues.some((issue) => issue.path[0] === "notifyRoles")).toBe(
+      true,
+    );
+  });
+
+  it("sends the selected song audience only when notification is enabled", () => {
+    const payload = getCrudConfig("songs").toPayload?.(
+      {
+        title: "Dobrado",
+        notifySong: true,
+        notifyRoles: ["musico", "aluno"],
+        notifyRecipientIds: ["15", ""],
+      },
+      undefined,
+    );
+
+    expect(payload).toMatchObject({
+      notifySong: true,
+      notifyRoles: ["musico", "aluno"],
+      notifyRecipientIds: ["15"],
+    });
+
+    const silent = getCrudConfig("songs").toPayload?.(
+      {
+        title: "Dobrado",
+        notifySong: false,
+        notifyRoles: ["musico"],
+        notifyRecipientIds: ["15"],
+      },
+      undefined,
+    );
+    expect(silent).toMatchObject({
+      notifySong: false,
+      notifyRoles: [],
+      notifyRecipientIds: [],
+    });
+  });
 });

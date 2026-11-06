@@ -23,4 +23,24 @@ describe("resolveNotificationLink", () => {
       external: false,
     });
   });
+
+  it("opens repertoire notifications in the score playground", () => {
+    const item: NotificationItem = {
+      id: 2,
+      type: "repertoire_song_created",
+      title: "Nova música no repertório",
+      body: "Linda Demais",
+      targetUrl: "/score_playground",
+      payload: { songId: 8 },
+      actorUserId: 1,
+      createdAt: "2026-11-06T12:00:00Z",
+      readAt: null,
+      archived: false,
+    };
+
+    expect(resolveNotificationLink(item)).toEqual({
+      href: "/score_playground",
+      external: false,
+    });
+  });
 });

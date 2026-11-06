@@ -89,7 +89,12 @@ export function FormStageField<TFieldValues extends FieldValues>({
     trigger,
   } = useFormContext<TFieldValues>();
   const { field, fieldState } = useController({ control, name });
-  const value = field.value;
+  const value =
+    typeof field.value === "string"
+      ? field.value
+      : field.value == null
+        ? ""
+        : String(field.value);
   const hasValue = value.trim().length > 0;
   const isPassword = type === "password";
   const inputType = isPassword && passwordVisible ? "text" : type;
