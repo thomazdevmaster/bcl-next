@@ -602,6 +602,9 @@ const songs: DomainCrudConfig = {
     visibility: "private",
     visibleToStudents: false,
     visibleToMusicians: false,
+    notifySong: false,
+    notifyRoles: [],
+    notifyRecipientIds: [],
     videoUrl: "",
   },
   fields: [
@@ -656,7 +659,15 @@ const songs: DomainCrudConfig = {
     { name: "title", label: "Título", required: true, section: "Dados" },
     { name: "composer", label: "Compositor", required: true, section: "Dados" },
     { name: "arranger", label: "Arranjador", section: "Dados" },
-    { name: "genre", label: "Gênero", section: "Dados" },
+    {
+      name: "genre",
+      label: "Gênero",
+      section: "Dados",
+      wide: true,
+      placeholder: "Digite o gênero",
+      helpText:
+        "Digite para ver os gêneros já usados. Um gênero novo entra nas sugestões.",
+    },
     {
       name: "key",
       label: "Tonalidade",
@@ -677,6 +688,15 @@ const songs: DomainCrudConfig = {
       helpText: "Opcional. O vídeo abre no estudo e nos detalhes da música.",
     },
     { ...commonStatus, section: "Dados" },
+    {
+      name: "notifySong",
+      label: "Enviar notificação",
+      type: "checkbox",
+      icon: "notifications",
+      wide: true,
+      helpText:
+        "Opcional. Se marcar, escolha perfis, pessoas com conta ou os dois.",
+    },
   ],
   columns: [
     { path: "title", label: "Título" },
@@ -699,15 +719,29 @@ const songs: DomainCrudConfig = {
     const score = Array.isArray(item.scores)
       ? (item.scores[0] as Record<string, unknown> | undefined)
       : undefined;
+    const text = (value: unknown) => (value == null ? "" : String(value));
     return {
       ...item,
+      title: text(item.title),
+      composer: text(item.composer),
+      arranger: text(item.arranger),
+      genre: text(item.genre),
+      key: text(item.key),
+      // A API manda inteiro; o campo de texto chama .trim() ao abrir a etapa.
+      durationSeconds:
+        item.durationSeconds == null || item.durationSeconds === ""
+          ? ""
+          : String(item.durationSeconds),
       scoreFile: "",
       scoreFileName: score?.fileName ?? "",
       scoreMimeType: score?.mimeType ?? "",
       visibility: item.visibility === "public" ? "public" : "private",
       visibleToStudents: Boolean(item.visibleToStudents),
       visibleToMusicians: Boolean(item.visibleToMusicians),
-      videoUrl: item.videoUrl ?? "",
+      videoUrl: text(item.videoUrl),
+      notifySong: false,
+      notifyRoles: [],
+      notifyRecipientIds: [],
     };
   },
   toPayload: (values, current) => {
@@ -716,8 +750,16 @@ const songs: DomainCrudConfig = {
       scoreFileName,
       scoreMimeType,
       durationSeconds,
+      notifySong,
+      notifyRoles,
+      notifyRecipientIds,
       ...base
     } = values;
+    const shouldNotify = notifySong === true;
+    const roles = Array.isArray(notifyRoles) ? notifyRoles.map(String) : [];
+    const recipientIds = Array.isArray(notifyRecipientIds)
+      ? notifyRecipientIds.map(String).filter((id) => id.trim() !== "")
+      : [];
     const previousScores = current?.scores;
     const scores = scoreFile
       ? [
@@ -735,6 +777,9 @@ const songs: DomainCrudConfig = {
         ...base,
         durationSeconds: durationSeconds ? Number(durationSeconds) : undefined,
         scores,
+        notifySong: shouldNotify,
+        notifyRoles: shouldNotify ? roles : [],
+        notifyRecipientIds: shouldNotify ? recipientIds : [],
       },
       current,
     );
@@ -1257,6 +1302,13 @@ const CRUD_FORM_STAGES: Partial<Record<CrudResource, CrudFormStage[]>> = {
         "videoUrl",
         "status",
       ],
+    },
+    {
+      id: "notify",
+      title: "Notificação",
+      shortTitle: "Aviso",
+      icon: "notifications",
+      fields: ["notifySong"],
     },
   ],
   patrimony: [

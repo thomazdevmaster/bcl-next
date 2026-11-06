@@ -24,6 +24,10 @@ import type { Person } from "@/domains/people/types";
 import { filterPeopleForRole } from "@/domains/people/visibility";
 import { shouldNotifyOnPresentationSave } from "@/domains/presentations/notificationPayload";
 import { filterSongRecordsForCatalog } from "@/domains/songs/catalogAccess";
+import {
+  collectSongGenres,
+  genreSuggestionKey,
+} from "@/domains/songs/genreSuggestions";
 import { apiFetch } from "@/lib/api";
 import { gestaoDeepLinkParam } from "@/lib/deepLink/gestaoDeepLinkParams";
 import { useGestaoDeepLink } from "@/lib/deepLink/useGestaoDeepLink";
@@ -91,6 +95,7 @@ function GenericDomainWorkspace({
   const createLabel = `Novo ${createNoun}`;
   const { roles, permissions, user } = useAuth();
   const [items, setItems] = useState<Record<string, unknown>[]>([]);
+  const [rememberedGenres, setRememberedGenres] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -236,6 +241,23 @@ function GenericDomainWorkspace({
           : [...current.people, entry],
       };
     });
+  };
+
+  const genreSuggestions = useMemo(
+    () =>
+      resource === "songs"
+        ? collectSongGenres(items, rememberedGenres)
+        : [],
+    [items, rememberedGenres, resource],
+  );
+  const rememberGenre = (genre: string) => {
+    const key = genreSuggestionKey(genre);
+    if (!key) return;
+    setRememberedGenres((current) =>
+      current.some((item) => genreSuggestionKey(item) === key)
+        ? current
+        : [...current, genre.trim()],
+    );
   };
 
   const rows = useMemo(() => {
@@ -665,6 +687,8 @@ function GenericDomainWorkspace({
             error={error}
             dynamicChoices={choices}
             stages={getCrudFormStages(resource)}
+            genreSuggestions={genreSuggestions}
+            onRememberGenre={rememberGenre}
             onSubmit={handleSave}
             onRetryPresentationTypes={retryPresentationTypes}
             onRetrySongs={retrySongs}
