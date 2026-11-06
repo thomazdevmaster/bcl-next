@@ -25,11 +25,11 @@ export const songsCrudFormSchema = z
     visibility: z.enum(["", "public", "private"]),
     visibleToStudents: z.boolean(),
     visibleToMusicians: z.boolean(),
-    notifySong: z.boolean().default(false),
-    notifyRoles: z
-      .array(z.enum(["amigos", "aluno", "musico", "maestro", "admin"]))
-      .default([]),
-    notifyRecipientIds: z.array(z.string()).default([]),
+    notifySong: z.boolean(),
+    notifyRoles: z.array(
+      z.enum(["amigos", "aluno", "musico", "maestro", "admin"]),
+    ),
+    notifyRecipientIds: z.array(z.string()),
     videoUrl: z
       .string()
       .trim()
